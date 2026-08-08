@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-// Server-side In-Memory Cache (TTL: 1 Hour)
+// Server-side In-Memory LRU Cache (TTL: 1 Hour, Max Capacity: 200 entries)
 interface CacheEntry {
   data: any;
   timestamp: number;
@@ -8,6 +8,21 @@ interface CacheEntry {
 
 const fileListCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const MAX_CACHE_ITEMS = 200;
+
+function cleanExpiredCache(now: number) {
+  for (const [key, entry] of fileListCache.entries()) {
+    if (now - entry.timestamp >= CACHE_TTL_MS) {
+      fileListCache.delete(key);
+    }
+  }
+  // LRU Eviction: If still exceeds max capacity, delete oldest insertion
+  while (fileListCache.size > MAX_CACHE_ITEMS) {
+    const firstKey = fileListCache.keys().next().value;
+    if (firstKey) fileListCache.delete(firstKey);
+    else break;
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -22,6 +37,8 @@ export async function POST(request: Request) {
     }
 
     const now = Date.now();
+    cleanExpiredCache(now);
+
     const cached = fileListCache.get(src);
     if (cached && now - cached.timestamp < CACHE_TTL_MS) {
       return NextResponse.json(cached.data, {
@@ -48,7 +65,7 @@ export async function POST(request: Request) {
 
     const data = await res.json();
 
-    // Cache successful responses
+    // Cache successful responses with LRU safety
     if (data && data.status) {
       fileListCache.set(src, { data, timestamp: now });
     }

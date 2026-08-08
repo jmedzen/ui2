@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 
 export interface PlayingTrack {
   courseId: number;
@@ -48,6 +48,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
 
+  const playlistRef = useRef<PlayingTrack[]>(playlist);
+  playlistRef.current = playlist;
+
+  const currentTrackRef = useRef<PlayingTrack | null>(currentTrack);
+  currentTrackRef.current = currentTrack;
+
   // Restore last played track from localStorage on mount
   useEffect(() => {
     try {
@@ -81,6 +87,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentTrack, playlist]);
 
+  // Audio HTML5 element lifecycle & event listeners
   useEffect(() => {
     const audio = new Audio();
     audioRef.current = audio;
@@ -92,20 +99,17 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     const handleEnded = () => {
       setIsPlaying(false);
-      setCurrentTrack((prevTrack) => {
-        if (!prevTrack) return null;
-        setPlaylist((currentPlaylist) => {
-          const nextIdx = prevTrack.index + 1;
-          if (nextIdx < currentPlaylist.length) {
-            const nextTrack = currentPlaylist[nextIdx];
-            audio.src = nextTrack.proxyUrl;
-            audio.play().then(() => setIsPlaying(true)).catch(console.warn);
-            return currentPlaylist;
-          }
-          return currentPlaylist;
-        });
-        return prevTrack;
-      });
+      const curr = currentTrackRef.current;
+      const list = playlistRef.current;
+      if (curr && list.length > 0) {
+        const nextIdx = curr.index + 1;
+        if (nextIdx < list.length) {
+          const nextTrack = list[nextIdx];
+          setCurrentTrack(nextTrack);
+          audio.src = nextTrack.proxyUrl;
+          audio.play().then(() => setIsPlaying(true)).catch(console.warn);
+        }
+      }
     };
 
     audio.addEventListener('timeupdate', handleTimeUpdate);
@@ -117,10 +121,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       audio.removeEventListener('loadedmetadata', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
       audio.pause();
+      audio.src = '';
+      audioRef.current = null;
     };
   }, []);
 
-  const playTrack = (
+  const playTrack = useCallback((
     courseTitle: string,
     courseId: number,
     tracks: { filename: string; proxyUrl: string; url: string; index: number }[],
@@ -153,9 +159,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         console.warn('Playback error:', err);
         setIsPlaying(false);
       });
-  };
+  }, [playbackRate, volume, isMuted]);
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     if (!audioRef.current || !currentTrack) return;
     if (isPlaying) {
       audioRef.current.pause();
@@ -169,64 +175,64 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         .then(() => setIsPlaying(true))
         .catch(() => setIsPlaying(false));
     }
-  };
+  }, [currentTrack, isPlaying]);
 
-  const playNext = () => {
+  const playNext = useCallback(() => {
     if (!currentTrack || playlist.length === 0) return;
     const nextIdx = currentTrack.index + 1;
     if (nextIdx < playlist.length) {
       playTrack(currentTrack.courseTitle, currentTrack.courseId, playlist, nextIdx);
     }
-  };
+  }, [currentTrack, playlist, playTrack]);
 
-  const playPrev = () => {
+  const playPrev = useCallback(() => {
     if (!currentTrack || playlist.length === 0) return;
     const prevIdx = currentTrack.index - 1;
     if (prevIdx >= 0) {
       playTrack(currentTrack.courseTitle, currentTrack.courseId, playlist, prevIdx);
     }
-  };
+  }, [currentTrack, playlist, playTrack]);
 
-  const seekTo = (time: number) => {
+  const seekTo = useCallback((time: number) => {
     if (audioRef.current) {
       audioRef.current.currentTime = time;
       setCurrentTime(time);
     }
-  };
+  }, []);
 
-  const seekRelative = (seconds: number) => {
+  const seekRelative = useCallback((seconds: number) => {
     if (audioRef.current) {
       const newTime = Math.max(0, Math.min(audioRef.current.duration || 0, audioRef.current.currentTime + seconds));
       audioRef.current.currentTime = newTime;
       setCurrentTime(newTime);
     }
-  };
+  }, []);
 
-  const setRate = (rate: number) => {
+  const setRate = useCallback((rate: number) => {
     setPlaybackRate(rate);
     if (audioRef.current) {
       audioRef.current.playbackRate = rate;
     }
-  };
+  }, []);
 
-  const setVol = (vol: number) => {
+  const setVol = useCallback((vol: number) => {
     setVolume(vol);
     setIsMuted(vol === 0);
     if (audioRef.current) {
       audioRef.current.volume = vol;
     }
-  };
+  }, []);
 
-  const toggleMute = () => {
+  const toggleMute = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.muted = !isMuted;
       setIsMuted(!isMuted);
     }
-  };
+  }, [isMuted]);
 
-  const toggleExpanded = () => {
-    setIsExpanded(!isExpanded);
-  };
+  const toggleExpanded = useCallback(() => {
+    setIsExpanded((prev) => !prev);
+  }, []);
 
   return (
     <AudioContext.Provider

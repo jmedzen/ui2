@@ -34,6 +34,7 @@ export default function CourseDetail({ course }: CourseDetailProps) {
 
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
 
     async function loadAudioTracks() {
       setIsLoadingAudio(true);
@@ -48,12 +49,13 @@ export default function CourseDetail({ course }: CourseDetailProps) {
       const uniqueAudioPaths = Array.from(new Set(potentialAudioPaths));
 
       for (const aPath of uniqueAudioPaths) {
-        if (fetchedTracks.length > 0) break;
+        if (fetchedTracks.length > 0 || !isMounted) break;
         try {
           const res = await fetch('/api/list-files', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ src: aPath })
+            body: JSON.stringify({ src: aPath }),
+            signal: controller.signal
           });
           if (res.ok) {
             const rawData = await res.json();
@@ -81,8 +83,10 @@ export default function CourseDetail({ course }: CourseDetailProps) {
               });
             }
           }
-        } catch (e) {
-          console.warn('Failed to fetch remote audio list:', e);
+        } catch (e: any) {
+          if (e.name !== 'AbortError') {
+            console.warn('Failed to fetch remote audio list:', e);
+          }
         }
       }
 
@@ -104,7 +108,8 @@ export default function CourseDetail({ course }: CourseDetailProps) {
           const res = await fetch('/api/list-files', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ src: course.video_path })
+            body: JSON.stringify({ src: course.video_path }),
+            signal: controller.signal
           });
           if (res.ok) {
             const rawData = await res.json();
@@ -132,8 +137,10 @@ export default function CourseDetail({ course }: CourseDetailProps) {
               });
             }
           }
-        } catch (e) {
-          console.warn('Failed to fetch remote video list:', e);
+        } catch (e: any) {
+          if (e.name !== 'AbortError') {
+            console.warn('Failed to fetch remote video list:', e);
+          }
         }
       }
 
@@ -148,45 +155,38 @@ export default function CourseDetail({ course }: CourseDetailProps) {
       setPdfTracks(course.pdfs || []);
 
       const potentialPaths: string[] = [];
-      if (course.lecture_path) potentialPaths.push(course.lecture_path);
-
-      if (course.audio_path) {
-        const parent = course.audio_path.replace(/\/audio\/?$/, '');
-        potentialPaths.push(parent, `${parent}/bilu`, `${parent}/beizhu`);
-      }
-      if (course.video_path) {
-        const parent = course.video_path.replace(/\/video\/?$/, '');
-        potentialPaths.push(parent, `${parent}/bilu`, `${parent}/beizhu`);
-      }
+      if (course.audio_path) potentialPaths.push(course.audio_path);
+      if (course.video_path) potentialPaths.push(course.video_path);
 
       const uniquePaths = Array.from(new Set(potentialPaths));
-      const fetchedPdfs: PdfItem[] = [];
+      const fetchedPdfs: PdfItem[] = course.pdfs ? [...course.pdfs] : [];
 
       for (const dirPath of uniquePaths) {
+        if (!isMounted) break;
         try {
           const res = await fetch('/api/list-files', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ src: dirPath })
+            body: JSON.stringify({ src: dirPath }),
+            signal: controller.signal
           });
           if (res.ok) {
             const rawData = await res.json();
-            const data = rawData?.data !== undefined ? rawData.data : rawData;
 
             const pdfFilenames: { name: string; folder: string }[] = [];
 
-            if (Array.isArray(data)) {
-              data.forEach((item: any) => {
+            if (Array.isArray(rawData)) {
+              rawData.forEach((item: any) => {
                 const fname = extractFilename(item);
                 if (fname.toLowerCase().endsWith('.pdf')) {
                   pdfFilenames.push({ name: fname, folder: dirPath });
                 }
               });
-            } else if (data && typeof data === 'object') {
-              Object.keys(data).forEach((key) => {
-                const list = data[key];
-                if (Array.isArray(list)) {
-                  list.forEach((item: any) => {
+            } else if (rawData && typeof rawData === 'object') {
+              Object.keys(rawData).forEach((key) => {
+                const val = rawData[key];
+                if (Array.isArray(val)) {
+                  val.forEach((item: any) => {
                     const fname = extractFilename(item);
                     if (fname.toLowerCase().endsWith('.pdf')) {
                       const subFolder = key === 'bilu' || key === 'beizhu' ? `${dirPath}/${key}` : dirPath;
@@ -197,7 +197,7 @@ export default function CourseDetail({ course }: CourseDetailProps) {
               });
             }
 
-            pdfFilenames.forEach((pf, idx) => {
+            pdfFilenames.forEach((pf) => {
               const pdfUrl = `https://www.fayun.org/ftpadmin${pf.folder}/${pf.name}`;
               if (!fetchedPdfs.some((p) => p.url === pdfUrl)) {
                 fetchedPdfs.push({
@@ -208,8 +208,10 @@ export default function CourseDetail({ course }: CourseDetailProps) {
               }
             });
           }
-        } catch (e) {
-          console.warn('Failed to fetch remote PDF list:', e);
+        } catch (e: any) {
+          if (e.name !== 'AbortError') {
+            console.warn('Failed to fetch remote PDF list:', e);
+          }
         }
       }
 
@@ -227,6 +229,7 @@ export default function CourseDetail({ course }: CourseDetailProps) {
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
   }, [course]);
 
@@ -238,332 +241,258 @@ export default function CourseDetail({ course }: CourseDetailProps) {
   };
 
   const handleVideoSelect = (idx: number) => {
-    if (isPlaying) {
-      togglePlay();
+    if (idx >= 0 && idx < videoTracks.length) {
+      setCurrentVideoIndex(idx);
+      if (isPlaying) {
+        togglePlay();
+      }
     }
-    setCurrentVideoIndex(idx);
   };
 
   const filteredAudioTracks = audioTracks.filter((t) =>
-    t.filename.toLowerCase().includes(episodeSearch.toLowerCase())
+    episodeSearch.trim() ? t.filename.toLowerCase().includes(episodeSearch.toLowerCase()) : true
   );
 
-  const hasVideoPath = !!course.video_path;
-  const hasPdfs = pdfTracks.length > 0;
-
   return (
-    <main className="course-detail-pane">
-      {/* Header Banner */}
-      <header className="course-header shadow-card">
+    <div className="course-detail-pane">
+      {/* Course Top Title & Information Card */}
+      <div className="shadow-card">
         <div className="breadcrumb">
+          <span>法雲資訊網</span>
+          <span>/</span>
           <span>{course.main_menu_title}</span>
-          <span className="sep">/</span>
+          <span>/</span>
           <span>{course.sub_menu_title}</span>
-          <span className="sep">/</span>
-          <span className="current">{course.topic_title || '講記'}</span>
+          <span>/</span>
+          <span className="current">{course.name}</span>
         </div>
 
-        <h2 className="course-title">{course.name}</h2>
+        <h1 className="course-title">{course.name}</h1>
 
         <div className="course-meta-tags">
-          <span className="meta-tag venue">📍 {course.location || '美國法雲寺禪學院'}</span>
-          {course.time && <span className="meta-tag year">🗓️ {course.time} 年</span>}
-          <span className="meta-tag teacher">👤 主講：玅境長老</span>
-          {audioTracks.length > 0 && (
-            <span className="meta-tag episodes">🎙️ 全 {audioTracks.length} 集音訊</span>
+          <span className="meta-tag teacher">主講：玅境長老</span>
+          <span className="meta-tag venue">地點：{course.location || '法雲寺'}</span>
+          <span className="meta-tag time">日期：{course.time || '典藏'}</span>
+          <span className="meta-tag episodes">音訊集數：{course.total_episodes || audioTracks.length} 集</span>
+          {course.video_path && (
+            <span className="meta-tag video-badge-tag">🎥 影音講記檔</span>
           )}
-          {videoTracks.length > 0 && (
-            <span className="meta-tag video-badge-tag">🎥 {videoTracks.length} 集影音影片</span>
-          )}
-          {hasPdfs && (
-            <span className="meta-tag notes">📚 {pdfTracks.length} 份筆記講義</span>
+          {course.pdfs && course.pdfs.length > 0 && (
+            <span className="meta-tag pdf-badge">📄 包含 {course.pdfs.length} 份 PDF 筆記講義</span>
           )}
         </div>
-      </header>
+      </div>
 
-      {/* Navigation Tabs */}
-      <nav className="tab-navigation">
-        <button
-          className={`tab-btn ${activeTab === 'audio' ? 'active' : ''}`}
-          onClick={() => handleTabClick('audio')}
-        >
-          🎧 音訊目錄 ({audioTracks.length} 集)
-        </button>
-
-        {hasPdfs && audioTracks.length > 0 && (
+      {/* Primary Content Area: Tabs + Display Panes */}
+      <div className="shadow-card content-card">
+        <div className="tab-navigation">
           <button
-            className={`tab-btn split-btn ${activeTab === 'split' ? 'active' : ''}`}
-            onClick={() => handleTabClick('split')}
-            title="同時瀏覽 PDF 講義與點選收聽音訊"
+            className={`tab-btn ${activeTab === 'audio' ? 'active' : ''}`}
+            onClick={() => handleTabClick('audio')}
           >
-            📖 雙欄對照閱讀
+            🎵 音訊錄音 ({audioTracks.length || course.total_episodes || 0})
           </button>
-        )}
-
-        {(hasVideoPath || videoTracks.length > 0) && (
+          {course.video_path && (
+            <button
+              className={`tab-btn ${activeTab === 'video' ? 'active' : ''}`}
+              onClick={() => handleTabClick('video')}
+            >
+              🎬 影音講記 ({videoTracks.length || '載入中'})
+            </button>
+          )}
           <button
-            className={`tab-btn ${activeTab === 'video' ? 'active' : ''}`}
-            onClick={() => handleTabClick('video')}
+            className={`tab-btn ${activeTab === 'pdf' ? 'active' : ''}`}
+            onClick={() => handleTabClick('pdf')}
           >
-            🎥 影音影片 ({videoTracks.length} 集)
+            📄 筆記講義 ({pdfTracks.length})
           </button>
-        )}
+          {course.video_path && pdfTracks.length > 0 && (
+            <button
+              className={`tab-btn split-btn ${activeTab === 'split' ? 'active' : ''}`}
+              onClick={() => handleTabClick('split')}
+            >
+              📺 影音+講義雙欄對照
+            </button>
+          )}
+          <button
+            className={`tab-btn ${activeTab === 'info' ? 'active' : ''}`}
+            onClick={() => handleTabClick('info')}
+          >
+            ℹ️ 典藏資訊
+          </button>
+        </div>
 
-        <button
-          className={`tab-btn ${activeTab === 'pdf' ? 'active' : ''}`}
-          onClick={() => handleTabClick('pdf')}
-        >
-          📖 講義筆記 PDF ({pdfTracks.length} 份)
-        </button>
-
-        <button
-          className={`tab-btn ${activeTab === 'info' ? 'active' : ''}`}
-          onClick={() => handleTabClick('info')}
-        >
-          ℹ️ 課程簡介
-        </button>
-      </nav>
-
-      {/* Tab Contents */}
-      <div className="tab-content">
-        {activeTab === 'audio' && (
-          <section className="audio-tab-content">
-            <div className="track-list-toolbar">
-              <input
-                type="text"
-                placeholder="搜尋音訊單集..."
-                value={episodeSearch}
-                onChange={(e) => setEpisodeSearch(e.target.value)}
-                className="episode-search-input"
-              />
-              <span className="track-count-info">共 {filteredAudioTracks.length} 集</span>
-            </div>
-
-            {isLoadingAudio ? (
-              <div className="loading-state shadow-card">
-                <span className="spinner">⏳</span> 正在載入音訊檔案目錄...
-              </div>
-            ) : filteredAudioTracks.length > 0 ? (
-              <ul className="episodes-list">
-                {filteredAudioTracks.map((track) => {
-                  const isCurrentPlayingTrack =
-                    currentTrack &&
-                    currentTrack.courseId === course.id &&
-                    currentTrack.index === track.index;
-
-                  return (
-                    <li
-                      key={track.index}
-                      className={`episode-item ${isCurrentPlayingTrack ? 'playing' : ''}`}
-                      onClick={() => {
-                        playTrack(course.name, course.id, audioTracks, track.index);
-                      }}
-                    >
-                      <div className="episode-index">{track.index + 1}</div>
-                      <div className="episode-info">
-                        <span className="episode-name">{track.filename}</span>
-                      </div>
-                      <div className="episode-actions">
-                        {isCurrentPlayingTrack ? (
-                          <span className="now-playing-label">
-                            <span className="pulse-dot"></span> {isPlaying ? '播放中' : '已暫停'}
-                          </span>
-                        ) : (
-                          <button className="play-track-btn">▶ 播放</button>
-                        )}
-                        <a
-                          href={track.proxyUrl}
-                          download={track.filename}
-                          onClick={(e) => e.stopPropagation()}
-                          className="download-track-link"
-                          title="下載音訊"
-                        >
-                          ⬇️ 下載
-                        </a>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <div className="no-audio-state shadow-card">
-                <p>此課程目前未收錄線上音訊檔。</p>
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* Split-Screen View */}
-        {activeTab === 'split' && (
-          <section className="split-view-container">
-            <div className="split-left-pane">
-              <h3 className="split-pane-title">🎙️ 音訊集數 ({filteredAudioTracks.length} 集)</h3>
-              <ul className="episodes-list compact-list">
-                {filteredAudioTracks.map((track) => {
-                  const isCurrentPlayingTrack =
-                    currentTrack &&
-                    currentTrack.courseId === course.id &&
-                    currentTrack.index === track.index;
-
-                  return (
-                    <li
-                      key={track.index}
-                      className={`episode-item ${isCurrentPlayingTrack ? 'playing' : ''}`}
-                      onClick={() => {
-                        playTrack(course.name, course.id, audioTracks, track.index);
-                      }}
-                    >
-                      <div className="episode-index">{track.index + 1}</div>
-                      <div className="episode-info">
-                        <span className="episode-name">{track.filename}</span>
-                      </div>
-                      <div className="episode-actions">
-                        {isCurrentPlayingTrack ? (
-                          <span className="now-playing-label">▶️</span>
-                        ) : (
-                          <button className="play-track-btn">▶</button>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-
-            <div className="split-right-pane">
-              <PdfViewer pdfs={pdfTracks} courseTitle={course.name} />
-            </div>
-          </section>
-        )}
-
-        {activeTab === 'video' && (
-          <section className="video-tab-content">
-            {isLoadingVideo ? (
-              <div className="loading-state shadow-card">
-                <span className="spinner">⏳</span> 正在載入影片檔案目錄...
-              </div>
-            ) : videoTracks.length > 0 ? (
-              <div className="video-section-wrapper">
-                <VideoPlayer
-                  tracks={videoTracks}
-                  currentTrackIndex={currentVideoIndex}
-                  onTrackChange={handleVideoSelect}
-                  courseTitle={course.name}
+        <div className="tab-content-pane">
+          {/* 1. Audio Track List Tab */}
+          {activeTab === 'audio' && (
+            <div className="audio-tab-content">
+              <div className="track-list-toolbar">
+                <input
+                  type="text"
+                  placeholder="🔍 搜尋單集檔名或集數..."
+                  value={episodeSearch}
+                  onChange={(e) => setEpisodeSearch(e.target.value)}
+                  className="episode-search-input"
                 />
+                <span className="track-count-info">
+                  顯示 {filteredAudioTracks.length} / {audioTracks.length} 集
+                </span>
+              </div>
 
-                <h3 className="video-list-heading">影片集數清單 ({videoTracks.length} 集)</h3>
-                <ul className="episodes-list video-episodes-list">
-                  {videoTracks.map((vTrack) => {
-                    const isCurrent = vTrack.index === currentVideoIndex;
+              {isLoadingAudio ? (
+                <div className="loading-state">
+                  <span className="loading-spinner">🌸</span>
+                  <p>正在載入音訊清單...</p>
+                </div>
+              ) : audioTracks.length === 0 ? (
+                <div className="no-audio-state">
+                  <p>尚無線上記錄之音訊檔案，或正在數據庫同步中</p>
+                </div>
+              ) : (
+                <ul className="episodes-list">
+                  {filteredAudioTracks.map((track) => {
+                    const isCurrentlyPlayingTrack =
+                      currentTrack?.courseId === course.id && currentTrack?.filename === track.filename;
+
                     return (
                       <li
-                        key={vTrack.index}
-                        className={`episode-item video-item ${isCurrent ? 'playing' : ''}`}
-                        onClick={() => handleVideoSelect(vTrack.index)}
+                        key={track.index}
+                        className={`episode-item ${isCurrentlyPlayingTrack ? 'playing' : ''}`}
+                        onClick={() => playTrack(course.name, course.id, audioTracks, track.index)}
                       >
-                        <div className="episode-index">🎬 {vTrack.index + 1}</div>
+                        <span className="episode-index">{track.index + 1}</span>
                         <div className="episode-info">
-                          <span className="episode-name">{vTrack.filename}</span>
+                          <span className="episode-name">{track.filename}</span>
                         </div>
                         <div className="episode-actions">
-                          {isCurrent ? (
-                            <span className="now-playing-label">▶️ 觀看中</span>
+                          {isCurrentlyPlayingTrack ? (
+                            <span className="now-playing-label">
+                              {isPlaying ? '▶ 播放中' : '⏸ 暫停中'}
+                            </span>
                           ) : (
-                            <button className="play-track-btn">▶ 觀看影片</button>
+                            <button className="play-track-btn">▶ 播放</button>
                           )}
                           <a
-                            href={vTrack.proxyUrl}
-                            download={vTrack.filename}
+                            href={track.proxyUrl}
+                            download={track.filename}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
                             className="download-track-link"
-                            title="下載影片"
+                            title="下載 MP3/M4A 音訊"
                           >
-                            ⬇️ 下載 MP4/M4V
+                            ⬇ 下載
                           </a>
                         </div>
                       </li>
                     );
                   })}
                 </ul>
-              </div>
-            ) : (
-              <div className="no-audio-state shadow-card">
-                <p>此課程目前未提供線上影音影片檔案。</p>
-              </div>
-            )}
-          </section>
-        )}
-
-        {activeTab === 'pdf' && (
-          <section className="pdf-tab-content">
-            {isLoadingPdf ? (
-              <div className="loading-state shadow-card">
-                <span className="spinner">⏳</span> 正在從 fayun.org 載入最新 PDF 講義清單...
-              </div>
-            ) : (
-              <PdfViewer pdfs={pdfTracks} courseTitle={course.name} />
-            )}
-          </section>
-        )}
-
-        {activeTab === 'info' && (
-          <section className="info-tab-content">
-            <div className="info-card">
-              <h3>典藏資訊說明</h3>
-              <div className="info-grid">
-                <div className="info-item">
-                  <span className="info-label">經典/課程名稱:</span>
-                  <span className="info-value">{course.name}</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">講述地點:</span>
-                  <span className="info-value">{course.location || '美國法雲寺禪學院'}</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">講述年份:</span>
-                  <span className="info-value">{course.time ? `${course.time} 年` : '未載明'}</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">分類歸屬:</span>
-                  <span className="info-value">
-                    {course.main_menu_title} / {course.sub_menu_title} ({course.topic_title})
-                  </span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">音訊總集數:</span>
-                  <span className="info-value">{audioTracks.length} 集</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">影片總集數:</span>
-                  <span className="info-value">{videoTracks.length} 集</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">講義文件數:</span>
-                  <span className="info-value">{pdfTracks.length} 份</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">音訊目錄路徑:</span>
-                  <code className="info-code">{course.audio_path || '無'}</code>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">影片目錄路徑:</span>
-                  <code className="info-code">{course.video_path || '無'}</code>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">筆記講義路徑:</span>
-                  <code className="info-code">{course.lecture_path || '無'}</code>
-                </div>
-              </div>
-              {course.comment && (
-                <div className="comment-box">
-                  <h4>備註事項：</h4>
-                  <p>{course.comment}</p>
-                </div>
               )}
             </div>
-          </section>
-        )}
+          )}
+
+          {/* 2. Video Player Tab */}
+          {activeTab === 'video' && (
+            <div className="video-tab-content">
+              {isLoadingVideo ? (
+                <div className="loading-state">
+                  <span className="loading-spinner">🎬</span>
+                  <p>正在載入影音講記清單...</p>
+                </div>
+              ) : (
+                <VideoPlayer
+                  tracks={videoTracks}
+                  currentTrackIndex={currentVideoIndex}
+                  onTrackChange={handleVideoSelect}
+                  courseTitle={course.name}
+                />
+              )}
+            </div>
+          )}
+
+          {/* 3. PDF Notes Viewer Tab */}
+          {activeTab === 'pdf' && (
+            <div className="pdf-tab-content">
+              {isLoadingPdf ? (
+                <div className="loading-state">
+                  <span className="loading-spinner">📄</span>
+                  <p>正在載入講義 PDF 清單...</p>
+                </div>
+              ) : (
+                <PdfViewer pdfs={pdfTracks} courseTitle={course.name} />
+              )}
+            </div>
+          )}
+
+          {/* 4. Split View: Video + PDF Side-by-Side */}
+          {activeTab === 'split' && (
+            <div className="split-view-container">
+              <div className="split-left-pane">
+                <h3 className="split-pane-title">🎬 影音講記</h3>
+                <VideoPlayer
+                  tracks={videoTracks}
+                  currentTrackIndex={currentVideoIndex}
+                  onTrackChange={handleVideoSelect}
+                  courseTitle={course.name}
+                />
+              </div>
+              <div className="split-right-pane">
+                <h3 className="split-pane-title">📄 講義筆記對照</h3>
+                <PdfViewer pdfs={pdfTracks} courseTitle={course.name} />
+              </div>
+            </div>
+          )}
+
+          {/* 5. Course Archive Info Tab */}
+          {activeTab === 'info' && (
+            <div className="info-tab-content">
+              <div className="info-card">
+                <h3>📖 {course.name} 典藏詳細資料</h3>
+                <div className="info-grid">
+                  <div className="info-item">
+                    <span className="info-label">主講法師</span>
+                    <span className="info-value">玅境長老</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">講述地點</span>
+                    <span className="info-value">{course.location || '法雲寺'}</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">講述日期</span>
+                    <span className="info-value">{course.time || '典藏'}</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">音訊總集數</span>
+                    <span className="info-value">{course.total_episodes} 集</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">分類目錄</span>
+                    <span className="info-value">{course.main_menu_title} ➔ {course.sub_menu_title}</span>
+                  </div>
+                  <div className="info-item">
+                    <span className="info-label">音訊資料夾路徑</span>
+                    <span className="info-code">{course.audio_path || '無'}</span>
+                  </div>
+                  {course.video_path && (
+                    <div className="info-item">
+                      <span className="info-label">影音資料夾路徑</span>
+                      <span className="info-code">{course.video_path}</span>
+                    </div>
+                  )}
+                </div>
+
+                {course.comment && (
+                  <div className="comment-box">
+                    <h4>📝 典藏說明備註</h4>
+                    <p>{course.comment}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
