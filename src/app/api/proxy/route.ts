@@ -126,13 +126,21 @@ export async function GET(request: NextRequest) {
 
       if (range) {
         const parts = range.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        let start = parseInt(parts[0], 10);
+        if (isNaN(start)) start = 0;
 
-        if (start >= fileSize || end >= fileSize) {
+        let end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        if (isNaN(end) || end >= fileSize) {
+          end = fileSize - 1;
+        }
+
+        if (start >= fileSize) {
           return new NextResponse(null, {
             status: 416,
-            headers: { 'Content-Range': `bytes */${fileSize}` }
+            headers: {
+              'Content-Range': `bytes */${fileSize}`,
+              'Accept-Ranges': 'bytes'
+            }
           });
         }
 
@@ -158,13 +166,62 @@ export async function GET(request: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // CASE 2: CACHE MISS - Stream Teeing (Instant Play + Disk Cache)
+    // CASE 2: CACHE MISS - Stream Teeing & Full Background Caching
     // -------------------------------------------------------------
     const range = request.headers.get('range');
+    const isPartialRange = range && range !== 'bytes=0-';
+
     if (range) {
       reqHeaders['Range'] = range;
     }
 
+    // If client requested a partial range (e.g. video probe), fetch range for client
+    // AND trigger full non-range download in background so disk gets the complete file
+    if (isPartialRange) {
+      const fullReqHeaders: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.fayun.org/',
+        'Accept': '*/*'
+      };
+      cacheRemoteMedia(targetUrl, cacheFilePath, fullReqHeaders);
+
+      const response = await fetch(targetUrl, {
+        headers: reqHeaders,
+        cache: 'no-store'
+      });
+
+      if (!response.ok && response.status !== 206) {
+        return new NextResponse(`Remote asset returned ${response.status}: ${response.statusText}`, { status: response.status });
+      }
+
+      const rawContentType = (response.headers.get('content-type') || '').toLowerCase();
+      if (rawContentType.includes('text/html')) {
+        return new NextResponse('Remote asset not found (Returned HTML SPA Page)', { status: 404 });
+      }
+
+      const resHeaders = new Headers();
+      resHeaders.set('Content-Type', rawContentType || contentType);
+      resHeaders.set('X-Content-Type-Options', 'nosniff');
+      resHeaders.set('X-Proxy-Cache', 'MISS');
+      resHeaders.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+
+      if (response.headers.get('content-length')) {
+        resHeaders.set('Content-Length', response.headers.get('content-length')!);
+      }
+      if (response.headers.get('content-range')) {
+        resHeaders.set('Content-Range', response.headers.get('content-range')!);
+      }
+      if (response.headers.get('accept-ranges')) {
+        resHeaders.set('Accept-Ranges', response.headers.get('accept-ranges')!);
+      }
+
+      return new NextResponse(response.body as any, {
+        status: response.status,
+        headers: resHeaders
+      });
+    }
+
+    // Full Stream Teeing for non-partial request (0-wait instant playback + full disk cache)
     const response = await fetch(targetUrl, {
       headers: reqHeaders,
       cache: 'no-store'
@@ -195,14 +252,10 @@ export async function GET(request: NextRequest) {
       resHeaders.set('Accept-Ranges', response.headers.get('accept-ranges')!);
     }
 
-    // If no stream body, fallback to response
     if (!response.body) {
       return new NextResponse(null, { status: response.status, headers: resHeaders });
     }
 
-    // Tee the Web Stream into 2 branches:
-    // Branch 1 -> Immediate response to client for 0-wait instant playback
-    // Branch 2 -> Synchronously pipe into local disk cache .tmp file
     const [streamForClient, streamForDisk] = response.body.tee();
 
     // Background disk cache writer (non-blocking)
@@ -223,7 +276,7 @@ export async function GET(request: NextRequest) {
 
           await fs.promises.rename(tempPath, cacheFilePath);
           updateAccessTime(cacheFilePath);
-          console.log(`[Media Cache Tee] Successfully cached file: ${path.basename(cacheFilePath)}`);
+          console.log(`[Media Cache Tee] Successfully cached complete file: ${path.basename(cacheFilePath)}`);
           enforceLRULimit();
         }
       } catch (err) {
