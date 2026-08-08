@@ -13,6 +13,26 @@ body {
   overflow-x: hidden;
 }
 
+/* Custom Zen Streamlined Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 99px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold-accent);
+}
+
 /* Dynamic Font Size Scaling Base */
 .app-root {
   --font-scale: calc(var(--base-font-size, 16px) / 16px);
@@ -20,7 +40,7 @@ body {
   color: var(--text-primary);
   min-height: 100vh;
   font-size: calc(16px * var(--font-scale));
-  transition: background-color 0.3s ease, color 0.3s ease, font-size 0.2s ease;
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s cubic-bezier(0.4, 0, 0.2, 1), font-size 0.2s ease;
   position: relative;
 }
 
@@ -626,8 +646,19 @@ body {
   background: var(--bg-hover);
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
 }
 
+.meta-tag.teacher {
+  color: var(--gold-accent);
+  background: var(--gold-glow);
+  border-color: var(--gold-accent);
+  font-weight: 700;
+  box-shadow: 0 2px 10px var(--gold-glow);
+}
 .meta-tag.venue { color: var(--gold-accent); }
 .meta-tag.episodes { color: var(--jade-accent); }
 .meta-tag.video-badge-tag { color: var(--purple-accent); border-color: var(--purple-accent); background: rgba(139, 92, 246, 0.1); }
@@ -1231,6 +1262,38 @@ body {
 .episode-item.playing {
   border-color: var(--gold-accent);
   background: var(--gold-glow);
+  box-shadow: 0 2px 12px var(--gold-glow);
+}
+
+.now-playing-label {
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 700;
+  color: var(--gold-accent);
+  background: var(--bg-card);
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--gold-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  animation: pulse 1.5s infinite;
+}
+
+.play-track-btn {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: calc(12px * var(--font-scale));
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.play-track-btn:hover {
+  background: var(--gold-accent);
+  color: #ffffff;
+  border-color: var(--gold-accent);
 }
 
 .episode-index {
