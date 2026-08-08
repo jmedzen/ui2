@@ -1,14 +1,16 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { CourseItem, ThemeType } from '@/types/course';
+import { CourseItem, ThemeType, FontSizeScale } from '@/types/course';
 import { AudioProvider } from '@/context/AudioContext';
 import TreeNav from '@/components/TreeNav';
 import CourseDetail from '@/components/CourseDetail';
 import GlobalAudioPlayer from '@/components/GlobalAudioPlayer';
+import SettingsModal from '@/components/SettingsModal';
 import initialDb from '@/data/courses_db.json';
 
 const THEME_STORAGE_KEY = 'fayun_theme';
+const FONT_SIZE_STORAGE_KEY = 'fayun_font_size';
 
 export default function Home() {
   // Initialize state immediately from bundled JSON data for 0ms load time
@@ -20,18 +22,26 @@ export default function Home() {
   const [selectedCourse, setSelectedCourse] = useState<CourseItem | null>(initialDefaultCourse);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
   const [theme, setTheme] = useState<ThemeType>('dark');
+  const [fontSize, setFontSize] = useState<FontSizeScale>('normal');
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
 
-  // Restore saved theme from localStorage on mount
+  // Restore saved theme & font size from localStorage on mount
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) as ThemeType | null;
       if (savedTheme && ['dark', 'light', 'pine', 'sandalwood', 'lotus'].includes(savedTheme)) {
         setTheme(savedTheme);
       }
+
+      const savedFontSize = localStorage.getItem(FONT_SIZE_STORAGE_KEY) as FontSizeScale | null;
+      if (savedFontSize && ['small', 'normal', 'large', 'xlarge'].includes(savedFontSize)) {
+        setFontSize(savedFontSize);
+      }
     } catch (e) {
-      console.warn('Failed to restore theme from localStorage:', e);
+      console.warn('Failed to restore settings from localStorage:', e);
     }
   }, []);
 
@@ -41,6 +51,15 @@ export default function Home() {
       localStorage.setItem(THEME_STORAGE_KEY, newTheme);
     } catch (e) {
       console.warn('Failed to save theme to localStorage:', e);
+    }
+  };
+
+  const handleSelectFontSize = (newSize: FontSizeScale) => {
+    setFontSize(newSize);
+    try {
+      localStorage.setItem(FONT_SIZE_STORAGE_KEY, newSize);
+    } catch (e) {
+      console.warn('Failed to save font size to localStorage:', e);
     }
   };
 
@@ -80,7 +99,7 @@ export default function Home() {
 
   return (
     <AudioProvider>
-      <div className={`app-root ${theme}`}>
+      <div className={`app-root ${theme} font-size-${fontSize}`}>
         {/* Mobile Top Navbar */}
         <div className="mobile-navbar">
           <button
@@ -90,17 +109,13 @@ export default function Home() {
             ☰ 目錄選單
           </button>
           <span className="mobile-title">法雲資訊網</span>
-          <select
-            value={theme}
-            onChange={(e) => handleSelectTheme(e.target.value as ThemeType)}
-            className="mobile-theme-btn"
+          <button
+            className="settings-open-btn mobile-settings-btn"
+            onClick={() => setIsSettingsOpen(true)}
+            title="開啟系統與字體設定面板"
           >
-            <option value="dark">🌙 深色</option>
-            <option value="light">☀️ 淺色</option>
-            <option value="pine">🍃 竹綠</option>
-            <option value="sandalwood">🪵 茶木</option>
-            <option value="lotus">🪷 紫藕</option>
-          </select>
+            ⚙️ 設定
+          </button>
         </div>
 
         <div className="layout-wrapper">
@@ -113,6 +128,7 @@ export default function Home() {
               onRefreshCourses={fetchCourses}
               theme={theme}
               onSelectTheme={handleSelectTheme}
+              onOpenSettings={() => setIsSettingsOpen(true)}
             />
           </div>
 
@@ -143,6 +159,16 @@ export default function Home() {
             )}
           </div>
         </div>
+
+        {/* Settings Modal Panel */}
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          theme={theme}
+          onSelectTheme={handleSelectTheme}
+          fontSize={fontSize}
+          onSelectFontSize={handleSelectFontSize}
+        />
 
         {/* Global Floating Audio Player */}
         <GlobalAudioPlayer />

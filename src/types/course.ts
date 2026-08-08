@@ -1,4 +1,5 @@
 export type ThemeType = 'dark' | 'light' | 'pine' | 'sandalwood' | 'lotus';
+export type FontSizeScale = 'small' | 'normal' | 'large' | 'xlarge';
 
 export interface PdfItem {
   num?: number;

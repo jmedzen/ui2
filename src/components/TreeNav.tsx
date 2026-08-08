@@ -11,6 +11,7 @@ interface TreeNavProps {
   onRefreshCourses: () => Promise<void>;
   theme: ThemeType;
   onSelectTheme: (theme: ThemeType) => void;
+  onOpenSettings: () => void;
 }
 
 type MediaFilterType = 'all' | 'audio' | 'video' | 'pdf';
@@ -21,7 +22,8 @@ export default function TreeNav({
   onSelectCourse,
   onRefreshCourses,
   theme,
-  onSelectTheme
+  onSelectTheme,
+  onOpenSettings
 }: TreeNavProps) {
   const { currentTrack, isPlaying } = useAudio();
   const [searchQuery, setSearchQuery] = useState('');
@@ -246,19 +248,14 @@ export default function TreeNav({
           </div>
         </div>
 
-        {/* 5-Theme Selector Dropdown */}
-        <select
-          value={theme}
-          onChange={(e) => onSelectTheme(e.target.value as ThemeType)}
-          className="theme-dropdown"
-          title="選擇主題配色風格"
+        {/* Top-Left Settings Modal Trigger Button */}
+        <button
+          onClick={onOpenSettings}
+          className="settings-open-btn"
+          title="開啟系統與字體設定面板"
         >
-          <option value="dark">🌙 玄夜禪月 (深色)</option>
-          <option value="light">☀️ 淨白雲卷 (淺色)</option>
-          <option value="pine">🍃 松林竹韻 (竹綠)</option>
-          <option value="sandalwood">🪵 古木沉香 (茶木)</option>
-          <option value="lotus">🪷 紫蓮靜室 (紫藕)</option>
-        </select>
+          ⚙️ 設定
+        </button>
       </div>
 
       <div className="search-section">
