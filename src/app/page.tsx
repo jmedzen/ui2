@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { CourseItem, ThemeType, FontSizeScale } from '@/types/course';
+import { CourseItem, ThemeType } from '@/types/course';
 import { AudioProvider } from '@/context/AudioContext';
 import TreeNav from '@/components/TreeNav';
 import CourseDetail from '@/components/CourseDetail';
@@ -10,7 +10,7 @@ import SettingsModal from '@/components/SettingsModal';
 import initialDb from '@/data/courses_db.json';
 
 const THEME_STORAGE_KEY = 'fayun_theme';
-const FONT_SIZE_STORAGE_KEY = 'fayun_font_size';
+const FONT_SIZE_PX_STORAGE_KEY = 'fayun_font_size_px';
 
 export default function Home() {
   // Initialize state immediately from bundled JSON data for 0ms load time
@@ -24,7 +24,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const [theme, setTheme] = useState<ThemeType>('dark');
-  const [fontSize, setFontSize] = useState<FontSizeScale>('normal');
+  const [fontSizePx, setFontSizePx] = useState<number>(16);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
 
@@ -36,9 +36,12 @@ export default function Home() {
         setTheme(savedTheme);
       }
 
-      const savedFontSize = localStorage.getItem(FONT_SIZE_STORAGE_KEY) as FontSizeScale | null;
-      if (savedFontSize && ['small', 'normal', 'large', 'xlarge'].includes(savedFontSize)) {
-        setFontSize(savedFontSize);
+      const savedPxStr = localStorage.getItem(FONT_SIZE_PX_STORAGE_KEY);
+      if (savedPxStr) {
+        const parsedPx = parseInt(savedPxStr, 10);
+        if (!isNaN(parsedPx) && parsedPx >= 12 && parsedPx <= 28) {
+          setFontSizePx(parsedPx);
+        }
       }
     } catch (e) {
       console.warn('Failed to restore settings from localStorage:', e);
@@ -54,10 +57,11 @@ export default function Home() {
     }
   };
 
-  const handleSelectFontSize = (newSize: FontSizeScale) => {
-    setFontSize(newSize);
+  const handleSelectFontSizePx = (newPx: number) => {
+    const clamped = Math.min(28, Math.max(12, newPx));
+    setFontSizePx(clamped);
     try {
-      localStorage.setItem(FONT_SIZE_STORAGE_KEY, newSize);
+      localStorage.setItem(FONT_SIZE_PX_STORAGE_KEY, String(clamped));
     } catch (e) {
       console.warn('Failed to save font size to localStorage:', e);
     }
@@ -99,7 +103,15 @@ export default function Home() {
 
   return (
     <AudioProvider>
-      <div className={`app-root ${theme} font-size-${fontSize}`}>
+      <div
+        className={`app-root ${theme}`}
+        style={
+          {
+            '--base-font-size': `${fontSizePx}px`,
+            fontSize: `${fontSizePx}px`
+          } as React.CSSProperties
+        }
+      >
         {/* Mobile Top Navbar */}
         <div className="mobile-navbar">
           <button
@@ -166,8 +178,8 @@ export default function Home() {
           onClose={() => setIsSettingsOpen(false)}
           theme={theme}
           onSelectTheme={handleSelectTheme}
-          fontSize={fontSize}
-          onSelectFontSize={handleSelectFontSize}
+          fontSizePx={fontSizePx}
+          onSelectFontSize={handleSelectFontSizePx}
         />
 
         {/* Global Floating Audio Player */}

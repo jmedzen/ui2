@@ -3,15 +3,13 @@
 import React from 'react';
 import { ThemeType } from '@/types/course';
 
-export type FontSizeScale = 'small' | 'normal' | 'large' | 'xlarge';
-
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   theme: ThemeType;
   onSelectTheme: (theme: ThemeType) => void;
-  fontSize: FontSizeScale;
-  onSelectFontSize: (size: FontSizeScale) => void;
+  fontSizePx: number;
+  onSelectFontSize: (sizePx: number) => void;
 }
 
 export default function SettingsModal({
@@ -19,7 +17,7 @@ export default function SettingsModal({
   onClose,
   theme,
   onSelectTheme,
-  fontSize,
+  fontSizePx,
   onSelectFontSize
 }: SettingsModalProps) {
   if (!isOpen) return null;
@@ -90,47 +88,46 @@ export default function SettingsModal({
 
           {/* Font Size Section */}
           <div className="settings-section">
-            <h4 className="settings-section-title">🔤 文字顯示大小 (Font Size)</h4>
-            <p className="settings-section-desc">動態調整全站經論名稱、講義內容與目錄之字型大小</p>
+            <h4 className="settings-section-title">🔤 微調全站字體大小 (Font Size px)</h4>
+            <p className="settings-section-desc">使用 ➖ 與 ➕ 按鈕精確調整全站字型像素大小 (12px ~ 28px)</p>
 
-            <div className="font-size-segmented-control">
+            <div className="font-size-stepper-control">
               <button
-                className={`font-size-btn ${fontSize === 'small' ? 'active' : ''}`}
-                onClick={() => onSelectFontSize('small')}
+                className="stepper-btn"
+                onClick={() => onSelectFontSize(Math.max(12, fontSizePx - 1))}
+                disabled={fontSizePx <= 12}
+                title="縮小字型 (最小 12px)"
               >
-                <span className="font-btn-label font-size-sample-sm">小</span>
-                <span className="font-btn-val">14px</span>
+                ➖
+              </button>
+
+              <div className="stepper-value-display">
+                <span className="stepper-num">{fontSizePx}</span>
+                <span className="stepper-unit">px</span>
+              </div>
+
+              <button
+                className="stepper-btn"
+                onClick={() => onSelectFontSize(Math.min(28, fontSizePx + 1))}
+                disabled={fontSizePx >= 28}
+                title="放大字型 (最大 28px)"
+              >
+                ➕
               </button>
 
               <button
-                className={`font-size-btn ${fontSize === 'normal' ? 'active' : ''}`}
-                onClick={() => onSelectFontSize('normal')}
+                className="stepper-reset-btn"
+                onClick={() => onSelectFontSize(16)}
+                title="重設為預設大小 (16px)"
               >
-                <span className="font-btn-label font-size-sample-md">標準</span>
-                <span className="font-btn-val">16px</span>
-              </button>
-
-              <button
-                className={`font-size-btn ${fontSize === 'large' ? 'active' : ''}`}
-                onClick={() => onSelectFontSize('large')}
-              >
-                <span className="font-btn-label font-size-sample-lg">大</span>
-                <span className="font-btn-val">18px</span>
-              </button>
-
-              <button
-                className={`font-size-btn ${fontSize === 'xlarge' ? 'active' : ''}`}
-                onClick={() => onSelectFontSize('xlarge')}
-              >
-                <span className="font-btn-label font-size-sample-xl">特大</span>
-                <span className="font-btn-val">20px</span>
+                🔄 重設 (16px)
               </button>
             </div>
 
             {/* Live Text Preview Box */}
             <div className="font-size-preview-box">
-              <span className="preview-tag">即時預覽：</span>
-              <p className="preview-text">
+              <span className="preview-tag">即時預覽 ({fontSizePx}px)：</span>
+              <p className="preview-text" style={{ fontSize: `${fontSizePx}px` }}>
                 「極樂世界，無有眾苦，但受諸樂，故名極樂。彼佛光明無量，照十方國，無所障礙。」
               </p>
             </div>
