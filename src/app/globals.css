@@ -1738,14 +1738,25 @@ body {
   opacity: 0.9;
 }
 
-/* Responsive Overrides */
+/* Mobile Viewport & Pixel Optimization Overrides */
 @media (max-width: 900px) {
   .layout-wrapper {
     flex-direction: column;
+    height: calc(100dvh - 56px);
+    padding-bottom: 84px;
   }
 
   .mobile-navbar {
     display: flex;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    height: 56px;
+  }
+
+  .mobile-settings-btn {
+    font-size: calc(12px * var(--font-scale));
+    padding: 5px 10px;
   }
 
   .sidebar-wrapper {
@@ -1753,9 +1764,10 @@ body {
     top: 0;
     left: 0;
     bottom: 0;
-    width: 320px;
+    width: 85vw;
+    max-width: 340px;
     transform: translateX(-100%);
-    box-shadow: 4px 0 25px rgba(0, 0, 0, 0.5);
+    box-shadow: 4px 0 25px rgba(0, 0, 0, 0.6);
   }
 
   .sidebar-wrapper.mobile-open {
@@ -1768,25 +1780,100 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(2px);
     z-index: 40;
+  }
+
+  .course-detail-pane {
+    padding: 12px;
+    gap: 14px;
+  }
+
+  .shadow-card {
+    padding: 16px;
+  }
+
+  .course-title {
+    font-size: calc(20px * var(--font-scale));
+  }
+
+  .tab-navigation {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+
+  .tab-btn {
+    white-space: nowrap;
+    padding: 8px 12px;
+    font-size: calc(13px * var(--font-scale));
+  }
+
+  .track-list-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .episode-search-input {
+    width: 100%;
+  }
+
+  .split-view-container {
+    flex-direction: column;
+  }
+
+  .split-left-pane {
+    max-height: 380px;
+  }
+
+  .pdf-viewer-card {
+    height: 520px;
+    padding: 10px;
+  }
+
+  .pdf-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pdf-select {
+    max-width: 100%;
+  }
+
+  .global-player-bar {
+    padding-bottom: max(6px, env(safe-area-inset-bottom));
   }
 
   .global-player-inner {
     flex-direction: column;
-    padding: 10px 16px;
-    gap: 8px;
+    padding: 8px 14px;
+    gap: 6px;
   }
 
   .global-player-info {
     width: 100%;
+    gap: 10px;
   }
 
   .global-player-controls {
     max-width: 100%;
+    width: 100%;
   }
 
   .global-player-tools {
+    width: 100%;
     justify-content: space-between;
+  }
+
+  .settings-modal-card {
+    max-width: 95vw;
+    max-height: 85vh;
+  }
+
+  .theme-options-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
