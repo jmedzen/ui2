@@ -77,9 +77,19 @@ export default function GlobalAudioPlayer() {
             <span className="course-name-text">
               {currentTrack.courseTitle} • 第 {currentTrack.index + 1} / {playlist.length} 集
             </span>
-            <span className="route-badge-tag" title="雙路徑自動測速分流與網頁主機 15GB 快取">
-              {currentTrack.activeRoute === 'direct' ? '🌐 直連 Fayun' : '⚡ 網頁主機代理 (快取中)'}
-            </span>
+            {currentTrack.activeRoute === 'direct' ? (
+              <span className="route-badge-tag route-badge-direct" title="播放來源：Fayun.org 直連 (主機背景預載中)">
+                🌐 Direct Fayun (⏳ 預載中)
+              </span>
+            ) : currentTrack.isServerCached ? (
+              <span className="route-badge-tag route-badge-cached" title="播放來源：網頁主機磁碟 (0ms 本地串流)">
+                ⚡ 網頁主機 (✅ 已快取)
+              </span>
+            ) : (
+              <span className="route-badge-tag route-badge-caching" title="播放來源：網頁主機 (邊聽邊快取中)">
+                ⚡ 網頁主機 (⏳ 邊聽邊快取...)
+              </span>
+            )}
           </div>
         </div>
 

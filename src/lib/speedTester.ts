@@ -27,6 +27,29 @@ export function cleanMediaPath(pathOrUrl: string): string {
 }
 
 /**
+ * Queries server cache status for a specific media file
+ */
+export async function fetchCacheStatus(pathOrUrl: string): Promise<boolean> {
+  try {
+    const cleanPath = cleanMediaPath(pathOrUrl);
+    if (!cleanPath) return false;
+
+    const proxyStatusUrl = cleanPath.startsWith('http')
+      ? `/api/proxy?url=${encodeURIComponent(cleanPath)}&action=status`
+      : `/api/proxy?path=${encodeURIComponent(cleanPath)}&action=status`;
+
+    const res = await fetch(proxyStatusUrl, { method: 'GET', cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      return !!data.isCached;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Triggers background server pre-caching for a requested asset
  */
 export function triggerBackgroundServerCache(pathOrUrl: string): void {

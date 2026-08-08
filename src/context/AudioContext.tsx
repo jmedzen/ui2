@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { triggerBackgroundServerCache, getOptimalMediaRoute } from '@/lib/speedTester';
+import { triggerBackgroundServerCache, getOptimalMediaRoute, fetchCacheStatus } from '@/lib/speedTester';
 
 export interface PlayingTrack {
   courseId: number;
@@ -11,6 +11,7 @@ export interface PlayingTrack {
   url: string;
   index: number;
   activeRoute?: 'proxy' | 'direct';
+  isServerCached?: boolean;
 }
 
 interface AudioContextType {
@@ -89,6 +90,32 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentTrack, playlist]);
 
+  // Dynamic Cache Status Polling for Current Track
+  useEffect(() => {
+    if (!currentTrack || currentTrack.isServerCached) return;
+
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      const isCached = await fetchCacheStatus(currentTrack.proxyUrl);
+      if (isCached && isMounted) {
+        setCurrentTrack((prev) => (prev ? { ...prev, isServerCached: true } : null));
+        clearInterval(interval);
+      }
+    }, 3000);
+
+    fetchCacheStatus(currentTrack.proxyUrl).then((isCached) => {
+      if (isCached && isMounted) {
+        setCurrentTrack((prev) => (prev ? { ...prev, isServerCached: true } : null));
+        clearInterval(interval);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [currentTrack?.proxyUrl, currentTrack?.isServerCached]);
+
   // Audio HTML5 element lifecycle & event listeners
   useEffect(() => {
     const audio = new Audio();
@@ -152,16 +179,20 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     setPlaylist(formattedPlaylist);
 
-    // Run dual-path speed evaluation in background, default to proxyUrl
-    getOptimalMediaRoute(targetTrack.proxyUrl, targetTrack.url).then((res) => {
-      const updatedTrack = {
+    // Initial cache status check & dual-path speed evaluation
+    Promise.all([
+      getOptimalMediaRoute(targetTrack.proxyUrl, targetTrack.url),
+      fetchCacheStatus(targetTrack.proxyUrl)
+    ]).then(([routeRes, isCached]) => {
+      const updatedTrack: PlayingTrack = {
         ...targetTrack,
-        activeRoute: res.route
+        activeRoute: routeRes.route,
+        isServerCached: isCached
       };
       setCurrentTrack(updatedTrack);
 
       if (audioRef.current) {
-        audioRef.current.src = res.activeUrl;
+        audioRef.current.src = routeRes.activeUrl;
         audioRef.current.playbackRate = playbackRate;
         audioRef.current.volume = isMuted ? 0 : volume;
         audioRef.current.load();

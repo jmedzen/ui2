@@ -61,6 +61,24 @@ export async function GET(request: NextRequest) {
       'Accept': '*/*'
     };
 
+    // Action: Status check endpoint
+    if (action === 'status') {
+      const cached = isCached(cacheFilePath);
+      let size = 0;
+      if (cached) {
+        try {
+          size = fs.statSync(cacheFilePath).size;
+        } catch {}
+      }
+      return NextResponse.json({
+        isCached: cached,
+        size,
+        targetUrl
+      }, {
+        headers: { 'Cache-Control': 'no-store' }
+      });
+    }
+
     // Action: Preload background cache without blocking client
     if (action === 'preload') {
       if (!isCached(cacheFilePath)) {
