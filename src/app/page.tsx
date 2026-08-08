@@ -32,7 +32,7 @@ export default function Home() {
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) as ThemeType | null;
-      if (savedTheme && ['dark', 'light', 'pine', 'sandalwood', 'zen'].includes(savedTheme)) {
+      if (savedTheme && ['dark', 'light', 'pine', 'sandalwood', 'zen', 'gruvbox'].includes(savedTheme)) {
         setTheme(savedTheme);
       }
 

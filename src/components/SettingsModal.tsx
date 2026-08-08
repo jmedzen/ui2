@@ -83,6 +83,15 @@ export default function SettingsModal({
                 <span className="theme-name">日式禪風</span>
                 <span className="theme-tag">和風抹茶</span>
               </button>
+
+              <button
+                className={`theme-option-btn gruvbox ${theme === 'gruvbox' ? 'active' : ''}`}
+                onClick={() => onSelectTheme('gruvbox')}
+              >
+                <span className="theme-icon">🌾</span>
+                <span className="theme-name">Gruvbox</span>
+                <span className="theme-tag">復古暖調</span>
+              </button>
             </div>
           </div>
 
