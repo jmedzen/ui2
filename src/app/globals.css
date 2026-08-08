@@ -1877,3 +1877,15 @@ body {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+.route-badge-tag {
+  font-size: calc(10px * var(--font-scale));
+  color: var(--jade-accent);
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid var(--jade-accent);
+  padding: 1px 6px;
+  border-radius: 4px;
+  width: fit-content;
+  margin-top: 2px;
+  font-weight: 600;
+}

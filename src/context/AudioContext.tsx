@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
+import { triggerBackgroundServerCache, getOptimalMediaRoute } from '@/lib/speedTester';
 
 export interface PlayingTrack {
   courseId: number;
@@ -9,6 +10,7 @@ export interface PlayingTrack {
   proxyUrl: string;
   url: string;
   index: number;
+  activeRoute?: 'proxy' | 'direct';
 }
 
 interface AudioContextType {
@@ -106,6 +108,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         if (nextIdx < list.length) {
           const nextTrack = list[nextIdx];
           setCurrentTrack(nextTrack);
+
+          // Always trigger background server caching for requested media
+          triggerBackgroundServerCache(nextTrack.proxyUrl);
+
           audio.src = nextTrack.proxyUrl;
           audio.play().then(() => setIsPlaying(true)).catch(console.warn);
         }
@@ -145,20 +151,30 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     if (!targetTrack || !audioRef.current) return;
 
     setPlaylist(formattedPlaylist);
-    setCurrentTrack(targetTrack);
 
-    audioRef.current.src = targetTrack.proxyUrl;
-    audioRef.current.playbackRate = playbackRate;
-    audioRef.current.volume = isMuted ? 0 : volume;
-    audioRef.current.load();
+    // Run dual-path speed evaluation in background, default to proxyUrl
+    getOptimalMediaRoute(targetTrack.proxyUrl, targetTrack.url).then((res) => {
+      const updatedTrack = {
+        ...targetTrack,
+        activeRoute: res.route
+      };
+      setCurrentTrack(updatedTrack);
 
-    audioRef.current
-      .play()
-      .then(() => setIsPlaying(true))
-      .catch((err) => {
-        console.warn('Playback error:', err);
-        setIsPlaying(false);
-      });
+      if (audioRef.current) {
+        audioRef.current.src = res.activeUrl;
+        audioRef.current.playbackRate = playbackRate;
+        audioRef.current.volume = isMuted ? 0 : volume;
+        audioRef.current.load();
+
+        audioRef.current
+          .play()
+          .then(() => setIsPlaying(true))
+          .catch((err) => {
+            console.warn('Playback error:', err);
+            setIsPlaying(false);
+          });
+      }
+    });
   }, [playbackRate, volume, isMuted]);
 
   const togglePlay = useCallback(() => {
@@ -170,6 +186,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       if (!audioRef.current.src) {
         audioRef.current.src = currentTrack.proxyUrl;
       }
+      // Always trigger background cache on play
+      triggerBackgroundServerCache(currentTrack.proxyUrl);
+
       audioRef.current
         .play()
         .then(() => setIsPlaying(true))

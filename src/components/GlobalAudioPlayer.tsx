@@ -77,6 +77,9 @@ export default function GlobalAudioPlayer() {
             <span className="course-name-text">
               {currentTrack.courseTitle} • 第 {currentTrack.index + 1} / {playlist.length} 集
             </span>
+            <span className="route-badge-tag" title="雙路徑自動測速分流與網頁主機 15GB 快取">
+              {currentTrack.activeRoute === 'direct' ? '🌐 直連 Fayun' : '⚡ 網頁主機代理 (快取中)'}
+            </span>
           </div>
         </div>
 
