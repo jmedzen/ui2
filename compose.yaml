@@ -1,0 +1,22 @@
+# Docker Compose Configuration for Fayun Web UI (Private GHCR Registry)
+# Usage:
+#   1. Login to GHCR: echo "YOUR_GITHUB_PAT" | docker login ghcr.io -u jmedzen --password-stdin
+#   2. Run: docker compose up -d
+
+services:
+  fyweb:
+    image: ghcr.io/jmedzen/ui2:latest
+    container_name: fyweb
+    restart: always
+    ports:
+      - "8410:8410"
+    environment:
+      - NODE_ENV=production
+      - PORT=8410
+      - HOSTNAME=0.0.0.0
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8410/api/courses"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
