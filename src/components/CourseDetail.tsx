@@ -152,14 +152,35 @@ export default function CourseDetail({ course }: CourseDetailProps) {
 
     async function loadPdfTracks() {
       setIsLoadingPdf(true);
-      setPdfTracks(course.pdfs || []);
 
       const potentialPaths: string[] = [];
-      if (course.audio_path) potentialPaths.push(course.audio_path);
-      if (course.video_path) potentialPaths.push(course.video_path);
+      if ((course as any).lecture_path) potentialPaths.push((course as any).lecture_path);
+      if ((course as any).pdf_path) potentialPaths.push((course as any).pdf_path);
+
+      if (course.audio_path) {
+        potentialPaths.push(course.audio_path);
+        const parentDir = course.audio_path.replace(/\/audio\/?$/, '');
+        if (parentDir && parentDir !== course.audio_path) {
+          potentialPaths.push(`${parentDir}/bilu`);
+          potentialPaths.push(`${parentDir}/pdf`);
+          potentialPaths.push(`${parentDir}/beizhu`);
+          potentialPaths.push(parentDir);
+        }
+      }
+
+      if (course.video_path) {
+        potentialPaths.push(course.video_path);
+        const parentDir = course.video_path.replace(/\/video\/?$/, '');
+        if (parentDir && parentDir !== course.video_path) {
+          potentialPaths.push(`${parentDir}/bilu`);
+          potentialPaths.push(`${parentDir}/pdf`);
+          potentialPaths.push(`${parentDir}/beizhu`);
+          potentialPaths.push(parentDir);
+        }
+      }
 
       const uniquePaths = Array.from(new Set(potentialPaths));
-      const fetchedPdfs: PdfItem[] = course.pdfs ? [...course.pdfs] : [];
+      const discoveredPdfs: PdfItem[] = [];
 
       for (const dirPath of uniquePaths) {
         if (!isMounted) break;
@@ -172,24 +193,25 @@ export default function CourseDetail({ course }: CourseDetailProps) {
           });
           if (res.ok) {
             const rawData = await res.json();
-
             const pdfFilenames: { name: string; folder: string }[] = [];
 
-            if (Array.isArray(rawData)) {
-              rawData.forEach((item: any) => {
+            const listData = Array.isArray(rawData) ? rawData : (rawData && typeof rawData === 'object' ? (rawData.data || rawData) : []);
+
+            if (Array.isArray(listData)) {
+              listData.forEach((item: any) => {
                 const fname = extractFilename(item);
                 if (fname.toLowerCase().endsWith('.pdf')) {
                   pdfFilenames.push({ name: fname, folder: dirPath });
                 }
               });
-            } else if (rawData && typeof rawData === 'object') {
-              Object.keys(rawData).forEach((key) => {
-                const val = rawData[key];
+            } else if (listData && typeof listData === 'object') {
+              Object.keys(listData).forEach((key) => {
+                const val = listData[key];
                 if (Array.isArray(val)) {
                   val.forEach((item: any) => {
                     const fname = extractFilename(item);
                     if (fname.toLowerCase().endsWith('.pdf')) {
-                      const subFolder = key === 'bilu' || key === 'beizhu' ? `${dirPath}/${key}` : dirPath;
+                      const subFolder = ['bilu', 'pdf', 'beizhu'].includes(key) ? `${dirPath}/${key}` : dirPath;
                       pdfFilenames.push({ name: fname, folder: subFolder });
                     }
                   });
@@ -199,9 +221,9 @@ export default function CourseDetail({ course }: CourseDetailProps) {
 
             pdfFilenames.forEach((pf) => {
               const pdfUrl = `https://www.fayun.org/ftpadmin${pf.folder}/${pf.name}`;
-              if (!fetchedPdfs.some((p) => p.url === pdfUrl)) {
-                fetchedPdfs.push({
-                  num: fetchedPdfs.length + 1,
+              if (!discoveredPdfs.some((p) => p.url === pdfUrl)) {
+                discoveredPdfs.push({
+                  num: discoveredPdfs.length + 1,
                   filename: pf.name,
                   url: pdfUrl
                 });
@@ -215,9 +237,15 @@ export default function CourseDetail({ course }: CourseDetailProps) {
         }
       }
 
+      discoveredPdfs.sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' }));
+      discoveredPdfs.forEach((p, i) => { p.num = i + 1; });
+
       if (isMounted) {
-        if (fetchedPdfs.length > 0) {
-          setPdfTracks(fetchedPdfs);
+        if (discoveredPdfs.length > 0) {
+          setPdfTracks(discoveredPdfs);
+        } else {
+          const fallbackPdfs = (course.pdfs || []).filter(p => !p.filename.endsWith('_筆記.pdf'));
+          setPdfTracks(fallbackPdfs);
         }
         setIsLoadingPdf(false);
       }
