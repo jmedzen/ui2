@@ -1,0 +1,7 @@
+# Caddyfile for Automatic HTTPS Reverse Proxy
+# Supports both self-signed local SSL and Let's Encrypt production SSL certificates.
+
+:443, :8443 {
+    tls internal
+    reverse_proxy fyweb:8410
+}

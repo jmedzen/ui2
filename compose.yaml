@@ -1,7 +1,8 @@
-# Docker Compose Configuration for Fayun Web UI (Private GHCR Registry)
+# Docker Compose Configuration with HTTPS SSL Support
 # Usage:
-#   1. Login to GHCR: echo "YOUR_GITHUB_PAT" | docker login ghcr.io -u jmedzen --password-stdin
-#   2. Run: docker compose up -d
+#   1. Login to GHCR (if private): echo "YOUR_PAT" | docker login ghcr.io -u jmedzen --password-stdin
+#   2. Start services: docker compose up -d
+#   3. Access HTTPS at: https://localhost or https://<YOUR_SERVER_IP>:8443
 
 services:
   fyweb:
@@ -20,3 +21,22 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  # HTTPS Automatic SSL Reverse Proxy
+  caddy:
+    image: caddy:2-alpine
+    container_name: fyweb-caddy
+    restart: always
+    ports:
+      - "443:443"
+      - "8443:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - fyweb
+
+volumes:
+  caddy_data:
+  caddy_config:
