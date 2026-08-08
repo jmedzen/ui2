@@ -19,7 +19,7 @@ DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
 LOG_PATH = os.path.join(PROJECT_DIR, "auto_heal.log")
 LIST_PHP_URL = "https://www.fayun.org/public/php/list.php"
 
-AUDIO_EXTS = ('.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac')
+AUDIO_EXTS = ('.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac', '.mp4', '.m4v', '.webm', '.mov')
 VIDEO_EXTS = ('.mp4', '.m4v', '.wmv', '.flv', '.mov', '.avi', '.mkv', '.webm')
 
 def log(msg):

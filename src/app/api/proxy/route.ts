@@ -51,13 +51,20 @@ export async function GET(request: NextRequest) {
       return new NextResponse(`Remote asset returned ${response.status}: ${response.statusText}`, { status: response.status });
     }
 
+    const rawContentType = (response.headers.get('content-type') || '').toLowerCase();
+    
+    // Critical Fix: If remote server returned HTML (Vue SPA fallback for non-existent files), return 404
+    if (rawContentType.includes('text/html')) {
+      return new NextResponse('Remote asset not found (Returned HTML SPA Page)', { status: 404 });
+    }
+
     const pathOrUrl = path || url || '';
     const ext = pathOrUrl.split('?')[0].split('.').pop()?.toLowerCase() || '';
 
-    let contentType = response.headers.get('content-type') || '';
+    let contentType = rawContentType;
 
     // Determine correct MIME type if missing or generic octet-stream
-    if (!contentType || contentType.includes('text/html') || contentType.includes('application/octet-stream')) {
+    if (!contentType || contentType.includes('application/octet-stream')) {
       if (['mp3'].includes(ext)) contentType = 'audio/mpeg';
       else if (['m4a', 'aac'].includes(ext)) contentType = 'audio/mp4';
       else if (['ogg'].includes(ext)) contentType = 'audio/ogg';

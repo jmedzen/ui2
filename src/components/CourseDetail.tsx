@@ -10,7 +10,7 @@ interface CourseDetailProps {
   course: CourseItem;
 }
 
-const AUDIO_EXTS = ['.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac'];
+const AUDIO_EXTS = ['.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac', '.mp4', '.m4v', '.webm', '.mov'];
 const VIDEO_EXTS = ['.mp4', '.m4v', '.wmv', '.flv', '.mov', '.avi', '.mkv', '.webm', '.mpg', '.mpeg'];
 
 const extractFilename = (item: any): string => {
@@ -41,12 +41,19 @@ export default function CourseDetail({ course }: CourseDetailProps) {
 
       let fetchedTracks: { filename: string; proxyUrl: string; url: string; index: number }[] = [];
 
-      if (course.audio_path) {
+      const potentialAudioPaths: string[] = [];
+      if (course.audio_path) potentialAudioPaths.push(course.audio_path);
+      if (course.video_path) potentialAudioPaths.push(course.video_path);
+
+      const uniqueAudioPaths = Array.from(new Set(potentialAudioPaths));
+
+      for (const aPath of uniqueAudioPaths) {
+        if (fetchedTracks.length > 0) break;
         try {
           const res = await fetch('/api/list-files', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ src: course.audio_path })
+            body: JSON.stringify({ src: aPath })
           });
           if (res.ok) {
             const rawData = await res.json();
@@ -64,7 +71,7 @@ export default function CourseDetail({ course }: CourseDetailProps) {
                 );
 
               fetchedTracks = audioFiles.map((filename: string, idx: number) => {
-                const fullPath = `${course.audio_path}/${filename}`;
+                const fullPath = `${aPath}/${filename}`;
                 return {
                   index: idx,
                   filename: filename,
@@ -76,21 +83,6 @@ export default function CourseDetail({ course }: CourseDetailProps) {
           }
         } catch (e) {
           console.warn('Failed to fetch remote audio list:', e);
-        }
-      }
-
-      if (fetchedTracks.length === 0 && course.total_episodes > 0 && course.audio_path) {
-        const total = course.total_episodes;
-        for (let i = 1; i <= total; i++) {
-          const numStr = i < 10 ? `0${i}` : `${i}`;
-          const filename = `${course.name}${numStr}.mp3`;
-          const fullPath = `${course.audio_path}/${filename}`;
-          fetchedTracks.push({
-            index: i - 1,
-            filename: `第 ${numStr} 集 (${filename})`,
-            url: `https://www.fayun.org/ftpadmin${fullPath}`,
-            proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
-          });
         }
       }
 
@@ -384,7 +376,7 @@ export default function CourseDetail({ course }: CourseDetailProps) {
                           download={track.filename}
                           onClick={(e) => e.stopPropagation()}
                           className="download-track-link"
-                          title="下載音訊 MP3/M4A"
+                          title="下載音訊"
                         >
                           ⬇️ 下載
                         </a>
