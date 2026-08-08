@@ -2,6 +2,7 @@
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useAudio } from '@/context/AudioContext';
+import { getOptimalMediaRoute, fetchCacheStatus, triggerBackgroundServerCache } from '@/lib/speedTester';
 
 export interface VideoTrackInfo {
   index: number;
@@ -30,6 +31,10 @@ export default function VideoPlayer({
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
   const [autoPlayNext, setAutoPlayNext] = useState<boolean>(true);
 
+  // Dual-path route & cache status state
+  const [activeRoute, setActiveRoute] = useState<'proxy' | 'direct'>('proxy');
+  const [isServerCached, setIsServerCached] = useState<boolean>(false);
+
   // Range page tab state (0 = 1..20, 1 = 21..40, etc.)
   const [selectedRangePage, setSelectedRangePage] = useState<number>(0);
 
@@ -47,12 +52,51 @@ export default function VideoPlayer({
     }
   }, [playbackRate]);
 
+  // Evaluate optimal media route & track server disk cache status
   useEffect(() => {
-    if (videoRef.current && currentTrack) {
-      videoRef.current.src = currentTrack.proxyUrl;
-      videoRef.current.load();
-    }
+    let isMounted = true;
+    if (!currentTrack) return;
+
+    // Trigger background cache on server
+    triggerBackgroundServerCache(currentTrack.proxyUrl);
+
+    Promise.all([
+      getOptimalMediaRoute(currentTrack.proxyUrl, currentTrack.url),
+      fetchCacheStatus(currentTrack.proxyUrl)
+    ]).then(([routeRes, isCached]) => {
+      if (!isMounted) return;
+      setActiveRoute(routeRes.route);
+      setIsServerCached(isCached);
+
+      if (videoRef.current) {
+        videoRef.current.src = routeRes.activeUrl;
+        videoRef.current.load();
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [currentTrackIndex, currentTrack]);
+
+  // Dynamic Cache Status Polling for Current Video
+  useEffect(() => {
+    if (!currentTrack || isServerCached) return;
+
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      const isCached = await fetchCacheStatus(currentTrack.proxyUrl);
+      if (isCached && isMounted) {
+        setIsServerCached(true);
+        clearInterval(interval);
+      }
+    }, 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [currentTrack?.proxyUrl, isServerCached]);
 
   const handleVideoPlay = () => {
     // When video starts playing, pause background audio player if it is currently playing
@@ -87,7 +131,22 @@ export default function VideoPlayer({
     <div className="video-player-card">
       <div className="video-header-bar">
         <div className="video-title-info">
-          <span className="video-badge">🎥 影音視訊</span>
+          <div className="video-badge-row">
+            <span className="video-badge">🎥 影音視訊</span>
+            {activeRoute === 'direct' ? (
+              <span className="route-badge-tag route-badge-direct" title="播放來源：Fayun.org 直連 (主機背景預載中)">
+                🌐 Direct Fayun (⏳ 預載中)
+              </span>
+            ) : isServerCached ? (
+              <span className="route-badge-tag route-badge-cached" title="播放來源：網頁主機磁碟 (0ms 本地串流)">
+                ⚡ 網頁主機 (✅ 已快取)
+              </span>
+            ) : (
+              <span className="route-badge-tag route-badge-caching" title="播放來源：網頁主機 (邊聽邊快取中)">
+                ⚡ 網頁主機 (⏳ 邊聽邊快取...)
+              </span>
+            )}
+          </div>
           <h4 className="video-name">{currentTrack.filename}</h4>
           <span className="video-sub-info">
             {courseTitle} • 第 {currentTrackIndex + 1} / {tracks.length} 集

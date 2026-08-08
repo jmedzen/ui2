@@ -3,7 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { Readable } from 'stream';
 
-const CACHE_DIR = process.env.MEDIA_CACHE_DIR || path.join(process.cwd(), '.media_cache');
+const CACHE_DIR = process.env.MEDIA_CACHE_DIR || path.join(process.cwd(), 'media_cache');
 const MAX_CACHE_SIZE_BYTES = 15 * 1024 * 1024 * 1024; // 15 GB
 const TARGET_CACHE_SIZE_BYTES = 12 * 1024 * 1024 * 1024; // 12 GB High-water mark after eviction
 

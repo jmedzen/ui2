@@ -917,6 +917,13 @@ body {
   gap: 4px;
 }
 
+.video-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .video-badge {
   font-size: calc(11px * var(--font-scale));
   background: rgba(139, 92, 246, 0.2);

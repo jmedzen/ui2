@@ -42,3 +42,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# media cache
+media_cache/
+.media_cache/
+*.mp3
+*.mp4
+*.m4a
+*.tmp
