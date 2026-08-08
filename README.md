@@ -113,6 +113,25 @@ npm run start
 
 ---
 
+## 🐳 Docker & GHCR 容器化部署 (GitHub Container Registry)
+
+本專案配置 GitHub Actions CI/CD 工作流，每次更新 `main` 分支均自動編譯並發布 Docker Image 至 GitHub Container Registry。
+
+### 1. 拉取 GHCR 鏡像並運行：
+```bash
+docker pull ghcr.io/jmedzen/ui2:latest
+docker run -d -p 8410:8410 --name fyweb ghcr.io/jmedzen/ui2:latest
+```
+開啟瀏覽器造訪：`http://localhost:8410`
+
+### 2. 本機 Docker 手動編譯：
+```bash
+docker build -t fyweb:latest .
+docker run -d -p 8410:8410 fyweb:latest
+```
+
+---
+
 ## 📄 授權說明 (License)
 
 影音與講義內容版權均屬 [fayun.org (美國法雲寺 / 法雲資訊網)](https://www.fayun.org) 所有。本 Web 平台僅供佛法講記典藏學習與研讀交流使用。
