@@ -1,4 +1,4 @@
-export type ThemeType = 'dark' | 'light' | 'pine' | 'sandalwood' | 'lotus';
+export type ThemeType = 'dark' | 'light' | 'pine' | 'sandalwood' | 'zen';
 export type FontSizeScale = 'small' | 'normal' | 'large' | 'xlarge';
 
 export interface PdfItem {

@@ -113,21 +113,21 @@ body {
   --shadow-color: rgba(0, 0, 0, 0.45);
 }
 
-.app-root.lotus {
-  --bg-main: #14101d;
-  --bg-sidebar: #1b1627;
-  --bg-card: #231c33;
-  --bg-hover: #2f2645;
-  --bg-active: #3c3057;
-  --border-color: #382c52;
-  --text-primary: #f5f3ff;
-  --text-secondary: #ddd6fe;
-  --text-muted: #a78bfa;
-  --gold-accent: #c084fc;
-  --gold-glow: rgba(192, 132, 252, 0.2);
-  --jade-accent: #34d399;
-  --purple-accent: #e879f9;
-  --shadow-color: rgba(0, 0, 0, 0.45);
+.app-root.zen {
+  --bg-main: #f4efea;
+  --bg-sidebar: #eae3da;
+  --bg-card: #fdfbf7;
+  --bg-hover: #e4dcd0;
+  --bg-active: #d8cebf;
+  --border-color: #dcd3c5;
+  --text-primary: #2d2926;
+  --text-secondary: #59524c;
+  --text-muted: #8c827a;
+  --gold-accent: #b8860b;
+  --gold-glow: rgba(184, 134, 11, 0.16);
+  --jade-accent: #4a6b54;
+  --purple-accent: #5c6b73;
+  --shadow-color: rgba(60, 50, 40, 0.08);
 }
 
 .theme-dropdown {

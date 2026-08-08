@@ -76,12 +76,12 @@ export default function SettingsModal({
               </button>
 
               <button
-                className={`theme-option-btn lotus ${theme === 'lotus' ? 'active' : ''}`}
-                onClick={() => onSelectTheme('lotus')}
+                className={`theme-option-btn zen ${theme === 'zen' ? 'active' : ''}`}
+                onClick={() => onSelectTheme('zen')}
               >
-                <span className="theme-icon">🪷</span>
-                <span className="theme-name">紫蓮靜室</span>
-                <span className="theme-tag">紫藕</span>
+                <span className="theme-icon">🍵</span>
+                <span className="theme-name">日式禪風</span>
+                <span className="theme-tag">和風抹茶</span>
               </button>
             </div>
           </div>
