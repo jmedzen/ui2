@@ -1,22 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
+import path from 'path';
 import { Readable } from 'stream';
-import { getCacheFilePath, isCached, updateAccessTime, cacheRemoteMedia } from '@/lib/serverMediaCache';
+import { getCacheFilePath, isCached, updateAccessTime, enforceLRULimit, cacheRemoteMedia } from '@/lib/serverMediaCache';
 
 const ALLOWED_HOSTS = ['www.fayun.org', 'fayun.org'];
+
+function sanitizePath(rawPath: string): string {
+  if (!rawPath) return '';
+  let cleaned = rawPath;
+  if (cleaned.includes('/api/proxy?path=')) {
+    cleaned = cleaned.split('/api/proxy?path=')[1];
+  }
+  if (cleaned.includes('/api/proxy?url=')) {
+    cleaned = cleaned.split('/api/proxy?url=')[1];
+  }
+  cleaned = decodeURIComponent(cleaned.split('&')[0]);
+  return cleaned;
+}
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     let url = searchParams.get('url');
-    let path = searchParams.get('path');
+    let rawPath = searchParams.get('path');
     const action = searchParams.get('action');
 
     let targetUrl = '';
     if (url) {
-      // Validate SSRF: URL must belong to allowed fayun.org host
+      const cleanUrl = sanitizePath(url);
       try {
-        const parsed = new URL(url);
+        const parsed = new URL(cleanUrl);
         if (!ALLOWED_HOSTS.includes(parsed.hostname.toLowerCase())) {
           return new NextResponse('Forbidden: Proxying to external domains is strictly prohibited.', { status: 403 });
         }
@@ -24,19 +38,21 @@ export async function GET(request: NextRequest) {
       } catch {
         return new NextResponse('Invalid target URL format', { status: 400 });
       }
-    } else if (path) {
-      // Sanitize path against directory traversal
-      if (path.includes('..')) {
+    } else if (rawPath) {
+      const cleanPath = sanitizePath(rawPath);
+      if (cleanPath.includes('..')) {
         return new NextResponse('Forbidden: Invalid path sequence', { status: 400 });
       }
-      const cleanPath = path.startsWith('/') ? path : `/${path}`;
-      targetUrl = `https://www.fayun.org/ftpadmin${encodeURI(cleanPath)}`;
+      const formattedPath = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
+      targetUrl = `https://www.fayun.org/ftpadmin${encodeURI(formattedPath)}`;
     } else {
       return new NextResponse('Missing url or path parameter', { status: 400 });
     }
 
-    const pathOrUrl = path || url || '';
-    const ext = pathOrUrl.split('?')[0].split('.').pop()?.toLowerCase() || '';
+    // Extract file extension cleanly without query strings
+    const urlObj = new URL(targetUrl);
+    const pathname = urlObj.pathname;
+    const ext = pathname.split('.').pop()?.toLowerCase() || '';
 
     const cacheFilePath = getCacheFilePath(targetUrl, ext);
     const reqHeaders: HeadersInit = {
@@ -124,19 +140,16 @@ export async function GET(request: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // CASE 2: CACHE MISS - Stream from Remote & Cache in Background
+    // CASE 2: CACHE MISS - Stream Teeing (Instant Play + Disk Cache)
     // -------------------------------------------------------------
     const range = request.headers.get('range');
     if (range) {
       reqHeaders['Range'] = range;
     }
 
-    // Always trigger background full download & 15GB LRU cache check for requested files
-    cacheRemoteMedia(targetUrl, cacheFilePath, reqHeaders);
-
     const response = await fetch(targetUrl, {
       headers: reqHeaders,
-      cache: 'no-cache'
+      cache: 'no-store'
     });
 
     if (!response.ok && response.status !== 206) {
@@ -164,7 +177,46 @@ export async function GET(request: NextRequest) {
       resHeaders.set('Accept-Ranges', response.headers.get('accept-ranges')!);
     }
 
-    return new NextResponse(response.body as any, {
+    // If no stream body, fallback to response
+    if (!response.body) {
+      return new NextResponse(null, { status: response.status, headers: resHeaders });
+    }
+
+    // Tee the Web Stream into 2 branches:
+    // Branch 1 -> Immediate response to client for 0-wait instant playback
+    // Branch 2 -> Synchronously pipe into local disk cache .tmp file
+    const [streamForClient, streamForDisk] = response.body.tee();
+
+    // Background disk cache writer (non-blocking)
+    (async () => {
+      const tempPath = `${cacheFilePath}.tmp`;
+      try {
+        if (!fs.existsSync(cacheFilePath) && !fs.existsSync(tempPath)) {
+          const fileStream = fs.createWriteStream(tempPath);
+          const nodeStream = Readable.fromWeb(streamForDisk as any);
+
+          nodeStream.pipe(fileStream);
+
+          await new Promise<void>((resolve, reject) => {
+            fileStream.on('finish', () => resolve());
+            fileStream.on('error', (err) => reject(err));
+            nodeStream.on('error', (err) => reject(err));
+          });
+
+          await fs.promises.rename(tempPath, cacheFilePath);
+          updateAccessTime(cacheFilePath);
+          console.log(`[Media Cache Tee] Successfully cached file: ${path.basename(cacheFilePath)}`);
+          enforceLRULimit();
+        }
+      } catch (err) {
+        console.warn(`[Media Cache Tee] Background stream save error:`, err);
+        try {
+          if (fs.existsSync(tempPath)) await fs.promises.unlink(tempPath);
+        } catch {}
+      }
+    })();
+
+    return new NextResponse(streamForClient as any, {
       status: response.status,
       headers: resHeaders
     });

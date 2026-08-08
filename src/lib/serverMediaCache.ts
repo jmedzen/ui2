@@ -22,7 +22,8 @@ export function getCacheKey(targetUrlOrPath: string): string {
 
 export function getCacheFilePath(targetUrlOrPath: string, ext: string): string {
   const hash = getCacheKey(targetUrlOrPath);
-  const cleanExt = ext ? (ext.startsWith('.') ? ext : `.${ext}`) : '';
+  const rawExt = (ext || '').split('?')[0].replace(/^\./, '');
+  const cleanExt = rawExt && /^[a-zA-Z0-9]+$/.test(rawExt) ? `.${rawExt}` : '.media';
   return path.join(CACHE_DIR, `${hash}${cleanExt}`);
 }
 

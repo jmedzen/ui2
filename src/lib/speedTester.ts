@@ -11,13 +11,32 @@ const speedCache = new Map<string, { route: 'direct' | 'proxy'; timestamp: numbe
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 Minutes client route preference memory
 
 /**
+ * Sanitizes path or URL to prevent double-encoding of /api/proxy
+ */
+export function cleanMediaPath(pathOrUrl: string): string {
+  if (!pathOrUrl) return '';
+  if (pathOrUrl.includes('/api/proxy?path=')) {
+    const raw = pathOrUrl.split('/api/proxy?path=')[1];
+    return decodeURIComponent(raw.split('&')[0]);
+  }
+  if (pathOrUrl.includes('/api/proxy?url=')) {
+    const raw = pathOrUrl.split('/api/proxy?url=')[1];
+    return decodeURIComponent(raw.split('&')[0]);
+  }
+  return pathOrUrl;
+}
+
+/**
  * Triggers background server pre-caching for a requested asset
  */
 export function triggerBackgroundServerCache(pathOrUrl: string): void {
   try {
-    const proxyPreloadUrl = pathOrUrl.startsWith('http')
-      ? `/api/proxy?url=${encodeURIComponent(pathOrUrl)}&action=preload`
-      : `/api/proxy?path=${encodeURIComponent(pathOrUrl)}&action=preload`;
+    const cleanPath = cleanMediaPath(pathOrUrl);
+    if (!cleanPath) return;
+
+    const proxyPreloadUrl = cleanPath.startsWith('http')
+      ? `/api/proxy?url=${encodeURIComponent(cleanPath)}&action=preload`
+      : `/api/proxy?path=${encodeURIComponent(cleanPath)}&action=preload`;
 
     fetch(proxyPreloadUrl, { method: 'GET', cache: 'no-store' }).catch(() => {});
   } catch (e) {
@@ -63,9 +82,10 @@ async function measureChunkSpeed(targetUrl: string): Promise<number> {
  * ALWAYS triggers background server caching regardless of winner.
  */
 export async function getOptimalMediaRoute(
-  path: string,
+  rawPath: string,
   directUrl: string
 ): Promise<SpeedTestResult> {
+  const path = cleanMediaPath(rawPath);
   const proxyUrl = `/api/proxy?path=${encodeURIComponent(path)}`;
 
   // ALWAYS trigger server background cache as per user requirement
