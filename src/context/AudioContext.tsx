@@ -121,6 +121,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const audio = new Audio();
     audioRef.current = audio;
 
+    if (currentTrackRef.current) {
+      audio.src = currentTrackRef.current.proxyUrl;
+    }
+
     const handleTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
       setDuration(audio.duration || 0);

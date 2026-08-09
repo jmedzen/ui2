@@ -11,6 +11,7 @@ import initialDb from '@/data/courses_db.json';
 
 const THEME_STORAGE_KEY = 'fayun_theme';
 const FONT_SIZE_PX_STORAGE_KEY = 'fayun_font_size_px';
+const LAST_COURSE_STORAGE_KEY = 'fayun_last_selected_course_id';
 
 export default function Home() {
   // Initialize state immediately from bundled JSON data for 0ms load time
@@ -28,7 +29,7 @@ export default function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
 
-  // Restore saved theme & font size from localStorage on mount
+  // Restore saved theme, font size & last selected/played course from localStorage on mount
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) as ThemeType | null;
@@ -43,10 +44,33 @@ export default function Home() {
           setFontSizePx(parsedPx);
         }
       }
+
+      // Restore last course ID or last played audio track's course ID
+      const savedCourseIdStr = localStorage.getItem(LAST_COURSE_STORAGE_KEY);
+      const savedTrackStr = localStorage.getItem('fayun_last_played_track');
+
+      let targetId: number | null = null;
+      if (savedCourseIdStr) {
+        targetId = parseInt(savedCourseIdStr, 10);
+      } else if (savedTrackStr) {
+        try {
+          const parsedTrack = JSON.parse(savedTrackStr);
+          if (parsedTrack?.currentTrack?.courseId) {
+            targetId = parsedTrack.currentTrack.courseId;
+          }
+        } catch {}
+      }
+
+      if (targetId && !isNaN(targetId)) {
+        const restoredCourse = initialCourses.find((c) => c.id === targetId);
+        if (restoredCourse) {
+          setSelectedCourse(restoredCourse);
+        }
+      }
     } catch (e) {
       console.warn('Failed to restore settings from localStorage:', e);
     }
-  }, []);
+  }, [initialCourses]);
 
   const handleSelectTheme = (newTheme: ThemeType) => {
     setTheme(newTheme);
@@ -99,6 +123,11 @@ export default function Home() {
   const handleSelectCourse = (course: CourseItem) => {
     setSelectedCourse(course);
     setIsMobileSidebarOpen(false);
+    try {
+      localStorage.setItem(LAST_COURSE_STORAGE_KEY, String(course.id));
+    } catch (e) {
+      console.warn('Failed to save last course ID to localStorage:', e);
+    }
   };
 
   return (

@@ -261,11 +261,40 @@ export default function CourseDetail({ course }: CourseDetailProps) {
     };
   }, [course]);
 
+  // Restore saved active tab & video index per course on mount/course change
+  useEffect(() => {
+    try {
+      const savedTab = localStorage.getItem(`fayun_last_tab_${course.id}`);
+      if (savedTab && ['audio', 'video', 'pdf', 'info', 'split'].includes(savedTab)) {
+        setActiveTab(savedTab as any);
+      } else {
+        setActiveTab('audio');
+      }
+
+      const savedVideoIdx = localStorage.getItem(`fayun_last_video_idx_${course.id}`);
+      if (savedVideoIdx) {
+        const parsed = parseInt(savedVideoIdx, 10);
+        if (!isNaN(parsed) && parsed >= 0) {
+          setCurrentVideoIndex(parsed);
+        } else {
+          setCurrentVideoIndex(0);
+        }
+      } else {
+        setCurrentVideoIndex(0);
+      }
+    } catch (e) {
+      console.warn('Failed to restore course tab state:', e);
+    }
+  }, [course.id]);
+
   const handleTabClick = (tab: 'audio' | 'video' | 'pdf' | 'info' | 'split') => {
     if (tab === 'video' && isPlaying) {
       togglePlay();
     }
     setActiveTab(tab);
+    try {
+      localStorage.setItem(`fayun_last_tab_${course.id}`, tab);
+    } catch {}
   };
 
   const handleVideoSelect = (idx: number) => {
@@ -274,6 +303,9 @@ export default function CourseDetail({ course }: CourseDetailProps) {
       if (isPlaying) {
         togglePlay();
       }
+      try {
+        localStorage.setItem(`fayun_last_video_idx_${course.id}`, String(idx));
+      } catch {}
     }
   };
 
