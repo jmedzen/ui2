@@ -183,6 +183,7 @@ export default function VideoPlayer({
           ref={videoRef}
           controls
           playsInline
+          preload="metadata"
           controlsList="nodownload"
           className="video-element"
           onPlay={handleVideoPlay}

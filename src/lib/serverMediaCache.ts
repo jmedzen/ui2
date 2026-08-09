@@ -131,19 +131,26 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string,
       nodeStream.on('error', (err) => reject(err));
     });
 
-    // Rename temp file to final cache file atomically
-    await fs.promises.rename(tempPath, cacheFilePath);
-    updateAccessTime(cacheFilePath);
-    console.log(`[Media Cache] Successfully cached file: ${path.basename(cacheFilePath)}`);
+    // Double-checked locking: If Stream Teeing already cached the file while downloading, clean up temp file
+    if (isCached(cacheFilePath)) {
+      try {
+        if (fs.existsSync(tempPath)) await fs.promises.unlink(tempPath);
+      } catch {}
+      return;
+    }
 
-    // Asynchronously trigger 15GB LRU check
-    enforceLRULimit();
-  } catch (e) {
-    console.warn(`[Media Cache] Failed background cache download for ${targetUrl}:`, e);
-    try {
-      if (fs.existsSync(tempPath)) {
+    if (fs.existsSync(tempPath)) {
+      await fs.promises.rename(tempPath, cacheFilePath);
+      updateAccessTime(cacheFilePath);
+      console.log(`[Media Cache] Successfully cached file: ${path.basename(cacheFilePath)}`);
+      enforceLRULimit();
+    }
+  } catch (e: any) {
+    // Only warn if unexpected error (ignore expected cancellation/race condition cleanup)
+    if (fs.existsSync(tempPath)) {
+      try {
         await fs.promises.unlink(tempPath);
-      }
-    } catch {}
+      } catch {}
+    }
   }
 }

@@ -76,6 +76,7 @@ export default function PdfViewer({ pdfs, courseTitle }: PdfViewerProps) {
           src={`${proxyUrl}#toolbar=1&navpanes=1`}
           title={activePdf.filename || courseTitle}
           className="pdf-iframe"
+          loading="lazy"
         />
       </div>
     </div>

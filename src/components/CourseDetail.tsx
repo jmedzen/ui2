@@ -182,19 +182,18 @@ export default function CourseDetail({ course }: CourseDetailProps) {
       const uniquePaths = Array.from(new Set(potentialPaths));
       const discoveredPdfs: PdfItem[] = [];
 
-      for (const dirPath of uniquePaths) {
-        if (!isMounted) break;
-        try {
-          const res = await fetch('/api/list-files', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ src: dirPath }),
-            signal: controller.signal
-          });
-          if (res.ok) {
+      try {
+        const results = await Promise.allSettled(
+          uniquePaths.map(async (dirPath) => {
+            const res = await fetch('/api/list-files', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ src: dirPath }),
+              signal: controller.signal
+            });
+            if (!res.ok) return [];
             const rawData = await res.json();
             const pdfFilenames: { name: string; folder: string }[] = [];
-
             const listData = Array.isArray(rawData) ? rawData : (rawData && typeof rawData === 'object' ? (rawData.data || rawData) : []);
 
             if (Array.isArray(listData)) {
@@ -218,8 +217,13 @@ export default function CourseDetail({ course }: CourseDetailProps) {
                 }
               });
             }
+            return pdfFilenames;
+          })
+        );
 
-            pdfFilenames.forEach((pf) => {
+        results.forEach((res) => {
+          if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+            res.value.forEach((pf) => {
               const pdfUrl = `https://www.fayun.org/ftpadmin${pf.folder}/${pf.name}`;
               if (!discoveredPdfs.some((p) => p.url === pdfUrl)) {
                 discoveredPdfs.push({
@@ -230,10 +234,10 @@ export default function CourseDetail({ course }: CourseDetailProps) {
               }
             });
           }
-        } catch (e: any) {
-          if (e.name !== 'AbortError') {
-            console.warn('Failed to fetch remote PDF list:', e);
-          }
+        });
+      } catch (e: any) {
+        if (e.name !== 'AbortError') {
+          console.warn('Failed to fetch remote PDF list:', e);
         }
       }
 
