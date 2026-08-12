@@ -166,62 +166,16 @@ export async function GET(request: NextRequest) {
     }
 
     // -------------------------------------------------------------
-    // CASE 2: CACHE MISS - Stream Teeing & Full Background Caching
+    // CASE 2: CACHE MISS - Proxy to Client & Trigger Formal Disk Cache Download
     // -------------------------------------------------------------
-    const range = request.headers.get('range');
-    const isPartialRange = range && range !== 'bytes=0-';
+    // Trigger background download of full formal file (.mp4 / .mp3 / .pdf)
+    cacheRemoteMedia(targetUrl, cacheFilePath);
 
+    const range = request.headers.get('range');
     if (range) {
       reqHeaders['Range'] = range;
     }
 
-    // If client requested a partial range (e.g. video probe), fetch range for client
-    // AND trigger full non-range download in background so disk gets the complete file
-    if (isPartialRange) {
-      const fullReqHeaders: Record<string, string> = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': 'https://www.fayun.org/',
-        'Accept': '*/*'
-      };
-      cacheRemoteMedia(targetUrl, cacheFilePath, fullReqHeaders);
-
-      const response = await fetch(targetUrl, {
-        headers: reqHeaders,
-        cache: 'no-store'
-      });
-
-      if (!response.ok && response.status !== 206) {
-        return new NextResponse(`Remote asset returned ${response.status}: ${response.statusText}`, { status: response.status });
-      }
-
-      const rawContentType = (response.headers.get('content-type') || '').toLowerCase();
-      if (rawContentType.includes('text/html')) {
-        return new NextResponse('Remote asset not found (Returned HTML SPA Page)', { status: 404 });
-      }
-
-      const resHeaders = new Headers();
-      resHeaders.set('Content-Type', rawContentType || contentType);
-      resHeaders.set('X-Content-Type-Options', 'nosniff');
-      resHeaders.set('X-Proxy-Cache', 'MISS');
-      resHeaders.set('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-
-      if (response.headers.get('content-length')) {
-        resHeaders.set('Content-Length', response.headers.get('content-length')!);
-      }
-      if (response.headers.get('content-range')) {
-        resHeaders.set('Content-Range', response.headers.get('content-range')!);
-      }
-      if (response.headers.get('accept-ranges')) {
-        resHeaders.set('Accept-Ranges', response.headers.get('accept-ranges')!);
-      }
-
-      return new NextResponse(response.body as any, {
-        status: response.status,
-        headers: resHeaders
-      });
-    }
-
-    // Full Stream Teeing for non-partial request (0-wait instant playback + full disk cache)
     const response = await fetch(targetUrl, {
       headers: reqHeaders,
       cache: 'no-store'
@@ -252,50 +206,7 @@ export async function GET(request: NextRequest) {
       resHeaders.set('Accept-Ranges', response.headers.get('accept-ranges')!);
     }
 
-    if (!response.body) {
-      return new NextResponse(null, { status: response.status, headers: resHeaders });
-    }
-
-    const [streamForClient, streamForDisk] = response.body.tee();
-
-    // Background disk cache writer (non-blocking)
-    (async () => {
-      const tempPath = `${cacheFilePath}.tmp`;
-      try {
-        if (!fs.existsSync(cacheFilePath) && !fs.existsSync(tempPath)) {
-          const fileStream = fs.createWriteStream(tempPath);
-          const nodeStream = Readable.fromWeb(streamForDisk as any);
-
-          nodeStream.pipe(fileStream);
-
-          await new Promise<void>((resolve, reject) => {
-            fileStream.on('finish', () => resolve());
-            fileStream.on('error', (err) => reject(err));
-            nodeStream.on('error', (err) => reject(err));
-          });
-
-          if (fs.existsSync(tempPath) && !fs.existsSync(cacheFilePath)) {
-            const stat = await fs.promises.stat(tempPath);
-            if (stat.size > 0) {
-              await fs.promises.rename(tempPath, cacheFilePath);
-              updateAccessTime(cacheFilePath);
-              console.log(`[Media Cache Tee] Successfully cached complete file: ${path.basename(cacheFilePath)}`);
-              enforceLRULimit();
-            }
-          }
-        }
-      } catch (err) {
-        console.warn(`[Media Cache Tee] Background stream save error:`, err);
-      } finally {
-        if (fs.existsSync(tempPath)) {
-          try {
-            await fs.promises.unlink(tempPath);
-          } catch {}
-        }
-      }
-    })();
-
-    return new NextResponse(streamForClient as any, {
+    return new NextResponse(response.body as any, {
       status: response.status,
       headers: resHeaders
     });

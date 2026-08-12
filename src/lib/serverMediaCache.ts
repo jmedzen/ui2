@@ -132,73 +132,98 @@ export async function enforceLRULimit(): Promise<void> {
   }
 }
 
+// Map to prevent duplicate concurrent background downloads for the same target file
+const activeDownloads = new Map<string, Promise<void>>();
+
 /**
- * Downloads remote media file to server cache disk in background
+ * Downloads remote media file to server cache disk in background and renames it to a formal file upon completion
  */
-export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string, reqHeaders: HeadersInit): Promise<void> {
+export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string, _reqHeaders?: HeadersInit): Promise<void> {
   const tempPath = `${cacheFilePath}.tmp`;
 
   if (isCached(cacheFilePath)) {
     return;
   }
 
+  // Return existing in-flight background download if already running
+  if (activeDownloads.has(cacheFilePath)) {
+    return activeDownloads.get(cacheFilePath);
+  }
+
+  // If tempPath exists, check if it's active (< 5 minutes old)
   if (fs.existsSync(tempPath)) {
     try {
       const stat = fs.statSync(tempPath);
-      // If temp file is older than 3 minutes, treat as stalled download and remove
-      if (Date.now() - stat.mtimeMs > 3 * 60 * 1000) {
-        fs.unlinkSync(tempPath);
+      if (Date.now() - stat.mtimeMs < 5 * 60 * 1000) {
+        return; // Download actively progressing
       } else {
-        return; // Active download in progress
+        fs.unlinkSync(tempPath); // Remove stale temp file
       }
-    } catch {
-      return;
-    }
+    } catch {}
   }
 
-  try {
-    const res = await fetch(targetUrl, {
-      headers: reqHeaders,
-      cache: 'no-store'
-    });
+  const downloadPromise = (async () => {
+    try {
+      console.log(`[Media Cache] Starting full background download for formal file: ${path.basename(cacheFilePath)}`);
 
-    if (!res.ok || !res.body) {
-      return;
-    }
+      const cleanHeaders: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://www.fayun.org/',
+        'Accept': '*/*'
+      };
 
-    const fileStream = fs.createWriteStream(tempPath);
-    const nodeStream = Readable.fromWeb(res.body as any);
+      const res = await fetch(targetUrl, {
+        headers: cleanHeaders,
+        cache: 'no-store'
+      });
 
-    nodeStream.pipe(fileStream);
+      if (!res.ok || !res.body) {
+        console.warn(`[Media Cache] Failed to fetch remote file ${targetUrl}: HTTP ${res.status}`);
+        return;
+      }
 
-    await new Promise<void>((resolve, reject) => {
-      fileStream.on('finish', () => resolve());
-      fileStream.on('error', (err) => reject(err));
-      nodeStream.on('error', (err) => reject(err));
-    });
+      const contentLengthStr = res.headers.get('content-length');
+      const expectedSize = contentLengthStr ? parseInt(contentLengthStr, 10) : 0;
 
-    // Double-checked locking: If Stream Teeing already cached the file while downloading, return
-    if (isCached(cacheFilePath)) {
-      return;
-    }
+      const fileStream = fs.createWriteStream(tempPath);
+      const nodeStream = Readable.fromWeb(res.body as any);
 
-    if (fs.existsSync(tempPath)) {
-      const stat = await fs.promises.stat(tempPath);
-      if (stat.size > 0) {
-        await fs.promises.rename(tempPath, cacheFilePath);
-        updateAccessTime(cacheFilePath);
-        console.log(`[Media Cache] Successfully cached file: ${path.basename(cacheFilePath)}`);
-        enforceLRULimit();
+      nodeStream.pipe(fileStream);
+
+      await new Promise<void>((resolve, reject) => {
+        fileStream.on('finish', () => resolve());
+        fileStream.on('error', (err) => reject(err));
+        nodeStream.on('error', (err) => reject(err));
+      });
+
+      if (isCached(cacheFilePath)) {
+        return;
+      }
+
+      if (fs.existsSync(tempPath)) {
+        const stat = await fs.promises.stat(tempPath);
+        if (stat.size > 0 && (expectedSize === 0 || stat.size >= expectedSize)) {
+          await fs.promises.rename(tempPath, cacheFilePath);
+          updateAccessTime(cacheFilePath);
+          console.log(`[Media Cache] Successfully cached formal file: ${path.basename(cacheFilePath)} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
+          enforceLRULimit();
+        } else {
+          console.warn(`[Media Cache] Incomplete download for ${path.basename(cacheFilePath)} (got ${stat.size}/${expectedSize} bytes). Cleaning temp file.`);
+          await fs.promises.unlink(tempPath);
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[Media Cache] Download error for ${path.basename(cacheFilePath)}:`, e?.message || e);
+    } finally {
+      activeDownloads.delete(cacheFilePath);
+      if (fs.existsSync(tempPath)) {
+        try {
+          await fs.promises.unlink(tempPath);
+        } catch {}
       }
     }
-  } catch (e: any) {
-    console.warn(`[Media Cache] Download error for ${path.basename(cacheFilePath)}:`, e?.message || e);
-  } finally {
-    // Unconditional cleanup: Ensure .tmp file is ALWAYS removed if not renamed
-    if (fs.existsSync(tempPath)) {
-      try {
-        await fs.promises.unlink(tempPath);
-      } catch {}
-    }
-  }
+  })();
+
+  activeDownloads.set(cacheFilePath, downloadPromise);
+  return downloadPromise;
 }
