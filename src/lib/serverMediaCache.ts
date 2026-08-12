@@ -3,29 +3,54 @@ import path from 'path';
 import crypto from 'crypto';
 import { Readable } from 'stream';
 
-const CACHE_DIR = process.env.MEDIA_CACHE_DIR || path.join(process.cwd(), 'data', 'media_cache');
+const CACHE_DIR = (() => {
+  const envDir = process.env.MEDIA_CACHE_DIR;
+  if (envDir && envDir.includes('data')) {
+    return envDir;
+  }
+  return path.join(process.cwd(), 'data', 'media_cache');
+})();
+
 const MAX_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_MAX_BYTES || '', 10) || 2 * 1024 * 1024 * 1024; // 2 GB
 const TARGET_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_TARGET_BYTES || '', 10) || Math.floor(MAX_CACHE_SIZE_BYTES * 0.8); // 1.6 GB High-water mark after eviction
 
-// Ensure cache directory exists and auto-migrate legacy media_cache folder if present
+// Ensure target data/media_cache directory exists and migrate all legacy media cache folders (audio/video/PDF)
 try {
   if (!fs.existsSync(CACHE_DIR)) {
     fs.mkdirSync(CACHE_DIR, { recursive: true });
   }
 
-  const legacyDir = path.join(process.cwd(), 'media_cache');
-  if (fs.existsSync(legacyDir) && legacyDir !== CACHE_DIR) {
-    const legacyFiles = fs.readdirSync(legacyDir);
-    for (const file of legacyFiles) {
-      const srcFile = path.join(legacyDir, file);
-      const destFile = path.join(CACHE_DIR, file);
-      if (!fs.existsSync(destFile)) {
+  const legacyDirs = [
+    path.join(process.cwd(), 'media_cache'),
+    path.join(process.cwd(), 'cache')
+  ];
+
+  for (const legacyDir of legacyDirs) {
+    if (fs.existsSync(legacyDir) && legacyDir !== CACHE_DIR) {
+      const legacyFiles = fs.readdirSync(legacyDir);
+      for (const file of legacyFiles) {
+        const srcFile = path.join(legacyDir, file);
+        const destFile = path.join(CACHE_DIR, file);
         try {
-          fs.renameSync(srcFile, destFile);
-        } catch {
-          try { fs.copyFileSync(srcFile, destFile); } catch {}
+          if (!fs.existsSync(destFile)) {
+            try {
+              fs.renameSync(srcFile, destFile);
+            } catch {
+              fs.copyFileSync(srcFile, destFile);
+              try { fs.unlinkSync(srcFile); } catch {}
+            }
+          } else {
+            try { fs.unlinkSync(srcFile); } catch {}
+          }
+        } catch (err) {
+          console.warn(`[Media Cache Migration] Could not move ${file}:`, err);
         }
       }
+      try {
+        if (fs.readdirSync(legacyDir).length === 0) {
+          fs.rmdirSync(legacyDir);
+        }
+      } catch {}
     }
   }
 } catch (e) {
@@ -45,7 +70,28 @@ export function getCacheFilePath(targetUrlOrPath: string, ext: string): string {
 
 export function isCached(filePath: string): boolean {
   try {
-    return fs.existsSync(filePath) && fs.statSync(filePath).size > 0;
+    if (fs.existsSync(filePath) && fs.statSync(filePath).size > 0) {
+      return true;
+    }
+    // Runtime safety net: check legacy media_cache folder for on-demand migration
+    const fileName = path.basename(filePath);
+    const legacyFilePath = path.join(process.cwd(), 'media_cache', fileName);
+    if (fs.existsSync(legacyFilePath) && fs.statSync(legacyFilePath).size > 0) {
+      try {
+        if (!fs.existsSync(path.dirname(filePath))) {
+          fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        }
+        fs.renameSync(legacyFilePath, filePath);
+        return true;
+      } catch {
+        try {
+          fs.copyFileSync(legacyFilePath, filePath);
+          fs.unlinkSync(legacyFilePath);
+          return true;
+        } catch {}
+      }
+    }
+    return false;
   } catch {
     return false;
   }
