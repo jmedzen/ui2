@@ -22,12 +22,19 @@ LIST_PHP_URL = "https://www.fayun.org/public/php/list.php"
 AUDIO_EXTS = ('.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac', '.mp4', '.m4v', '.webm', '.mov')
 VIDEO_EXTS = ('.mp4', '.m4v', '.wmv', '.flv', '.mov', '.avi', '.mkv', '.webm')
 
+SCANNER_LOG_PATH = os.path.join(PROJECT_DIR, "scanner.log")
+
 def log(msg):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {msg}"
     print(line)
     with open(LOG_PATH, "a", encoding="utf-8") as f:
         f.write(line + "\n")
+    try:
+        with open(SCANNER_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except:
+        pass
 
 def quote_url(url):
     parts = urllib.parse.urlsplit(url)
@@ -276,7 +283,7 @@ def run_auto_heal():
                     "name": course["name"],
                     "notes": notes
                 })
-                log(f"🔧 [{idx+1}/{total_courses}] Repaired '{course['name']}': {notes}")
+                log(f"🔧 [修復路徑] ID: {course['id']} | 完整名稱: '{course['name']}' | 分類: {course.get('main_menu_title','')} ➔ {course.get('sub_menu_title','')} | 修復結果: {notes}")
         except Exception as e:
             log(f"⚠️ Error auditing course {course.get('name')}: {e}")
 

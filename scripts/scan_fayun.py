@@ -153,10 +153,10 @@ def run_scan():
 
                 if not existing:
                     new_items_count += 1
-                    log_message(f"🆕 Discovered NEW media: ID {c_id} - '{c_name}' ({main_title} / {sub_title})")
+                    log_message(f"🆕 [新增媒體] ID: {c_id} | 完整名稱: '{c_name}' | 分類: {main_title} ➔ {sub_title} ➔ {topic_title} | 音訊路徑: {course_obj.get('audio_path')} | 影音路徑: {course_obj.get('video_path')} | 講義路徑: {course_obj.get('lecture_path')}")
                 elif existing != course_obj:
                     updated_items_count += 1
-                    log_message(f"🔄 Synced updated media: ID {c_id} - '{c_name}' ({main_title} / {sub_title})")
+                    log_message(f"🔄 [更新同步] ID: {c_id} | 完整名稱: '{c_name}' | 分類: {main_title} ➔ {sub_title} ➔ {topic_title} | 音訊路徑: {course_obj.get('audio_path')} | 集數: {course_obj.get('total_episodes')}")
 
                 scanned_courses.append(course_obj)
         except Exception as e:
