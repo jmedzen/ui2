@@ -44,6 +44,18 @@ export default function CourseDetail({ course }: CourseDetailProps) {
 
       const potentialAudioPaths: string[] = [];
       if (course.audio_path) potentialAudioPaths.push(course.audio_path);
+
+      if (course.audio_path) {
+        const parentDir = course.audio_path.split('/audio')[0];
+        const topicDir = parentDir.includes('/') ? parentDir.substring(0, parentDir.lastIndexOf('/')) : '';
+        potentialAudioPaths.push(`${parentDir}/${course.name}/audio`);
+        potentialAudioPaths.push(`${parentDir}/${course.name}`);
+        if (topicDir) {
+          potentialAudioPaths.push(`${topicDir}/${course.name}/audio`);
+          potentialAudioPaths.push(`${topicDir}/${course.name}`);
+        }
+      }
+
       if (course.video_path) potentialAudioPaths.push(course.video_path);
 
       const uniqueAudioPaths = Array.from(new Set(potentialAudioPaths));
@@ -72,21 +84,68 @@ export default function CourseDetail({ course }: CourseDetailProps) {
                   a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
                 );
 
-              fetchedTracks = audioFiles.map((filename: string, idx: number) => {
-                const fullPath = `${aPath}/${filename}`;
-                return {
-                  index: idx,
-                  filename: filename,
-                  url: `https://www.fayun.org/ftpadmin${fullPath}`,
-                  proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
-                };
-              });
+              const hasMatchingFile = audioFiles.some(fn => fn.includes(course.name) || (course.name.length > 2 && fn.includes(course.name.slice(0, 3))));
+
+              if (audioFiles.length > 0 && (hasMatchingFile || aPath.includes(encodeURIComponent(course.name)) || aPath.includes(course.name))) {
+                fetchedTracks = audioFiles.map((filename: string, idx: number) => {
+                  const fullPath = `${aPath}/${filename}`;
+                  return {
+                    index: idx,
+                    filename: filename,
+                    url: `https://www.fayun.org/ftpadmin${fullPath}`,
+                    proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
+                  };
+                });
+              }
             }
           }
         } catch (e: any) {
           if (e.name !== 'AbortError') {
             console.warn('Failed to fetch remote audio list:', e);
           }
+        }
+      }
+
+      // Fallback if no matching audio file found in prioritized candidate paths
+      if (fetchedTracks.length === 0 && uniqueAudioPaths.length > 0) {
+        for (const aPath of uniqueAudioPaths) {
+          if (fetchedTracks.length > 0 || !isMounted) break;
+          try {
+            const res = await fetch('/api/list-files', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ src: aPath }),
+              signal: controller.signal
+            });
+            if (res.ok) {
+              const rawData = await res.json();
+              const dataList = Array.isArray(rawData) ? rawData : (rawData && Array.isArray(rawData.data) ? rawData.data : []);
+
+              if (Array.isArray(dataList) && dataList.length > 0) {
+                const audioFiles = dataList
+                  .map(extractFilename)
+                  .filter((filename: string) => {
+                    const ext = '.' + filename.split('.').pop()?.toLowerCase();
+                    return AUDIO_EXTS.includes(ext);
+                  })
+                  .sort((a: string, b: string) =>
+                    a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+                  );
+
+                if (audioFiles.length > 0) {
+                  fetchedTracks = audioFiles.map((filename: string, idx: number) => {
+                    const fullPath = `${aPath}/${filename}`;
+                    return {
+                      index: idx,
+                      filename: filename,
+                      url: `https://www.fayun.org/ftpadmin${fullPath}`,
+                      proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
+                    };
+                  });
+                }
+              }
+            }
+          } catch {}
         }
       }
 

@@ -102,6 +102,13 @@ def fetch_category_media(main_menu, sub_menu):
             return res
     return []
 
+PATH_OVERRIDES = {
+    14: {
+        "audio_path": "/media/止觀坐禪/靜坐漫談/audio",
+        "lecture_path": "/media/止觀坐禪/靜坐漫談/bilu"
+    }
+}
+
 def run_scan():
     log_message("Starting fayun.org media scan...")
 
@@ -131,6 +138,15 @@ def run_scan():
                 existing = existing_courses.get(c_id)
                 c_pdfs = existing.get("pdfs", []) if existing else []
 
+                audio_p = item.get("audio_path")
+                lecture_p = item.get("lecture_path_audio") or item.get("lecture_path_video")
+
+                if c_id in PATH_OVERRIDES:
+                    if "audio_path" in PATH_OVERRIDES[c_id]:
+                        audio_p = PATH_OVERRIDES[c_id]["audio_path"]
+                    if "lecture_path" in PATH_OVERRIDES[c_id]:
+                        lecture_p = PATH_OVERRIDES[c_id]["lecture_path"]
+
                 course_obj = {
                     "id": c_id,
                     "name": c_name,
@@ -143,9 +159,9 @@ def run_scan():
                     "location": item.get("location") or "美國法雲寺禪學院",
                     "time": item.get("time") or "",
                     "total_episodes": item.get("total", 0) or 0,
-                    "audio_path": item.get("audio_path"),
+                    "audio_path": audio_p,
                     "video_path": item.get("video_path"),
-                    "lecture_path": item.get("lecture_path_audio") or item.get("lecture_path_video"),
+                    "lecture_path": lecture_p,
                     "poster_path": item.get("poster_path"),
                     "comment": item.get("comment"),
                     "pdfs": c_pdfs
