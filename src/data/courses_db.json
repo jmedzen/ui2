@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-08 16:14:09",
+  "generated_at": "2026-08-12 11:00:40",
   "total_courses": 414,
   "menu_schema": {
     "dharma": {
@@ -8836,12 +8836,18 @@
       "location": "新竹福嚴佛學院",
       "time": "1995",
       "total_episodes": 3,
-      "audio_path": "/media/止觀坐禪/止觀大意/audio",
+      "audio_path": "/media/止觀坐禪/靜坐漫談/audio",
       "video_path": null,
-      "lecture_path": "/media/止觀坐禪/止觀大意/bilu",
+      "lecture_path": "/media/止觀坐禪/靜坐漫談/bilu",
       "poster_path": "/media/poster/fayun-cover1.png",
       "comment": null,
-      "pdfs": []
+      "pdfs": [
+        {
+          "num": 1,
+          "filename": "靜坐漫談.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/%E6%AD%A2%E8%A7%80%E5%9D%90%E7%96%A1/%E9%9D%96%E5%9D%90%E6%9D%B3%E8%AB%87/bilu/%E9%9D%96%E5%9D%90%E6%9D%B3%E8%AB%87.pdf"
+        }
+      ]
     }
   ]
 }

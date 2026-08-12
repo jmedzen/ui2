@@ -173,15 +173,51 @@ def verify_and_heal_course(course):
     audio_path = course.get("audio_path")
     if audio_path:
         audio_data = query_remote_list(audio_path)
-        if not audio_data and "/audio" in audio_path:
-            # Try alternate path
-            parent = audio_path.split("/audio")[0]
-            alt_data = query_remote_list(parent)
-            if alt_data:
-                course["audio_path"] = parent
+        
+        # Check if audio_data files actually belong to this course
+        is_mismatched = False
+        if isinstance(audio_data, list) and len(audio_data) > 0:
+            fnames = [extract_fname(f) for f in audio_data]
+            # Check if any audio filename contains course_name (or key substring)
+            matched = any(course_name in fn or (len(course_name) > 2 and course_name[:3] in fn) for fn in fnames)
+            if not matched:
+                is_mismatched = True
+
+        if is_mismatched or not audio_data:
+            # Attempt to find real course directory under parent topic
+            parent_dir = audio_path.split("/audio")[0] if "/audio" in audio_path else os.path.dirname(audio_path)
+            topic_dir = os.path.dirname(parent_dir)
+            
+            candidates = [
+                f"{parent_dir}/{course_name}/audio",
+                f"{parent_dir}/{course_name}",
+                f"{topic_dir}/{course_name}/audio",
+                f"{topic_dir}/{course_name}"
+            ]
+            
+            repaired_path = None
+            for cand in candidates:
+                cand_data = query_remote_list(cand)
+                if isinstance(cand_data, list) and len(cand_data) > 0:
+                    cand_fnames = [extract_fname(f) for f in cand_data]
+                    if any(course_name in fn or (len(course_name) > 2 and course_name[:3] in fn) for fn in cand_fnames):
+                        repaired_path = cand
+                        audio_data = cand_data
+                        break
+
+            if repaired_path:
+                course["audio_path"] = repaired_path
                 modified = True
-                notes.append(f"Repaired audio_path to {parent}")
-        elif isinstance(audio_data, list):
+                notes.append(f"Repaired mismatched audio_path to {repaired_path}")
+            elif not audio_data and "/audio" in audio_path:
+                parent = audio_path.split("/audio")[0]
+                alt_data = query_remote_list(parent)
+                if alt_data:
+                    course["audio_path"] = parent
+                    modified = True
+                    notes.append(f"Repaired audio_path to {parent}")
+
+        if isinstance(audio_data, list):
             audio_files = [f for f in audio_data if extract_fname(f).lower().endswith(AUDIO_EXTS)]
             if len(audio_files) > 0 and course.get("total_episodes") != len(audio_files):
                 course["total_episodes"] = len(audio_files)
