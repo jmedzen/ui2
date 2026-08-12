@@ -86,6 +86,9 @@ def verify_media_url(url):
     except Exception as e:
         return False, str(e)
 
+LIST_PHP_URL = "https://www.fayun.org/public/php/list.php"
+AUDIO_EXTS = (".mp3", ".m4a", ".wav", ".wma", ".aac", ".ogg", ".mp4", ".m4v", ".webm")
+
 def query_remote_list(src_path):
     """
     Queries fayun.org list.php for file listings inside a directory path.

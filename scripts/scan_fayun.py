@@ -181,9 +181,6 @@ def run_scan():
                         lecture_p = PATH_OVERRIDES[c_id]["lecture_path"]
 
                 if existing:
-                    # Preserve auto-healed None video_path to prevent regression/flip-flop loop
-                    if existing.get("video_path") is None:
-                        video_p = None
                     if existing.get("audio_path"):
                         audio_p = existing["audio_path"]
                     if existing.get("lecture_path"):
