@@ -10,7 +10,7 @@ export async function GET() {
     if (fs.existsSync(logPath)) {
       const fullLog = fs.readFileSync(logPath, 'utf-8');
       const lines = fullLog.trim().split('\n');
-      logContent = lines.slice(-20).join('\n');
+      logContent = lines.slice(-300).join('\n');
     }
 
     const dbPath = path.join(process.cwd(), 'src', 'data', 'courses_db.json');
@@ -25,7 +25,7 @@ export async function GET() {
 
     return NextResponse.json({
       status: 'active',
-      schedule: 'Web Trigger Only',
+      schedule: 'Web Trigger / Manual',
       lastScan: dbInfo.generated_at,
       totalCourses: dbInfo.total_courses,
       recentLogs: logContent
@@ -40,10 +40,36 @@ export async function POST(): Promise<NextResponse> {
     const scriptPath = path.join(process.cwd(), 'scripts', 'scan_fayun.py');
     return new Promise<NextResponse>((resolve) => {
       exec(`python3 "${scriptPath}"`, (error, stdout, stderr) => {
+        const logPath = path.join(process.cwd(), 'scanner.log');
+        let logContent = stdout;
+        if (fs.existsSync(logPath)) {
+          const fullLog = fs.readFileSync(logPath, 'utf-8');
+          const lines = fullLog.trim().split('\n');
+          logContent = lines.slice(-300).join('\n');
+        }
+
+        const dbPath = path.join(process.cwd(), 'src', 'data', 'courses_db.json');
+        let dbInfo = { generated_at: 'Unknown', total_courses: 0 };
+        if (fs.existsSync(dbPath)) {
+          try {
+            const data = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
+            dbInfo = {
+              generated_at: data.generated_at || 'Unknown',
+              total_courses: data.total_courses || 0
+            };
+          } catch {}
+        }
+
         if (error) {
-          resolve(NextResponse.json({ error: error.message, stderr }, { status: 500 }));
+          resolve(NextResponse.json({ error: error.message, stderr, recentLogs: logContent }, { status: 500 }));
         } else {
-          resolve(NextResponse.json({ message: 'Scan executed successfully', output: stdout }));
+          resolve(NextResponse.json({
+            message: 'Scan executed successfully',
+            output: stdout,
+            lastScan: dbInfo.generated_at,
+            totalCourses: dbInfo.total_courses,
+            recentLogs: logContent
+          }));
         }
       });
     });

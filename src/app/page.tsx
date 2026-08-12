@@ -209,6 +209,7 @@ export default function Home() {
           onSelectTheme={handleSelectTheme}
           fontSizePx={fontSizePx}
           onSelectFontSize={handleSelectFontSizePx}
+          onRefreshCourses={fetchCourses}
         />
 
         {/* Global Floating Audio Player */}

@@ -156,6 +156,7 @@ def run_scan():
                     log_message(f"🆕 Discovered NEW media: ID {c_id} - '{c_name}' ({main_title} / {sub_title})")
                 elif existing != course_obj:
                     updated_items_count += 1
+                    log_message(f"🔄 Synced updated media: ID {c_id} - '{c_name}' ({main_title} / {sub_title})")
 
                 scanned_courses.append(course_obj)
         except Exception as e:
