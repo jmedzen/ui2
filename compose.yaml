@@ -15,8 +15,7 @@ services:
       - PORT=8410
       - HOSTNAME=0.0.0.0
     volumes:
-      - ./media_cache:/app/media_cache
-      - ./logs:/app/logs
+      - ./data:/app/data
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8410/api/courses"]
       interval: 30s

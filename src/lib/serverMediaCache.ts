@@ -3,17 +3,33 @@ import path from 'path';
 import crypto from 'crypto';
 import { Readable } from 'stream';
 
-const CACHE_DIR = process.env.MEDIA_CACHE_DIR || path.join(process.cwd(), 'media_cache');
+const CACHE_DIR = process.env.MEDIA_CACHE_DIR || path.join(process.cwd(), 'data', 'media_cache');
 const MAX_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_MAX_BYTES || '', 10) || 2 * 1024 * 1024 * 1024; // 2 GB
 const TARGET_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_TARGET_BYTES || '', 10) || Math.floor(MAX_CACHE_SIZE_BYTES * 0.8); // 1.6 GB High-water mark after eviction
 
-// Ensure cache directory exists
+// Ensure cache directory exists and auto-migrate legacy media_cache folder if present
 try {
   if (!fs.existsSync(CACHE_DIR)) {
     fs.mkdirSync(CACHE_DIR, { recursive: true });
   }
+
+  const legacyDir = path.join(process.cwd(), 'media_cache');
+  if (fs.existsSync(legacyDir) && legacyDir !== CACHE_DIR) {
+    const legacyFiles = fs.readdirSync(legacyDir);
+    for (const file of legacyFiles) {
+      const srcFile = path.join(legacyDir, file);
+      const destFile = path.join(CACHE_DIR, file);
+      if (!fs.existsSync(destFile)) {
+        try {
+          fs.renameSync(srcFile, destFile);
+        } catch {
+          try { fs.copyFileSync(srcFile, destFile); } catch {}
+        }
+      }
+    }
+  }
 } catch (e) {
-  console.warn('Failed to create media cache directory:', e);
+  console.warn('Failed to create or migrate media cache directory:', e);
 }
 
 export function getCacheKey(targetUrlOrPath: string): string {

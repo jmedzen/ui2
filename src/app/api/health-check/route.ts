@@ -4,20 +4,26 @@ import path from 'path';
 import fs from 'fs';
 
 function getAutoHealLogPath(): string {
-  const logsDir = path.join(process.cwd(), 'logs');
-  if (!fs.existsSync(logsDir)) {
-    fs.mkdirSync(logsDir, { recursive: true });
+  const dataLogsDir = path.join(process.cwd(), 'data', 'logs');
+  if (!fs.existsSync(dataLogsDir)) {
+    fs.mkdirSync(dataLogsDir, { recursive: true });
   }
-  const persistentPath = path.join(logsDir, 'auto_heal.log');
-  const legacyPath = path.join(process.cwd(), 'auto_heal.log');
+  const persistentPath = path.join(dataLogsDir, 'auto_heal.log');
 
-  if (fs.existsSync(legacyPath) && !fs.existsSync(persistentPath)) {
-    try {
-      fs.copyFileSync(legacyPath, persistentPath);
-    } catch {}
+  const legacyPaths = [
+    path.join(process.cwd(), 'logs', 'auto_heal.log'),
+    path.join(process.cwd(), 'auto_heal.log')
+  ];
+
+  for (const oldPath of legacyPaths) {
+    if (fs.existsSync(oldPath) && !fs.existsSync(persistentPath)) {
+      try {
+        fs.copyFileSync(oldPath, persistentPath);
+        break;
+      } catch {}
+    }
   }
-  if (fs.existsSync(persistentPath)) return persistentPath;
-  if (fs.existsSync(legacyPath)) return legacyPath;
+
   return persistentPath;
 }
 

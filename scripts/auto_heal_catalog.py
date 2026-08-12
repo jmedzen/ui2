@@ -17,7 +17,7 @@ from datetime import datetime
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
 
-LOG_DIR = os.path.join(PROJECT_DIR, "logs")
+LOG_DIR = os.path.join(PROJECT_DIR, "data", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 LOG_PATH = os.path.join(LOG_DIR, "auto_heal.log")
