@@ -274,16 +274,24 @@ export async function GET(request: NextRequest) {
             nodeStream.on('error', (err) => reject(err));
           });
 
-          await fs.promises.rename(tempPath, cacheFilePath);
-          updateAccessTime(cacheFilePath);
-          console.log(`[Media Cache Tee] Successfully cached complete file: ${path.basename(cacheFilePath)}`);
-          enforceLRULimit();
+          if (fs.existsSync(tempPath) && !fs.existsSync(cacheFilePath)) {
+            const stat = await fs.promises.stat(tempPath);
+            if (stat.size > 0) {
+              await fs.promises.rename(tempPath, cacheFilePath);
+              updateAccessTime(cacheFilePath);
+              console.log(`[Media Cache Tee] Successfully cached complete file: ${path.basename(cacheFilePath)}`);
+              enforceLRULimit();
+            }
+          }
         }
       } catch (err) {
         console.warn(`[Media Cache Tee] Background stream save error:`, err);
-        try {
-          if (fs.existsSync(tempPath)) await fs.promises.unlink(tempPath);
-        } catch {}
+      } finally {
+        if (fs.existsSync(tempPath)) {
+          try {
+            await fs.promises.unlink(tempPath);
+          } catch {}
+        }
       }
     })();
 

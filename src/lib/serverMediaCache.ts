@@ -45,11 +45,42 @@ export function updateAccessTime(filePath: string): void {
 }
 
 /**
- * Enforces 15GB LRU Eviction Limit on Server Cache Directory
+ * Removes any stale temporary (.tmp) files left behind by interrupted downloads
+ */
+export async function cleanStaleTempFiles(): Promise<void> {
+  try {
+    if (!fs.existsSync(CACHE_DIR)) return;
+    const files = await fs.promises.readdir(CACHE_DIR);
+    const now = Date.now();
+    for (const filename of files) {
+      if (filename.endsWith('.tmp')) {
+        const fullPath = path.join(CACHE_DIR, filename);
+        try {
+          const stat = await fs.promises.stat(fullPath);
+          // Delete .tmp files older than 3 minutes
+          if (now - stat.mtimeMs > 3 * 60 * 1000) {
+            await fs.promises.unlink(fullPath);
+            console.log(`[Media Cache] Removed stale temporary file: ${filename}`);
+          }
+        } catch {}
+      }
+    }
+  } catch (e) {
+    console.warn('[Media Cache] Stale temp file cleanup error:', e);
+  }
+}
+
+// Automatically clean stale .tmp files when module initializes
+cleanStaleTempFiles();
+
+/**
+ * Enforces LRU Eviction Limit on Server Cache Directory
  */
 export async function enforceLRULimit(): Promise<void> {
   try {
     if (!fs.existsSync(CACHE_DIR)) return;
+
+    await cleanStaleTempFiles();
 
     const files = await fs.promises.readdir(CACHE_DIR);
     let totalSize = 0;
@@ -57,6 +88,7 @@ export async function enforceLRULimit(): Promise<void> {
     const fileStats: { filePath: string; size: number; atimeMs: number }[] = [];
 
     for (const filename of files) {
+      if (filename.endsWith('.tmp')) continue; // Exclude active temp files from LRU size
       const fullPath = path.join(CACHE_DIR, filename);
       try {
         const stat = await fs.promises.stat(fullPath);
@@ -104,11 +136,24 @@ export async function enforceLRULimit(): Promise<void> {
  * Downloads remote media file to server cache disk in background
  */
 export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string, reqHeaders: HeadersInit): Promise<void> {
-  // Prevent duplicate concurrent background downloads for the same file
   const tempPath = `${cacheFilePath}.tmp`;
 
-  if (isCached(cacheFilePath) || fs.existsSync(tempPath)) {
+  if (isCached(cacheFilePath)) {
     return;
+  }
+
+  if (fs.existsSync(tempPath)) {
+    try {
+      const stat = fs.statSync(tempPath);
+      // If temp file is older than 3 minutes, treat as stalled download and remove
+      if (Date.now() - stat.mtimeMs > 3 * 60 * 1000) {
+        fs.unlinkSync(tempPath);
+      } else {
+        return; // Active download in progress
+      }
+    } catch {
+      return;
+    }
   }
 
   try {
@@ -132,22 +177,24 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string,
       nodeStream.on('error', (err) => reject(err));
     });
 
-    // Double-checked locking: If Stream Teeing already cached the file while downloading, clean up temp file
+    // Double-checked locking: If Stream Teeing already cached the file while downloading, return
     if (isCached(cacheFilePath)) {
-      try {
-        if (fs.existsSync(tempPath)) await fs.promises.unlink(tempPath);
-      } catch {}
       return;
     }
 
     if (fs.existsSync(tempPath)) {
-      await fs.promises.rename(tempPath, cacheFilePath);
-      updateAccessTime(cacheFilePath);
-      console.log(`[Media Cache] Successfully cached file: ${path.basename(cacheFilePath)}`);
-      enforceLRULimit();
+      const stat = await fs.promises.stat(tempPath);
+      if (stat.size > 0) {
+        await fs.promises.rename(tempPath, cacheFilePath);
+        updateAccessTime(cacheFilePath);
+        console.log(`[Media Cache] Successfully cached file: ${path.basename(cacheFilePath)}`);
+        enforceLRULimit();
+      }
     }
   } catch (e: any) {
-    // Only warn if unexpected error (ignore expected cancellation/race condition cleanup)
+    console.warn(`[Media Cache] Download error for ${path.basename(cacheFilePath)}:`, e?.message || e);
+  } finally {
+    // Unconditional cleanup: Ensure .tmp file is ALWAYS removed if not renamed
     if (fs.existsSync(tempPath)) {
       try {
         await fs.promises.unlink(tempPath);
