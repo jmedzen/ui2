@@ -28,6 +28,7 @@ export default function SettingsModal({
   const [totalCourses, setTotalCourses] = useState<number>(0);
   const [isFetchingLogs, setIsFetchingLogs] = useState<boolean>(false);
   const [isTriggeringScan, setIsTriggeringScan] = useState<boolean>(false);
+  const [isTriggeringHeal, setIsTriggeringHeal] = useState<boolean>(false);
   const [copyToast, setCopyToast] = useState<boolean>(false);
 
   const fetchLogs = useCallback(async () => {
@@ -75,6 +76,27 @@ export default function SettingsModal({
       setLogs(`❌ 執行同步出錯: ${e.message}`);
     } finally {
       setIsTriggeringScan(false);
+    }
+  };
+
+  const handleTriggerAutoHeal = async () => {
+    try {
+      setIsTriggeringHeal(true);
+      setLogs('🚑 正在自動巡檢全站 414 門課程並自我修復無效/錯位鏈結...');
+      const res = await fetch('/api/health-check', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        fetchLogs();
+        if (onRefreshCourses) {
+          await onRefreshCourses();
+        }
+      } else {
+        setLogs(`❌ 巡檢修復失敗: ${data.error || '未知錯誤'}`);
+      }
+    } catch (e: any) {
+      setLogs(`❌ 執行巡檢修復出錯: ${e.message}`);
+    } finally {
+      setIsTriggeringHeal(false);
     }
   };
 
@@ -246,38 +268,58 @@ export default function SettingsModal({
                 </div>
               </div>
 
-              {/* Action Toolbar */}
+              {/* Action Toolbar with Tooltips */}
               <div className="log-action-toolbar">
-                <button
-                  className="log-sync-btn"
-                  onClick={handleTriggerScan}
-                  disabled={isTriggeringScan || isFetchingLogs}
-                >
-                  {isTriggeringScan ? '⏳ 正在掃描同步中...' : '🔄 執行連線掃描與同步'}
-                </button>
+                <div className="tooltip-action-wrapper" data-tooltip="連線 fayun.org 掃描新上架之佛法經論、禪修開示與音訊影音媒體資源">
+                  <button
+                    className="log-sync-btn"
+                    onClick={handleTriggerScan}
+                    disabled={isTriggeringScan || isTriggeringHeal || isFetchingLogs}
+                    title="連線 fayun.org 掃描新上架之佛法經論、禪修開示與音訊影音媒體資源"
+                  >
+                    {isTriggeringScan ? '⏳ 正在掃描同步中...' : '🔄 同步新媒體'}
+                  </button>
+                </div>
 
-                <button
-                  className="log-copy-btn"
-                  onClick={handleCopyLogs}
-                  disabled={!logs}
-                >
-                  {copyToast ? '✅ 已複製紀錄！' : '📋 複製日誌紀錄'}
-                </button>
+                <div className="tooltip-action-wrapper" data-tooltip="自動檢測全站 414 門課程之音訊、影音與 PDF 講義鏈結，發現無效網址自動校正修復">
+                  <button
+                    className="log-heal-btn"
+                    onClick={handleTriggerAutoHeal}
+                    disabled={isTriggeringHeal || isTriggeringScan || isFetchingLogs}
+                    title="自動檢測全站 414 門課程之音訊、影音與 PDF 講義鏈結，發現無效網址自動校正修復"
+                  >
+                    {isTriggeringHeal ? '🚑 正在巡檢修復中...' : '🚑 自我巡檢自動修復'}
+                  </button>
+                </div>
 
-                <button
-                  className="log-refresh-btn"
-                  onClick={fetchLogs}
-                  disabled={isFetchingLogs || isTriggeringScan}
-                >
-                  🔄 重新讀取 Log
-                </button>
+                <div className="tooltip-action-wrapper" data-tooltip="將當前呈現的媒體掃描與修復日誌複製到系統剪貼簿">
+                  <button
+                    className="log-copy-btn"
+                    onClick={handleCopyLogs}
+                    disabled={!logs}
+                    title="將當前呈現的媒體掃描與修復日誌複製到系統剪貼簿"
+                  >
+                    {copyToast ? '✅ 已複製紀錄！' : '📋 複製日誌紀錄'}
+                  </button>
+                </div>
+
+                <div className="tooltip-action-wrapper" data-tooltip="從網頁伺服器重新載入最新 scanner.log 內容">
+                  <button
+                    className="log-refresh-btn"
+                    onClick={fetchLogs}
+                    disabled={isFetchingLogs || isTriggeringScan || isTriggeringHeal}
+                    title="從網頁伺服器重新載入最新 scanner.log 內容"
+                  >
+                    🔄 重新整理日誌
+                  </button>
+                </div>
               </div>
 
               {/* Log Display Window */}
               <div className="log-window-wrapper">
                 <div className="log-window-header">
                   <span className="log-file-tag">📄 scanner.log</span>
-                  <span className="log-hint">紀錄 fayun.org 媒體掃描、上架與更新歷史資訊</span>
+                  <span className="log-hint">紀錄 fayun.org 媒體掃描、新上架與路徑自我修復歷史資訊</span>
                 </div>
                 <pre className="log-window-body">
                   {logs}

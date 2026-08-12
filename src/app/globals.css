@@ -2089,6 +2089,63 @@ body {
   cursor: not-allowed;
 }
 
+.log-heal-btn {
+  background: var(--purple-accent, #8b5cf6);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.log-heal-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.log-heal-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Rich Hover Tooltip Styling */
+.tooltip-action-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip-action-wrapper::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: rgba(20, 20, 25, 0.95);
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  z-index: 99999;
+}
+
+.tooltip-action-wrapper:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
 .log-copy-btn, .log-refresh-btn {
   background: var(--bg-hover);
   border: 1px solid var(--border-color);

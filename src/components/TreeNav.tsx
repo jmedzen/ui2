@@ -303,26 +303,7 @@ export default function TreeNav({
           </button>
         </div>
 
-        <div className="web-scan-bar">
-          <button
-            onClick={handleAutoHealTrigger}
-            disabled={isHealing || isScanning}
-            className="web-scan-btn heal-btn"
-            title="自動巡檢全站 414 門課程鏈結，發現無效網址自動重新連線修正"
-          >
-            {isHealing ? '🚑 巡檢修復中...' : '🚑 自動巡檢與自我修復'}
-          </button>
-          <button
-            onClick={handleWebScanTrigger}
-            disabled={isScanning || isHealing}
-            className="web-scan-btn"
-            title="連線 fayun.org 檢查最新媒體上架"
-          >
-            {isScanning ? '⏳ 掃描中...' : '🔄 同步新媒體'}
-          </button>
-        </div>
 
-        {scanMessage && <div className="scan-toast-msg">{scanMessage}</div>}
 
         <div className="tree-actions">
           <button onClick={expandAll} className="action-btn">
