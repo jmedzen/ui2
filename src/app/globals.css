@@ -1583,16 +1583,59 @@ body {
 
 /* Settings Modal Card */
 .settings-modal-card {
+  position: relative;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 14px;
   width: 100%;
-  max-width: 520px;
+  max-width: 95vw;
+  min-width: 480px;
   display: flex;
   flex-direction: column;
   box-shadow: 0 10px 40px var(--shadow-color);
   overflow: hidden;
   animation: modalSlide 0.25s ease-out;
+  user-select: auto;
+}
+
+.settings-modal-card.resizing {
+  user-select: none;
+  border-color: var(--gold-accent);
+}
+
+/* Mouse Drag Resize Handles */
+.modal-resize-handle-right {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 20;
+  transition: background 0.2s ease;
+}
+
+.modal-resize-handle-right:hover,
+.modal-resize-handle-right:active {
+  background: var(--gold-accent);
+}
+
+.modal-resize-handle-corner {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 21;
+  background: linear-gradient(135deg, transparent 50%, var(--text-muted) 50%);
+  opacity: 0.4;
+  transition: opacity 0.2s ease;
+}
+
+.modal-resize-handle-corner:hover {
+  opacity: 1;
+  background: linear-gradient(135deg, transparent 50%, var(--gold-accent) 50%);
 }
 
 @keyframes modalSlide {
@@ -1606,6 +1649,23 @@ body {
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.window-width-badge {
+  font-size: calc(11px * var(--font-scale));
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-family: monospace;
+  cursor: ew-resize;
 }
 
 .settings-modal-title {

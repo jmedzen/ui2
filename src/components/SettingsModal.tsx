@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ThemeType } from '@/types/course';
 
 interface SettingsModalProps {
@@ -31,6 +31,31 @@ export default function SettingsModal({
   const [isTriggeringHeal, setIsTriggeringHeal] = useState<boolean>(false);
   const [copyToast, setCopyToast] = useState<boolean>(false);
 
+  // Resizable Width & Log Scroll References
+  const [modalWidth, setModalWidth] = useState<number>(820);
+  const [isResizing, setIsResizing] = useState<boolean>(false);
+  const logBodyRef = useRef<HTMLPreElement>(null);
+  const modalCardRef = useRef<HTMLDivElement>(null);
+
+  // Restore saved custom modal width
+  useEffect(() => {
+    try {
+      const savedWidth = localStorage.getItem('fayun_settings_modal_width');
+      if (savedWidth) {
+        const parsed = parseInt(savedWidth, 10);
+        if (!isNaN(parsed) && parsed >= 500) {
+          setModalWidth(parsed);
+        }
+      }
+    } catch {}
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    if (logBodyRef.current) {
+      logBodyRef.current.scrollTop = logBodyRef.current.scrollHeight;
+    }
+  }, []);
+
   const fetchLogs = useCallback(async () => {
     try {
       setIsFetchingLogs(true);
@@ -55,6 +80,14 @@ export default function SettingsModal({
       fetchLogs();
     }
   }, [isOpen, fetchLogs]);
+
+  // Auto scroll to bottom when logs update or tab switches to logs
+  useEffect(() => {
+    if (activeTab === 'logs') {
+      const timer = setTimeout(scrollToBottom, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [logs, activeTab, scrollToBottom]);
 
   const handleTriggerScan = async () => {
     try {
@@ -108,11 +141,54 @@ export default function SettingsModal({
     }
   };
 
+  // Mouse Drag Resizing for Window Width
+  const handleMouseDownResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    const startX = e.clientX;
+    const startWidth = modalWidth;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const newWidth = Math.max(500, Math.min(window.innerWidth * 0.95, startWidth + deltaX));
+      setModalWidth(newWidth);
+      try {
+        localStorage.setItem('fayun_settings_modal_width', String(Math.round(newWidth)));
+      } catch {}
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
   if (!isOpen) return null;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="settings-modal-card shadow-card" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={modalCardRef}
+        className={`settings-modal-card shadow-card ${isResizing ? 'resizing' : ''}`}
+        style={{ width: `${modalWidth}px` }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Mouse Drag Resize Handles */}
+        <div
+          className="modal-resize-handle-right"
+          onMouseDown={handleMouseDownResize}
+          title="↔️ 按住拖曳以改變彈窗寬度"
+        />
+        <div
+          className="modal-resize-handle-corner"
+          onMouseDown={handleMouseDownResize}
+          title="↘️ 按住拖曳以改變彈窗寬度"
+        />
+
         <div className="settings-modal-header">
           <div className="settings-modal-tabs">
             <button
@@ -132,9 +208,14 @@ export default function SettingsModal({
             </button>
           </div>
 
-          <button className="settings-modal-close" onClick={onClose} title="關閉">
-            ✕
-          </button>
+          <div className="modal-header-actions">
+            <span className="window-width-badge" title="目前彈窗寬度 (可按住右邊緣拖曳)">
+              {Math.round(modalWidth)}px ↔️
+            </span>
+            <button className="settings-modal-close" onClick={onClose} title="關閉">
+              ✕
+            </button>
+          </div>
         </div>
 
         <div className="settings-modal-body">
@@ -319,9 +400,9 @@ export default function SettingsModal({
               <div className="log-window-wrapper">
                 <div className="log-window-header">
                   <span className="log-file-tag">📄 scanner.log</span>
-                  <span className="log-hint">紀錄 fayun.org 媒體掃描、新上架與路徑自我修復歷史資訊</span>
+                  <span className="log-hint">紀錄 fayun.org 媒體掃描、新上架與路徑自我修復歷史資訊 (自動跳至最新)</span>
                 </div>
-                <pre className="log-window-body">
+                <pre className="log-window-body" ref={logBodyRef}>
                   {logs}
                 </pre>
               </div>
