@@ -3,14 +3,32 @@ import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
+function getScannerLogPath(): string {
+  const logsDir = path.join(process.cwd(), 'logs');
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+  const persistentPath = path.join(logsDir, 'scanner.log');
+  const legacyPath = path.join(process.cwd(), 'scanner.log');
+
+  if (fs.existsSync(legacyPath) && !fs.existsSync(persistentPath)) {
+    try {
+      fs.copyFileSync(legacyPath, persistentPath);
+    } catch {}
+  }
+  if (fs.existsSync(persistentPath)) return persistentPath;
+  if (fs.existsSync(legacyPath)) return legacyPath;
+  return persistentPath;
+}
+
 export async function GET() {
   try {
-    const logPath = path.join(process.cwd(), 'scanner.log');
+    const logPath = getScannerLogPath();
     let logContent = 'No logs available';
     if (fs.existsSync(logPath)) {
       const fullLog = fs.readFileSync(logPath, 'utf-8');
       const lines = fullLog.trim().split('\n');
-      logContent = lines.slice(-300).join('\n');
+      logContent = lines.slice(-500).join('\n');
     }
 
     const dbPath = path.join(process.cwd(), 'src', 'data', 'courses_db.json');
@@ -40,12 +58,12 @@ export async function POST(): Promise<NextResponse> {
     const scriptPath = path.join(process.cwd(), 'scripts', 'scan_fayun.py');
     return new Promise<NextResponse>((resolve) => {
       exec(`python3 "${scriptPath}"`, (error, stdout, stderr) => {
-        const logPath = path.join(process.cwd(), 'scanner.log');
+        const logPath = getScannerLogPath();
         let logContent = stdout;
         if (fs.existsSync(logPath)) {
           const fullLog = fs.readFileSync(logPath, 'utf-8');
           const lines = fullLog.trim().split('\n');
-          logContent = lines.slice(-300).join('\n');
+          logContent = lines.slice(-500).join('\n');
         }
 
         const dbPath = path.join(process.cwd(), 'src', 'data', 'courses_db.json');

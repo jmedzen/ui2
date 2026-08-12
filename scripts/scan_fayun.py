@@ -14,7 +14,18 @@ from datetime import datetime
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
-LOG_PATH = os.path.join(PROJECT_DIR, "scanner.log")
+
+LOG_DIR = os.path.join(PROJECT_DIR, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_PATH = os.path.join(LOG_DIR, "scanner.log")
+
+legacy_log = os.path.join(PROJECT_DIR, "scanner.log")
+if os.path.exists(legacy_log) and not os.path.exists(LOG_PATH):
+    try:
+        import shutil
+        shutil.copyfile(legacy_log, LOG_PATH)
+    except:
+        pass
 
 DB_ACCESS_URL = "https://www.fayun.org/public/php/dbaccess.php"
 

@@ -26,6 +26,7 @@
 *.log
 scanner.log
 auto_heal.log
+logs/
 
 # debug
 npm-debug.log*
