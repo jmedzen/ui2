@@ -27,7 +27,7 @@
 scanner.log
 auto_heal.log
 logs/
-data/
+/data/
 
 # debug
 npm-debug.log*
