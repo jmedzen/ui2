@@ -139,7 +139,7 @@ PATH_OVERRIDES = {
 }
 
 def run_scan():
-    log_message("Starting fayun.org media scan...")
+    log_message("🔄 === 開始連線 fayun.org 執行媒體同步與掃描 ===")
 
     existing_db = {"courses": []}
     if os.path.exists(DB_PATH):

@@ -37,7 +37,9 @@ export async function GET() {
       logContent = lines.slice(-500).join('\n');
     }
 
-    const dbPath = path.join(process.cwd(), 'src', 'data', 'courses_db.json');
+    const dataDbPath = path.join(process.cwd(), 'data', 'courses_db.json');
+    const srcDbPath = path.join(process.cwd(), 'src', 'data', 'courses_db.json');
+    const dbPath = fs.existsSync(dataDbPath) ? dataDbPath : srcDbPath;
     let dbInfo = { generated_at: 'Unknown', total_courses: 0 };
     if (fs.existsSync(dbPath)) {
       const data = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));

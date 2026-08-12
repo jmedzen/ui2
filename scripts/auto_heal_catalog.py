@@ -273,7 +273,7 @@ def extract_fname(item):
     return ""
 
 def run_auto_heal():
-    log("🚀 Starting Fayun Catalog Audit & Self-Healing Engine...")
+    log("🚑 === 開始執行全站自我巡檢與目錄自動修復 ===")
 
     if not os.path.exists(DB_PATH):
         log("❌ Database file not found!")
