@@ -141,10 +141,14 @@ export default function SettingsModal({
     }
   };
 
+  const justResizedRef = useRef<boolean>(false);
+
   // Mouse Drag Resizing for Window Width
   const handleMouseDownResize = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsResizing(true);
+    justResizedRef.current = true;
     const startX = e.clientX;
     const startWidth = modalWidth;
 
@@ -159,6 +163,10 @@ export default function SettingsModal({
 
     const handleMouseUp = () => {
       setIsResizing(false);
+      setTimeout(() => {
+        justResizedRef.current = false;
+      }, 300);
+
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
@@ -167,10 +175,21 @@ export default function SettingsModal({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    if (isResizing || justResizedRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={handleBackdropClick}>
       <div
         ref={modalCardRef}
         className={`settings-modal-card shadow-card ${isResizing ? 'resizing' : ''}`}
