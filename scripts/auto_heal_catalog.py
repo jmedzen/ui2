@@ -20,8 +20,20 @@ DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
 LOG_DIR = os.path.join(PROJECT_DIR, "data", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
-LOG_PATH = os.path.join(LOG_DIR, "auto_heal.log")
-SCANNER_LOG_PATH = os.path.join(LOG_DIR, "scanner.log")
+LOG_PATH = os.path.join(LOG_DIR, "scanner.log")
+
+# Merge legacy auto_heal.log entries into scanner.log if present
+for old_heal in [os.path.join(LOG_DIR, "auto_heal.log"), os.path.join(PROJECT_DIR, "auto_heal.log")]:
+    if os.path.exists(old_heal):
+        try:
+            with open(old_heal, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+            if content:
+                with open(LOG_PATH, "a", encoding="utf-8") as f:
+                    f.write("\n" + content + "\n")
+            os.remove(old_heal)
+        except:
+            pass
 
 def log(msg):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -29,11 +41,6 @@ def log(msg):
     print(line)
     with open(LOG_PATH, "a", encoding="utf-8") as f:
         f.write(line + "\n")
-    try:
-        with open(SCANNER_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    except:
-        pass
 
 def quote_url(url):
     parts = urllib.parse.urlsplit(url)

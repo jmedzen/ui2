@@ -8,11 +8,12 @@ function getAutoHealLogPath(): string {
   if (!fs.existsSync(dataLogsDir)) {
     fs.mkdirSync(dataLogsDir, { recursive: true });
   }
-  const persistentPath = path.join(dataLogsDir, 'auto_heal.log');
+  const persistentPath = path.join(dataLogsDir, 'scanner.log');
 
   const legacyPaths = [
-    path.join(process.cwd(), 'logs', 'auto_heal.log'),
-    path.join(process.cwd(), 'auto_heal.log')
+    path.join(process.cwd(), 'data', 'logs', 'auto_heal.log'),
+    path.join(process.cwd(), 'logs', 'scanner.log'),
+    path.join(process.cwd(), 'scanner.log')
   ];
 
   for (const oldPath of legacyPaths) {
