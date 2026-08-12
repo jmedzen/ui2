@@ -13,7 +13,19 @@ import urllib.request
 from datetime import datetime
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
+DATA_DIR = os.path.join(PROJECT_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(DATA_DIR, "courses_db.json")
+
+# Fallback initialization from src/data/courses_db.json if data/courses_db.json doesn't exist
+SRC_DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
+if not os.path.exists(DB_PATH) and os.path.exists(SRC_DB_PATH):
+    try:
+        import shutil
+        shutil.copyfile(SRC_DB_PATH, DB_PATH)
+    except Exception as e:
+        print(f"Warning: Could not initialize {DB_PATH}: {e}")
+        print(f"Warning: Could not initialize {DB_PATH}: {e}")
 
 LOG_DIR = os.path.join(PROJECT_DIR, "data", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
