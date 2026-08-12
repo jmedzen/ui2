@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-12 13:46:40",
+  "generated_at": "2026-08-12 19:03:11",
   "total_courses": 414,
   "menu_schema": {
     "dharma": {
@@ -1303,18 +1303,7 @@
       "lecture_path": "/media/解經/般若波羅蜜多心經/般若波羅蜜多心經淺述/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "般若波羅蜜多心經淺述2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/解經/般若波羅蜜多心經/般若波羅蜜多心經淺述/bilu/般若波羅蜜多心經淺述2.pdf"
-        },
-        {
-          "num": 2,
-          "filename": "般若波羅蜜多心經淺述1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/解經/般若波羅蜜多心經/般若波羅蜜多心經淺述/bilu/般若波羅蜜多心經淺述1.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 110,
@@ -1352,113 +1341,7 @@
       "lecture_path": "/media/釋論/淨土十疑論/bilu",
       "poster_path": "/media/poster/fayun-cover1.png",
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "9.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/9.pdf"
-        },
-        {
-          "num": 2,
-          "filename": "8-2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/8-2.pdf"
-        },
-        {
-          "num": 3,
-          "filename": "8-1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/8-1.pdf"
-        },
-        {
-          "num": 4,
-          "filename": "7.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/7.pdf"
-        },
-        {
-          "num": 5,
-          "filename": "6.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/6.pdf"
-        },
-        {
-          "num": 6,
-          "filename": "5-4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/5-4.pdf"
-        },
-        {
-          "num": 7,
-          "filename": "5-3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/5-3.pdf"
-        },
-        {
-          "num": 8,
-          "filename": "5-2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/5-2.pdf"
-        },
-        {
-          "num": 9,
-          "filename": "5-1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/5-1.pdf"
-        },
-        {
-          "num": 10,
-          "filename": "4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/4.pdf"
-        },
-        {
-          "num": 11,
-          "filename": "3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/3.pdf"
-        },
-        {
-          "num": 12,
-          "filename": "2-6.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/2-6.pdf"
-        },
-        {
-          "num": 13,
-          "filename": "2-5.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/2-5.pdf"
-        },
-        {
-          "num": 14,
-          "filename": "2-4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/2-4.pdf"
-        },
-        {
-          "num": 15,
-          "filename": "2-3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/2-3.pdf"
-        },
-        {
-          "num": 16,
-          "filename": "2-2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/2-2.pdf"
-        },
-        {
-          "num": 17,
-          "filename": "2-1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/2-1.pdf"
-        },
-        {
-          "num": 18,
-          "filename": "10-2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/10-2.pdf"
-        },
-        {
-          "num": 19,
-          "filename": "10-1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/10-1.pdf"
-        },
-        {
-          "num": 20,
-          "filename": "1-2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/1-2.pdf"
-        },
-        {
-          "num": 21,
-          "filename": "1-1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/淨土十疑論/bilu/1-1.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 111,
@@ -1553,13 +1436,7 @@
       "lecture_path": "/media/釋論/攝大乘論/攝大乘論2002/bilu",
       "poster_path": "/media/poster/fayun-cover1.png",
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "攝大乘論2002.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/攝大乘論/攝大乘論2002/bilu/攝大乘論2002.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 104,
@@ -1578,13 +1455,7 @@
       "lecture_path": "/media/釋論/瑜伽師地論/真實義品第四/bilu",
       "poster_path": "/media/poster/fayun-cover1.png",
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "真實義品2002.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/真實義品第四/bilu/真實義品2002.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 99,
@@ -1698,258 +1569,7 @@
       "lecture_path": "/media/釋論/瑜伽師地論/修所成地/bilu",
       "poster_path": "/media/poster/fayun-cover1.png",
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "修所成地26問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地26問答.pdf"
-        },
-        {
-          "num": 2,
-          "filename": "修所成地26.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地26.pdf"
-        },
-        {
-          "num": 3,
-          "filename": "修所成地25問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地25問答.pdf"
-        },
-        {
-          "num": 4,
-          "filename": "修所成地25.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地25.pdf"
-        },
-        {
-          "num": 5,
-          "filename": "修所成地24問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地24問答.pdf"
-        },
-        {
-          "num": 6,
-          "filename": "修所成地24.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地24.pdf"
-        },
-        {
-          "num": 7,
-          "filename": "修所成地23問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地23問答.pdf"
-        },
-        {
-          "num": 8,
-          "filename": "修所成地23.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地23.pdf"
-        },
-        {
-          "num": 9,
-          "filename": "修所成地22問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地22問答.pdf"
-        },
-        {
-          "num": 10,
-          "filename": "修所成地22.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地22.pdf"
-        },
-        {
-          "num": 11,
-          "filename": "修所成地21問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地21問答.pdf"
-        },
-        {
-          "num": 12,
-          "filename": "修所成地21.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地21.pdf"
-        },
-        {
-          "num": 13,
-          "filename": "修所成地20問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地20問答.pdf"
-        },
-        {
-          "num": 14,
-          "filename": "修所成地20.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地20.pdf"
-        },
-        {
-          "num": 15,
-          "filename": "修所成地19問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地19問答.pdf"
-        },
-        {
-          "num": 16,
-          "filename": "修所成地19.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地19.pdf"
-        },
-        {
-          "num": 17,
-          "filename": "修所成地18.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地18.pdf"
-        },
-        {
-          "num": 18,
-          "filename": "修所成地17問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地17問答.pdf"
-        },
-        {
-          "num": 19,
-          "filename": "修所成地17.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地17.pdf"
-        },
-        {
-          "num": 20,
-          "filename": "修所成地16問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地16問答.pdf"
-        },
-        {
-          "num": 21,
-          "filename": "修所成地16.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地16.pdf"
-        },
-        {
-          "num": 22,
-          "filename": "修所成地15.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地15.pdf"
-        },
-        {
-          "num": 23,
-          "filename": "修所成地14問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地14問答.pdf"
-        },
-        {
-          "num": 24,
-          "filename": "修所成地14.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地14.pdf"
-        },
-        {
-          "num": 25,
-          "filename": "修所成地13問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地13問答.pdf"
-        },
-        {
-          "num": 26,
-          "filename": "修所成地13.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地13.pdf"
-        },
-        {
-          "num": 27,
-          "filename": "修所成地12問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地12問答.pdf"
-        },
-        {
-          "num": 28,
-          "filename": "修所成地12.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地12.pdf"
-        },
-        {
-          "num": 29,
-          "filename": "修所成地11問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地11問答.pdf"
-        },
-        {
-          "num": 30,
-          "filename": "修所成地11.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地11.pdf"
-        },
-        {
-          "num": 31,
-          "filename": "修所成地10問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地10問答.pdf"
-        },
-        {
-          "num": 32,
-          "filename": "修所成地10.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地10.pdf"
-        },
-        {
-          "num": 33,
-          "filename": "修所成地09問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地09問答.pdf"
-        },
-        {
-          "num": 34,
-          "filename": "修所成地09.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地09.pdf"
-        },
-        {
-          "num": 35,
-          "filename": "修所成地08問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地08問答.pdf"
-        },
-        {
-          "num": 36,
-          "filename": "修所成地08.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地08.pdf"
-        },
-        {
-          "num": 37,
-          "filename": "修所成地07問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地07問答.pdf"
-        },
-        {
-          "num": 38,
-          "filename": "修所成地07.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地07.pdf"
-        },
-        {
-          "num": 39,
-          "filename": "修所成地06問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地06問答.pdf"
-        },
-        {
-          "num": 40,
-          "filename": "修所成地06.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地06.pdf"
-        },
-        {
-          "num": 41,
-          "filename": "修所成地05問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地05問答.pdf"
-        },
-        {
-          "num": 42,
-          "filename": "修所成地05.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地05.pdf"
-        },
-        {
-          "num": 43,
-          "filename": "修所成地04問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地04問答.pdf"
-        },
-        {
-          "num": 44,
-          "filename": "修所成地04.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地04.pdf"
-        },
-        {
-          "num": 45,
-          "filename": "修所成地03問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地03問答.pdf"
-        },
-        {
-          "num": 46,
-          "filename": "修所成地03.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地03.pdf"
-        },
-        {
-          "num": 47,
-          "filename": "修所成地02問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地02問答.pdf"
-        },
-        {
-          "num": 48,
-          "filename": "修所成地02.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地02.pdf"
-        },
-        {
-          "num": 49,
-          "filename": "修所成地01問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地01問答.pdf"
-        },
-        {
-          "num": 50,
-          "filename": "修所成地01.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論/修所成地/bilu/修所成地01.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 105,
@@ -2215,23 +1835,7 @@
       "lecture_path": "/media/淨土相關/如何往生阿彌陀佛國/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "如何往生阿彌陀佛國3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/淨土相關/如何往生阿彌陀佛國/bilu/如何往生阿彌陀佛國3.pdf"
-        },
-        {
-          "num": 2,
-          "filename": "如何往生阿彌陀佛國2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/淨土相關/如何往生阿彌陀佛國/bilu/如何往生阿彌陀佛國2.pdf"
-        },
-        {
-          "num": 3,
-          "filename": "如何往生阿彌陀佛國1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/淨土相關/如何往生阿彌陀佛國/bilu/如何往生阿彌陀佛國1.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 210,
@@ -2326,13 +1930,7 @@
       "lecture_path": "/media/淨土相關/持名念佛與觀相念佛/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "持名念佛與觀相念佛.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/淨土相關/持名念佛與觀相念佛/bilu/持名念佛與觀相念佛.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 205,
@@ -2389,13 +1987,7 @@
       "lecture_path": "/media/淨土相關/持戒與念佛法門的殊勝（覺林菩薩偈）/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "持戒與念佛法門的殊勝.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/淨土相關/持戒與念佛法門的殊勝（覺林菩薩偈）/bilu/持戒與念佛法門的殊勝.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 203,
@@ -2490,13 +2082,7 @@
       "lecture_path": "/media/隨緣化導/二諦莊嚴/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "二諦莊嚴.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/二諦莊嚴/bilu/二諦莊嚴.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 549,
@@ -2515,13 +2101,7 @@
       "lecture_path": "/media/隨緣化導/五力有力量，能降伏煩惱/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "五力有力量，能降伏煩惱.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/五力有力量，能降伏煩惱/bilu/五力有力量，能降伏煩惱.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 471,
@@ -2540,13 +2120,7 @@
       "lecture_path": "/media/隨緣化導/什麼原因說六波羅蜜/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "什麼原因說六波羅蜜.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/什麼原因說六波羅蜜/bilu/什麼原因說六波羅蜜.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 250,
@@ -2565,13 +2139,7 @@
       "lecture_path": "/media/隨緣化導/什麼是佛法/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "什麼是佛法.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/什麼是佛法/bilu/什麼是佛法.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 253,
@@ -2913,13 +2481,7 @@
       "lecture_path": "/media/隨緣化導/修學聖道的次第/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "修學聖道的次第.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/修學聖道的次第/bilu/修學聖道的次第.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 245,
@@ -2938,13 +2500,7 @@
       "lecture_path": "/media/隨緣化導/修行要重視實效/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "修行要重視實效.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/修行要重視實效/bilu/修行要重視實效.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 244,
@@ -3020,13 +2576,7 @@
       "lecture_path": "/media/隨緣化導/凡夫與聖人/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "凡夫與聖人.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/凡夫與聖人/bilu/凡夫與聖人.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 243,
@@ -3083,18 +2633,7 @@
       "lecture_path": "/media/隨緣化導/四護法門/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "四護法門・問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/四護法門/bilu/四護法門・問答.pdf"
-        },
-        {
-          "num": 2,
-          "filename": "四護法門.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/四護法門/bilu/四護法門.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 241,
@@ -3189,13 +2728,7 @@
       "lecture_path": "/media/隨緣化導/如何學習禪/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "如何學習禪.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/如何學習禪/bilu/如何學習禪.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 236,
@@ -3233,13 +2766,7 @@
       "lecture_path": "/media/隨緣化導/如何得解脫/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "如何得解脫.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/如何得解脫/bilu/如何得解脫.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 275,
@@ -3334,18 +2861,7 @@
       "lecture_path": "/media/隨緣化導/學佛的目標何在/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "學佛的目標何在2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/學佛的目標何在/bilu/學佛的目標何在2.pdf"
-        },
-        {
-          "num": 2,
-          "filename": "學佛的目標何在1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/學佛的目標何在/bilu/學佛的目標何在1.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 656,
@@ -3516,13 +3032,7 @@
       "lecture_path": "/media/隨緣化導/安居自恣的本意/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "安居自恣的本意.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/安居自恣的本意/bilu/安居自恣的本意.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 222,
@@ -3579,13 +3089,7 @@
       "lecture_path": "/media/隨緣化導/心不顛倒與臨終前的準備/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "心不顛倒與臨終前的準備.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/心不顛倒與臨終前的準備/bilu/心不顛倒與臨終前的準備.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 399,
@@ -3623,13 +3127,7 @@
       "lecture_path": "/media/隨緣化導/怎麼叫做發無上菩提心/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "怎麼叫做發無上菩提心.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/怎麼叫做發無上菩提心/bilu/怎麼叫做發無上菩提心.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 613,
@@ -3648,13 +3146,7 @@
       "lecture_path": "/media/隨緣化導/拿到修行的方法，成道不是太難的事/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "拿到修行的方法，成道不是太難的事.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/拿到修行的方法，成道不是太難的事/bilu/拿到修行的方法，成道不是太難的事.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 612,
@@ -3673,13 +3165,7 @@
       "lecture_path": "/media/隨緣化導/教發無上菩提心：開示及問答/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "教發無上菩提心：開示及問答.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/教發無上菩提心：開示及問答/bilu/教發無上菩提心：開示及問答.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 239,
@@ -3717,13 +3203,7 @@
       "lecture_path": "/media/隨緣化導/最有力量的懺悔/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "最有力量的懺悔.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/最有力量的懺悔/bilu/最有力量的懺悔.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 295,
@@ -3799,113 +3279,7 @@
       "lecture_path": "/media/隨緣化導/梁皇法會開示1997/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "1997梁皇法會開示7.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示7.pdf"
-        },
-        {
-          "num": 2,
-          "filename": "1997梁皇法會開示6.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示6.pdf"
-        },
-        {
-          "num": 3,
-          "filename": "1997梁皇法會開示5.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示5.pdf"
-        },
-        {
-          "num": 4,
-          "filename": "1997梁皇法會開示4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示4.pdf"
-        },
-        {
-          "num": 5,
-          "filename": "1997梁皇法會開示3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示3.pdf"
-        },
-        {
-          "num": 6,
-          "filename": "1997梁皇法會開示2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示2.pdf"
-        },
-        {
-          "num": 7,
-          "filename": "1997梁皇法會開示1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示1.pdf"
-        },
-        {
-          "num": 8,
-          "filename": "1998梁皇法會開示7.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示7.pdf"
-        },
-        {
-          "num": 9,
-          "filename": "1998梁皇法會開示6.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示6.pdf"
-        },
-        {
-          "num": 10,
-          "filename": "1998梁皇法會開示5.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示5.pdf"
-        },
-        {
-          "num": 11,
-          "filename": "1998梁皇法會開示4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示4.pdf"
-        },
-        {
-          "num": 12,
-          "filename": "1998梁皇法會開示3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示3.pdf"
-        },
-        {
-          "num": 13,
-          "filename": "1998梁皇法會開示2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示2.pdf"
-        },
-        {
-          "num": 14,
-          "filename": "1998梁皇法會開示1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示1.pdf"
-        },
-        {
-          "num": 15,
-          "filename": "1999梁皇法會開示7.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示7.pdf"
-        },
-        {
-          "num": 16,
-          "filename": "1999梁皇法會開示6.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示6.pdf"
-        },
-        {
-          "num": 17,
-          "filename": "1999梁皇法會開示5.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示5.pdf"
-        },
-        {
-          "num": 18,
-          "filename": "1999梁皇法會開示4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示4.pdf"
-        },
-        {
-          "num": 19,
-          "filename": "1999梁皇法會開示3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示3.pdf"
-        },
-        {
-          "num": 20,
-          "filename": "1999梁皇法會開示2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示2.pdf"
-        },
-        {
-          "num": 21,
-          "filename": "1999梁皇法會開示1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示1.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 217,
@@ -3924,113 +3298,7 @@
       "lecture_path": "/media/隨緣化導/梁皇法會開示1998/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "1997梁皇法會開示7.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示7.pdf"
-        },
-        {
-          "num": 2,
-          "filename": "1997梁皇法會開示6.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示6.pdf"
-        },
-        {
-          "num": 3,
-          "filename": "1997梁皇法會開示5.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示5.pdf"
-        },
-        {
-          "num": 4,
-          "filename": "1997梁皇法會開示4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示4.pdf"
-        },
-        {
-          "num": 5,
-          "filename": "1997梁皇法會開示3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示3.pdf"
-        },
-        {
-          "num": 6,
-          "filename": "1997梁皇法會開示2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示2.pdf"
-        },
-        {
-          "num": 7,
-          "filename": "1997梁皇法會開示1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示1.pdf"
-        },
-        {
-          "num": 8,
-          "filename": "1998梁皇法會開示7.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示7.pdf"
-        },
-        {
-          "num": 9,
-          "filename": "1998梁皇法會開示6.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示6.pdf"
-        },
-        {
-          "num": 10,
-          "filename": "1998梁皇法會開示5.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示5.pdf"
-        },
-        {
-          "num": 11,
-          "filename": "1998梁皇法會開示4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示4.pdf"
-        },
-        {
-          "num": 12,
-          "filename": "1998梁皇法會開示3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示3.pdf"
-        },
-        {
-          "num": 13,
-          "filename": "1998梁皇法會開示2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示2.pdf"
-        },
-        {
-          "num": 14,
-          "filename": "1998梁皇法會開示1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示1.pdf"
-        },
-        {
-          "num": 15,
-          "filename": "1999梁皇法會開示7.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示7.pdf"
-        },
-        {
-          "num": 16,
-          "filename": "1999梁皇法會開示6.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示6.pdf"
-        },
-        {
-          "num": 17,
-          "filename": "1999梁皇法會開示5.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示5.pdf"
-        },
-        {
-          "num": 18,
-          "filename": "1999梁皇法會開示4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示4.pdf"
-        },
-        {
-          "num": 19,
-          "filename": "1999梁皇法會開示3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示3.pdf"
-        },
-        {
-          "num": 20,
-          "filename": "1999梁皇法會開示2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示2.pdf"
-        },
-        {
-          "num": 21,
-          "filename": "1999梁皇法會開示1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示1.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 218,
@@ -4049,113 +3317,7 @@
       "lecture_path": "/media/隨緣化導/梁皇法會開示1999/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "1997梁皇法會開示7.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示7.pdf"
-        },
-        {
-          "num": 2,
-          "filename": "1997梁皇法會開示6.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示6.pdf"
-        },
-        {
-          "num": 3,
-          "filename": "1997梁皇法會開示5.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示5.pdf"
-        },
-        {
-          "num": 4,
-          "filename": "1997梁皇法會開示4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示4.pdf"
-        },
-        {
-          "num": 5,
-          "filename": "1997梁皇法會開示3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示3.pdf"
-        },
-        {
-          "num": 6,
-          "filename": "1997梁皇法會開示2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示2.pdf"
-        },
-        {
-          "num": 7,
-          "filename": "1997梁皇法會開示1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1997/bilu/1997梁皇法會開示1.pdf"
-        },
-        {
-          "num": 8,
-          "filename": "1998梁皇法會開示7.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示7.pdf"
-        },
-        {
-          "num": 9,
-          "filename": "1998梁皇法會開示6.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示6.pdf"
-        },
-        {
-          "num": 10,
-          "filename": "1998梁皇法會開示5.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示5.pdf"
-        },
-        {
-          "num": 11,
-          "filename": "1998梁皇法會開示4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示4.pdf"
-        },
-        {
-          "num": 12,
-          "filename": "1998梁皇法會開示3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示3.pdf"
-        },
-        {
-          "num": 13,
-          "filename": "1998梁皇法會開示2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示2.pdf"
-        },
-        {
-          "num": 14,
-          "filename": "1998梁皇法會開示1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1998/bilu/1998梁皇法會開示1.pdf"
-        },
-        {
-          "num": 15,
-          "filename": "1999梁皇法會開示7.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示7.pdf"
-        },
-        {
-          "num": 16,
-          "filename": "1999梁皇法會開示6.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示6.pdf"
-        },
-        {
-          "num": 17,
-          "filename": "1999梁皇法會開示5.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示5.pdf"
-        },
-        {
-          "num": 18,
-          "filename": "1999梁皇法會開示4.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示4.pdf"
-        },
-        {
-          "num": 19,
-          "filename": "1999梁皇法會開示3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示3.pdf"
-        },
-        {
-          "num": 20,
-          "filename": "1999梁皇法會開示2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示2.pdf"
-        },
-        {
-          "num": 21,
-          "filename": "1999梁皇法會開示1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/梁皇法會開示1999/bilu/1999梁皇法會開示1.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 396,
@@ -4174,13 +3336,7 @@
       "lecture_path": "/media/隨緣化導/楞伽經二偈/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "楞伽經二偈.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/楞伽經二偈/bilu/楞伽經二偈.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 224,
@@ -4275,13 +3431,7 @@
       "lecture_path": "/media/隨緣化導/法雲寺佛學院教育理念/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "法雲寺佛學院教育理念.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/法雲寺佛學院教育理念/bilu/法雲寺佛學院教育理念.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 268,
@@ -4319,13 +3469,7 @@
       "lecture_path": "/media/隨緣化導/略說無我/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "略說無我.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/略說無我/bilu/略說無我.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 263,
@@ -4363,13 +3507,7 @@
       "lecture_path": "/media/隨緣化導/當學然意燈，自練求智慧/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "當學然意燈，自練求智慧.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/當學然意燈，自練求智慧/bilu/當學然意燈，自練求智慧.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 262,
@@ -4407,13 +3545,7 @@
       "lecture_path": "/media/隨緣化導/發菩提心修無我慧/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "發菩提心修無我慧.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/發菩提心修無我慧/bilu/發菩提心修無我慧.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 666,
@@ -4489,13 +3621,7 @@
       "lecture_path": "/media/隨緣化導/結夏安居開示/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "結夏安居開示.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/結夏安居開示/bilu/結夏安居開示.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 277,
@@ -4552,13 +3678,7 @@
       "lecture_path": "/media/隨緣化導/聞思法談/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "聞思法談.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/聞思法談/bilu/聞思法談.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 276,
@@ -4596,13 +3716,7 @@
       "lecture_path": "/media/隨緣化導/若承認自己是凡夫，修四念處就是對了/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "若承認自己是凡夫，修四念處就是對了.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/若承認自己是凡夫，修四念處就是對了/bilu/若承認自己是凡夫，修四念處就是對了.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 267,
@@ -4621,13 +3735,7 @@
       "lecture_path": "/media/隨緣化導/談四護/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "談四護.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/談四護/bilu/談四護.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 467,
@@ -4646,13 +3754,7 @@
       "lecture_path": "/media/隨緣化導/諸法實相與十如是/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "諸法實相與十如是.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/諸法實相與十如是/bilu/諸法實相與十如是.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 237,
@@ -4671,23 +3773,7 @@
       "lecture_path": "/media/隨緣化導/身心如何安樂住/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "身心如何安樂住 3.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/身心如何安樂住/bilu/身心如何安樂住 3.pdf"
-        },
-        {
-          "num": 2,
-          "filename": "身心如何安樂住 2.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/身心如何安樂住/bilu/身心如何安樂住 2.pdf"
-        },
-        {
-          "num": 3,
-          "filename": "身心如何安樂住 1.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/身心如何安樂住/bilu/身心如何安樂住 1.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 518,
@@ -4706,13 +3792,7 @@
       "lecture_path": "/media/隨緣化導/迴向，是很重要的一件事/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "迴向，是很重要的一件事.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/迴向，是很重要的一件事/bilu/迴向，是很重要的一件事.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 296,
@@ -4750,13 +3830,7 @@
       "lecture_path": "/media/隨緣化導/願諸煩惱盡，逮得薩婆若/bilu",
       "poster_path": null,
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "願諸煩惱盡，逮得薩婆若.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/隨緣化導/願諸煩惱盡，逮得薩婆若/bilu/願諸煩惱盡，逮得薩婆若.pdf"
-        }
-      ]
+      "pdfs": []
     },
     {
       "id": 219,
@@ -8841,15 +7915,9 @@
       "lecture_path": "/media/止觀坐禪/靜坐漫談/bilu",
       "poster_path": "/media/poster/fayun-cover1.png",
       "comment": null,
-      "pdfs": [
-        {
-          "num": 1,
-          "filename": "靜坐漫談.pdf",
-          "url": "https://www.fayun.org/ftpadmin/media/止觀坐禪/靜坐漫談/bilu/靜坐漫談.pdf"
-        }
-      ]
+      "pdfs": []
     }
   ],
-  "last_auto_healed_at": "2026-08-12 13:47:37",
+  "last_auto_healed_at": "2026-08-12 19:03:13",
   "total_repaired_courses": 0
 }

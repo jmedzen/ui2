@@ -314,6 +314,13 @@ def run_auto_heal():
     with open(DB_PATH, "w", encoding="utf-8") as f:
         json.dump(db, f, ensure_ascii=False, indent=2)
 
+    if os.path.exists(SRC_DB_PATH):
+        try:
+            with open(SRC_DB_PATH, "w", encoding="utf-8") as f:
+                json.dump(db, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            log(f"Notice: Could not sync to {SRC_DB_PATH}: {e}")
+
     summary_msg = f"✅ Self-Healing Complete! Audited: {total_courses} | Repaired: {total_repaired}"
     log(summary_msg)
 

@@ -149,7 +149,7 @@ def run_scan():
         with open(DB_PATH, "r", encoding="utf-8") as f:
             existing_db = json.load(f)
 
-    existing_courses = {c["id"]: c for c in existing_db.get("courses", [])}
+    existing_courses = {str(c["id"]): c for c in existing_db.get("courses", [])}
     new_items_count = 0
     updated_items_count = 0
 
@@ -167,17 +167,27 @@ def run_scan():
                 sub_title = MENU_MAP.get(main_menu, {}).get("subs", {}).get(sub_menu, sub_menu)
                 topic_title = TOPIC_MAP.get(topic, topic) or "通用主題"
 
-                existing = existing_courses.get(c_id)
+                existing = existing_courses.get(str(c_id))
                 c_pdfs = existing.get("pdfs", []) if existing else []
 
                 audio_p = item.get("audio_path")
                 lecture_p = item.get("lecture_path_audio") or item.get("lecture_path_video")
+                video_p = item.get("video_path")
 
                 if c_id in PATH_OVERRIDES:
                     if "audio_path" in PATH_OVERRIDES[c_id]:
                         audio_p = PATH_OVERRIDES[c_id]["audio_path"]
                     if "lecture_path" in PATH_OVERRIDES[c_id]:
                         lecture_p = PATH_OVERRIDES[c_id]["lecture_path"]
+
+                if existing:
+                    # Preserve auto-healed None video_path to prevent regression/flip-flop loop
+                    if existing.get("video_path") is None:
+                        video_p = None
+                    if existing.get("audio_path"):
+                        audio_p = existing["audio_path"]
+                    if existing.get("lecture_path"):
+                        lecture_p = existing["lecture_path"]
 
                 course_obj = {
                     "id": c_id,
@@ -192,7 +202,7 @@ def run_scan():
                     "time": item.get("time") or "",
                     "total_episodes": item.get("total", 0) or 0,
                     "audio_path": audio_p,
-                    "video_path": item.get("video_path"),
+                    "video_path": video_p,
                     "lecture_path": lecture_p,
                     "poster_path": item.get("poster_path"),
                     "comment": item.get("comment"),
@@ -222,6 +232,13 @@ def run_scan():
 
     with open(DB_PATH, "w", encoding="utf-8") as f:
         json.dump(new_db, f, ensure_ascii=False, indent=2)
+
+    if os.path.exists(SRC_DB_PATH):
+        try:
+            with open(SRC_DB_PATH, "w", encoding="utf-8") as f:
+                json.dump(new_db, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            log_message(f"Notice: Could not sync to {SRC_DB_PATH}: {e}")
 
     log_message(f"✅ Scan finished. Total courses: {len(scanned_courses)} | New: {new_items_count} | Updated: {updated_items_count}")
     return {
