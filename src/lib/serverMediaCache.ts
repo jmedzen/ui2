@@ -4,8 +4,8 @@ import crypto from 'crypto';
 import { Readable } from 'stream';
 
 const CACHE_DIR = process.env.MEDIA_CACHE_DIR || path.join(process.cwd(), 'media_cache');
-const MAX_CACHE_SIZE_BYTES = 15 * 1024 * 1024 * 1024; // 15 GB
-const TARGET_CACHE_SIZE_BYTES = 12 * 1024 * 1024 * 1024; // 12 GB High-water mark after eviction
+const MAX_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_MAX_BYTES || '', 10) || 2 * 1024 * 1024 * 1024; // 2 GB
+const TARGET_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_TARGET_BYTES || '', 10) || Math.floor(MAX_CACHE_SIZE_BYTES * 0.8); // 1.6 GB High-water mark after eviction
 
 // Ensure cache directory exists
 try {
@@ -74,10 +74,11 @@ export async function enforceLRULimit(): Promise<void> {
     }
 
     if (totalSize <= MAX_CACHE_SIZE_BYTES) {
-      return; // Under 15GB limit, no action needed
+      return; // Under size limit, no action needed
     }
 
-    console.log(`[Media Cache LRU] Total cache size (${(totalSize / 1024 / 1024 / 1024).toFixed(2)} GB) exceeds 15GB. Evicting oldest files...`);
+    const maxGb = (MAX_CACHE_SIZE_BYTES / (1024 * 1024 * 1024)).toFixed(2);
+    console.log(`[Media Cache LRU] Total cache size (${(totalSize / 1024 / 1024 / 1024).toFixed(2)} GB) exceeds ${maxGb} GB limit. Evicting oldest files...`);
 
     // Sort by atime ascending (oldest access time first)
     fileStats.sort((a, b) => a.atimeMs - b.atimeMs);
