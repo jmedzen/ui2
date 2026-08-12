@@ -92,21 +92,30 @@ export default function SettingsModal({
   const handleTriggerScan = async () => {
     try {
       setIsTriggeringScan(true);
-      setLogs('⏳ 正在連線 fayun.org 掃描媒體庫與同步更新數據庫...');
+      const timestamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+      const promptMsg = `[${timestamp}] ⏳ [系統操作] 使用者觸發：連線 fayun.org 執行媒體同步與掃描中...`;
+      setLogs((prev) => (prev ? `${prev}\n${promptMsg}` : promptMsg));
+
       const res = await fetch('/api/scan', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        setLogs(data.recentLogs || data.output || '掃描完成');
+        if (data.recentLogs) {
+          setLogs(data.recentLogs);
+        } else {
+          await fetchLogs();
+        }
         setLastScan(data.lastScan || new Date().toLocaleString());
         if (data.totalCourses) setTotalCourses(data.totalCourses);
         if (onRefreshCourses) {
           await onRefreshCourses();
         }
       } else {
-        setLogs(`❌ 掃描失敗: ${data.error || '未知錯誤'}\n${data.recentLogs || ''}`);
+        const errorMsg = `[${timestamp}] ❌ [系統錯誤] 媒體同步失敗: ${data.error || '未知錯誤'}`;
+        setLogs((prev) => `${prev}\n${errorMsg}`);
       }
     } catch (e: any) {
-      setLogs(`❌ 執行同步出錯: ${e.message}`);
+      const errorMsg = `[${new Date().toLocaleTimeString('zh-TW', { hour12: false })}] ❌ [系統錯誤] 執行同步出錯: ${e.message}`;
+      setLogs((prev) => `${prev}\n${errorMsg}`);
     } finally {
       setIsTriggeringScan(false);
     }
@@ -115,19 +124,28 @@ export default function SettingsModal({
   const handleTriggerAutoHeal = async () => {
     try {
       setIsTriggeringHeal(true);
-      setLogs('🚑 正在自動巡檢全站 414 門課程並自我修復無效/錯位鏈結...');
+      const timestamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+      const promptMsg = `[${timestamp}] ⏳ [系統操作] 使用者觸發：全站 414 門課程巡檢與自我修復中...`;
+      setLogs((prev) => (prev ? `${prev}\n${promptMsg}` : promptMsg));
+
       const res = await fetch('/api/health-check', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
-        fetchLogs();
+        if (data.recentLogs) {
+          setLogs(data.recentLogs);
+        } else {
+          await fetchLogs();
+        }
         if (onRefreshCourses) {
           await onRefreshCourses();
         }
       } else {
-        setLogs(`❌ 巡檢修復失敗: ${data.error || '未知錯誤'}`);
+        const errorMsg = `[${timestamp}] ❌ [系統錯誤] 巡檢修復失敗: ${data.error || '未知錯誤'}`;
+        setLogs((prev) => `${prev}\n${errorMsg}`);
       }
     } catch (e: any) {
-      setLogs(`❌ 執行巡檢修復出錯: ${e.message}`);
+      const errorMsg = `[${new Date().toLocaleTimeString('zh-TW', { hour12: false })}] ❌ [系統錯誤] 執行巡檢修復出錯: ${e.message}`;
+      setLogs((prev) => `${prev}\n${errorMsg}`);
     } finally {
       setIsTriggeringHeal(false);
     }

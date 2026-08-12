@@ -63,9 +63,13 @@ export async function GET() {
 
 export async function POST(): Promise<NextResponse> {
   try {
+    console.log('[API/Scan] Executing media scan script: scan_fayun.py...');
     const scriptPath = path.join(process.cwd(), 'scripts', 'scan_fayun.py');
     return new Promise<NextResponse>((resolve) => {
       exec(`python3 "${scriptPath}"`, (error, stdout, stderr) => {
+        if (stdout) console.log(stdout);
+        if (stderr) console.error(stderr);
+
         const logPath = getScannerLogPath();
         let logContent = stdout;
         if (fs.existsSync(logPath)) {
@@ -74,7 +78,10 @@ export async function POST(): Promise<NextResponse> {
           logContent = lines.slice(-500).join('\n');
         }
 
-        const dbPath = path.join(process.cwd(), 'src', 'data', 'courses_db.json');
+        const dataDbPath = path.join(process.cwd(), 'data', 'courses_db.json');
+        const srcDbPath = path.join(process.cwd(), 'src', 'data', 'courses_db.json');
+        const dbPath = fs.existsSync(dataDbPath) ? dataDbPath : srcDbPath;
+
         let dbInfo = { generated_at: 'Unknown', total_courses: 0 };
         if (fs.existsSync(dbPath)) {
           try {
@@ -100,6 +107,7 @@ export async function POST(): Promise<NextResponse> {
       });
     });
   } catch (error: any) {
+    console.error('[API/Scan] Error in POST handler:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

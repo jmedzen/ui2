@@ -49,9 +49,12 @@ for old_heal in [os.path.join(LOG_DIR, "auto_heal.log"), os.path.join(PROJECT_DI
 def log(msg):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {msg}"
-    print(line)
-    with open(LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(line + "\n")
+    print(line, flush=True)
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception as e:
+        print(f"Failed to write log: {e}", flush=True)
 
 def quote_url(url):
     parts = urllib.parse.urlsplit(url)

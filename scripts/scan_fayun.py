@@ -108,10 +108,13 @@ TOPIC_MAP = {
 
 def log_message(msg):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    formatted = f"[{timestamp}] {msg}"
-    print(formatted)
-    with open(LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(formatted + "\n")
+    line = f"[{timestamp}] {msg}"
+    print(line, flush=True)
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception as e:
+        print(f"Failed to write log: {e}", flush=True)
 
 def fetch_category_media(main_menu, sub_menu):
     req = urllib.request.Request(
