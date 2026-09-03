@@ -8,7 +8,17 @@ import json
 import urllib.request
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
+DATA_DIR = os.path.join(PROJECT_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(DATA_DIR, "courses_db.json")
+
+SRC_DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
+if not os.path.exists(DB_PATH) and os.path.exists(SRC_DB_PATH):
+    try:
+        import shutil
+        shutil.copyfile(SRC_DB_PATH, DB_PATH)
+    except Exception as e:
+        print(f"Warning: Could not initialize {DB_PATH}: {e}")
 
 def get_real_pdfs_for_course(audio_path, video_path, lecture_path):
     potential_paths = []

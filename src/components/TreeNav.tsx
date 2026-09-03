@@ -35,10 +35,12 @@ export default function TreeNav({
   const [isHealing, setIsHealing] = useState<boolean>(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
 
-  // Build hierarchical tree: Main Menu -> Sub Menu -> Topic -> Courses
+  // Build hierarchical tree: Main Menu -> Sub Menu -> Topic -> Courses with O(N) Map Indexing
   const treeData = useMemo(() => {
     const rootNodes: TreeNode[] = [];
     const mainMap = new Map<string, TreeNode>();
+    const subMap = new Map<string, TreeNode>();
+    const topicMap = new Map<string, TreeNode>();
 
     const q = deferredSearchQuery.trim().toLowerCase();
 
@@ -74,8 +76,9 @@ export default function TreeNav({
       }
       mainNode.count = (mainNode.count || 0) + 1;
 
-      // 2. Sub Menu
-      let subNode = mainNode.children?.find((c) => c.id === `sub-${course.main_menu}-${course.sub_menu}`);
+      // 2. Sub Menu - O(1) Hash Map lookup
+      const subKey = `${course.main_menu}__${course.sub_menu}`;
+      let subNode = subMap.get(subKey);
       if (!subNode) {
         subNode = {
           id: `sub-${course.main_menu}-${course.sub_menu}`,
@@ -84,13 +87,15 @@ export default function TreeNav({
           children: [],
           count: 0
         };
+        subMap.set(subKey, subNode);
         mainNode.children?.push(subNode);
       }
       subNode.count = (subNode.count || 0) + 1;
 
-      // 3. Topic
+      // 3. Topic - O(1) Hash Map lookup
       const topicLabel = course.topic_title && course.topic_title.trim() !== '' ? course.topic_title : '通用主題';
-      let topicNode = subNode.children?.find((c) => c.id === `topic-${course.sub_menu}-${course.topic}`);
+      const topicKey = `${subKey}__${course.topic}`;
+      let topicNode = topicMap.get(topicKey);
       if (!topicNode) {
         topicNode = {
           id: `topic-${course.sub_menu}-${course.topic}`,
@@ -99,6 +104,7 @@ export default function TreeNav({
           children: [],
           count: 0
         };
+        topicMap.set(topicKey, topicNode);
         subNode.children?.push(topicNode);
       }
       topicNode.count = (topicNode.count || 0) + 1;
@@ -303,26 +309,7 @@ export default function TreeNav({
           </button>
         </div>
 
-        <div className="web-scan-bar">
-          <button
-            onClick={handleAutoHealTrigger}
-            disabled={isHealing || isScanning}
-            className="web-scan-btn heal-btn"
-            title="自動巡檢全站 414 門課程鏈結，發現無效網址自動重新連線修正"
-          >
-            {isHealing ? '🚑 巡檢修復中...' : '🚑 自動巡檢與自我修復'}
-          </button>
-          <button
-            onClick={handleWebScanTrigger}
-            disabled={isScanning || isHealing}
-            className="web-scan-btn"
-            title="連線 fayun.org 檢查最新媒體上架"
-          >
-            {isScanning ? '⏳ 掃描中...' : '🔄 同步新媒體'}
-          </button>
-        </div>
 
-        {scanMessage && <div className="scan-toast-msg">{scanMessage}</div>}
 
         <div className="tree-actions">
           <button onClick={expandAll} className="action-btn">
@@ -344,7 +331,14 @@ export default function TreeNav({
       </nav>
 
       <footer className="sidebar-footer">
-        <span>© fayun.org 典藏庫</span>
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="sidebar-copyright-link"
+          title="點擊檢視法雲資訊網 (fayun.org) 著作權與非營利弘法聲明"
+        >
+          © 版權所有：法雲資訊網 fayun.org
+        </button>
       </footer>
     </aside>
   );

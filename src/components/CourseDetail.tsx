@@ -42,14 +42,7 @@ export default function CourseDetail({ course }: CourseDetailProps) {
 
       let fetchedTracks: { filename: string; proxyUrl: string; url: string; index: number }[] = [];
 
-      const potentialAudioPaths: string[] = [];
-      if (course.audio_path) potentialAudioPaths.push(course.audio_path);
-      if (course.video_path) potentialAudioPaths.push(course.video_path);
-
-      const uniqueAudioPaths = Array.from(new Set(potentialAudioPaths));
-
-      for (const aPath of uniqueAudioPaths) {
-        if (fetchedTracks.length > 0 || !isMounted) break;
+      const queryDirectory = async (aPath: string) => {
         try {
           const res = await fetch('/api/list-files', {
             method: 'POST',
@@ -57,35 +50,103 @@ export default function CourseDetail({ course }: CourseDetailProps) {
             body: JSON.stringify({ src: aPath }),
             signal: controller.signal
           });
-          if (res.ok) {
-            const rawData = await res.json();
-            const dataList = Array.isArray(rawData) ? rawData : (rawData && Array.isArray(rawData.data) ? rawData.data : []);
+          if (!res.ok) return { path: aPath, files: [] };
+          const rawData = await res.json();
+          const dataList = Array.isArray(rawData) ? rawData : (rawData && Array.isArray(rawData.data) ? rawData.data : []);
+          if (!Array.isArray(dataList)) return { path: aPath, files: [] };
+          const audioFiles = dataList
+            .map(extractFilename)
+            .filter((filename: string) => {
+              const ext = '.' + filename.split('.').pop()?.toLowerCase();
+              return AUDIO_EXTS.includes(ext);
+            })
+            .sort((a: string, b: string) =>
+              a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+            );
+          return { path: aPath, files: audioFiles };
+        } catch {
+          return { path: aPath, files: [] };
+        }
+      };
 
-            if (Array.isArray(dataList) && dataList.length > 0) {
-              const audioFiles = dataList
-                .map(extractFilename)
-                .filter((filename: string) => {
-                  const ext = '.' + filename.split('.').pop()?.toLowerCase();
-                  return AUDIO_EXTS.includes(ext);
-                })
-                .sort((a: string, b: string) =>
-                  a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-                );
+      // 1. Fast-Path: Probe primary course.audio_path first
+      if (course.audio_path) {
+        const primaryResult = await queryDirectory(course.audio_path);
+        if (primaryResult.files.length > 0 && isMounted) {
+          const hasMatchingFile = primaryResult.files.some(
+            fn => fn.includes(course.name) || (course.name.length > 2 && fn.includes(course.name.slice(0, 3)))
+          );
+          if (hasMatchingFile || primaryResult.path.includes(course.name) || primaryResult.files.length > 0) {
+            fetchedTracks = primaryResult.files.map((filename: string, idx: number) => {
+              const fullPath = `${primaryResult.path}/${filename}`;
+              return {
+                index: idx,
+                filename,
+                url: `https://www.fayun.org/ftpadmin${fullPath}`,
+                proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
+              };
+            });
+          }
+        }
+      }
 
-              fetchedTracks = audioFiles.map((filename: string, idx: number) => {
-                const fullPath = `${aPath}/${filename}`;
-                return {
-                  index: idx,
-                  filename: filename,
-                  url: `https://www.fayun.org/ftpadmin${fullPath}`,
-                  proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
-                };
-              });
+      // 2. Parallel Candidate Probe if fast-path yielded no tracks
+      if (fetchedTracks.length === 0 && isMounted) {
+        const potentialAudioPaths: string[] = [];
+        if (course.audio_path) {
+          const parentDir = course.audio_path.split('/audio')[0];
+          const topicDir = parentDir.includes('/') ? parentDir.substring(0, parentDir.lastIndexOf('/')) : '';
+          potentialAudioPaths.push(`${parentDir}/${course.name}/audio`);
+          potentialAudioPaths.push(`${parentDir}/${course.name}`);
+          if (topicDir) {
+            potentialAudioPaths.push(`${topicDir}/${course.name}/audio`);
+            potentialAudioPaths.push(`${topicDir}/${course.name}`);
+          }
+        }
+        if (course.video_path) potentialAudioPaths.push(course.video_path);
+
+        const uniqueCandidatePaths = Array.from(new Set(potentialAudioPaths)).filter(p => p !== course.audio_path);
+
+        if (uniqueCandidatePaths.length > 0) {
+          const results = await Promise.allSettled(uniqueCandidatePaths.map(queryDirectory));
+
+          // Priority 1: Candidate with files matching course name
+          for (const res of results) {
+            if (res.status === 'fulfilled' && res.value.files.length > 0) {
+              const hasMatching = res.value.files.some(
+                fn => fn.includes(course.name) || (course.name.length > 2 && fn.includes(course.name.slice(0, 3)))
+              );
+              if (hasMatching || res.value.path.includes(course.name)) {
+                fetchedTracks = res.value.files.map((filename: string, idx: number) => {
+                  const fullPath = `${res.value.path}/${filename}`;
+                  return {
+                    index: idx,
+                    filename,
+                    url: `https://www.fayun.org/ftpadmin${fullPath}`,
+                    proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
+                  };
+                });
+                break;
+              }
             }
           }
-        } catch (e: any) {
-          if (e.name !== 'AbortError') {
-            console.warn('Failed to fetch remote audio list:', e);
+
+          // Priority 2: First candidate with any audio files
+          if (fetchedTracks.length === 0) {
+            for (const res of results) {
+              if (res.status === 'fulfilled' && res.value.files.length > 0) {
+                fetchedTracks = res.value.files.map((filename: string, idx: number) => {
+                  const fullPath = `${res.value.path}/${filename}`;
+                  return {
+                    index: idx,
+                    filename,
+                    url: `https://www.fayun.org/ftpadmin${fullPath}`,
+                    proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
+                  };
+                });
+                break;
+              }
+            }
           }
         }
       }
@@ -552,6 +613,42 @@ export default function CourseDetail({ course }: CourseDetailProps) {
                     <p>{course.comment}</p>
                   </div>
                 )}
+
+                {/* Official Copyright & Archive Provenance Card */}
+                <div className="copyright-info-card">
+                  <div className="copyright-card-header">
+                    <span className="copyright-icon">📜</span>
+                    <h4 className="copyright-title">著作權與典藏來源聲明 (Copyright Declaration)</h4>
+                  </div>
+                  <div className="copyright-card-body">
+                    <p className="copyright-text">
+                      本課程《<strong>{course.name}</strong>》所收錄之所有經論講述錄音、MP3音訊、影音講記檔及PDF筆記講義，其智慧財產權與著作權<strong>均屬 法雲資訊網 (<a href="https://www.fayun.org" target="_blank" rel="noopener noreferrer" className="copyright-link">fayun.org</a>) 及相關著作權人所有</strong>。
+                    </p>
+                    <div className="copyright-terms">
+                      <div className="term-item">
+                        <span className="term-icon">🪷</span>
+                        <div className="term-content">
+                          <strong>弘法非營利宗旨</strong>
+                          <p>本平台純為佛教學人便利研習玅境長老宣說法音之學修工具，完全無償免費流通弘揚正法。</p>
+                        </div>
+                      </div>
+                      <div className="term-item">
+                        <span className="term-icon">🚫</span>
+                        <div className="term-content">
+                          <strong>嚴禁商業使用</strong>
+                          <p>未獲法雲資訊網或原始機構合法書面授權，任何團體或個人均不得將本站媒體資料用於營利、販售、付費課程或商業轉載。</p>
+                        </div>
+                      </div>
+                      <div className="term-item">
+                        <span className="term-icon">🌐</span>
+                        <div className="term-content">
+                          <strong>官方原創出處</strong>
+                          <p>完整原始典藏與更多開示文庫，請造訪官方網站：<a href="https://www.fayun.org" target="_blank" rel="noopener noreferrer" className="copyright-link">https://www.fayun.org</a></p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

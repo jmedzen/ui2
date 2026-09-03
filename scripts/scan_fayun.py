@@ -13,8 +13,37 @@ import urllib.request
 from datetime import datetime
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
-LOG_PATH = os.path.join(PROJECT_DIR, "scanner.log")
+DATA_DIR = os.path.join(PROJECT_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(DATA_DIR, "courses_db.json")
+
+# Fallback initialization from src/data/courses_db.json if data/courses_db.json doesn't exist
+SRC_DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
+if not os.path.exists(DB_PATH) and os.path.exists(SRC_DB_PATH):
+    try:
+        import shutil
+        shutil.copyfile(SRC_DB_PATH, DB_PATH)
+    except Exception as e:
+        print(f"Warning: Could not initialize {DB_PATH}: {e}")
+        print(f"Warning: Could not initialize {DB_PATH}: {e}")
+
+LOG_DIR = os.path.join(PROJECT_DIR, "data", "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+LOG_PATH = os.path.join(LOG_DIR, "scanner.log")
+
+legacy_logs = [
+    os.path.join(PROJECT_DIR, "logs", "scanner.log"),
+    os.path.join(PROJECT_DIR, "scanner.log")
+]
+for old_log in legacy_logs:
+    if os.path.exists(old_log) and old_log != LOG_PATH:
+        try:
+            if not os.path.exists(LOG_PATH):
+                import shutil
+                shutil.copyfile(old_log, LOG_PATH)
+                break
+        except:
+            pass
 
 DB_ACCESS_URL = "https://www.fayun.org/public/php/dbaccess.php"
 
@@ -79,10 +108,13 @@ TOPIC_MAP = {
 
 def log_message(msg):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    formatted = f"[{timestamp}] {msg}"
-    print(formatted)
-    with open(LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(formatted + "\n")
+    line = f"[{timestamp}] {msg}"
+    print(line, flush=True)
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception as e:
+        print(f"Failed to write log: {e}", flush=True)
 
 def fetch_category_media(main_menu, sub_menu):
     req = urllib.request.Request(
@@ -102,15 +134,22 @@ def fetch_category_media(main_menu, sub_menu):
             return res
     return []
 
+PATH_OVERRIDES = {
+    14: {
+        "audio_path": "/media/止觀坐禪/靜坐漫談/audio",
+        "lecture_path": "/media/止觀坐禪/靜坐漫談/bilu"
+    }
+}
+
 def run_scan():
-    log_message("Starting fayun.org media scan...")
+    log_message("🔄 === 開始連線 fayun.org 執行媒體同步與掃描 ===")
 
     existing_db = {"courses": []}
     if os.path.exists(DB_PATH):
         with open(DB_PATH, "r", encoding="utf-8") as f:
             existing_db = json.load(f)
 
-    existing_courses = {c["id"]: c for c in existing_db.get("courses", [])}
+    existing_courses = {str(c["id"]): c for c in existing_db.get("courses", [])}
     new_items_count = 0
     updated_items_count = 0
 
@@ -128,8 +167,35 @@ def run_scan():
                 sub_title = MENU_MAP.get(main_menu, {}).get("subs", {}).get(sub_menu, sub_menu)
                 topic_title = TOPIC_MAP.get(topic, topic) or "通用主題"
 
-                existing = existing_courses.get(c_id)
+                existing = existing_courses.get(str(c_id))
                 c_pdfs = existing.get("pdfs", []) if existing else []
+
+                audio_p = item.get("audio_path")
+                lecture_p = item.get("lecture_path_audio") or item.get("lecture_path_video")
+                video_p = item.get("video_path")
+
+                if c_id in PATH_OVERRIDES:
+                    if "audio_path" in PATH_OVERRIDES[c_id]:
+                        audio_p = PATH_OVERRIDES[c_id]["audio_path"]
+                    if "lecture_path" in PATH_OVERRIDES[c_id]:
+                        lecture_p = PATH_OVERRIDES[c_id]["lecture_path"]
+
+                if existing:
+                    # Preserve all repaired/corrected paths and data from existing database
+                    if existing.get("audio_path"):
+                        audio_p = existing["audio_path"]
+                    if existing.get("lecture_path"):
+                        lecture_p = existing["lecture_path"]
+                    if existing.get("video_path") is not None:
+                        video_p = existing["video_path"]
+                    if existing.get("pdfs"):
+                        c_pdfs = existing["pdfs"]
+                    if existing.get("total_episodes") and existing["total_episodes"] > 0:
+                        total_episodes = existing["total_episodes"]
+                    else:
+                        total_episodes = item.get("total", 0) or 0
+                else:
+                    total_episodes = item.get("total", 0) or 0
 
                 course_obj = {
                     "id": c_id,
@@ -140,22 +206,23 @@ def run_scan():
                     "sub_menu_title": sub_title,
                     "topic": topic,
                     "topic_title": topic_title,
-                    "location": item.get("location") or "美國法雲寺禪學院",
-                    "time": item.get("time") or "",
-                    "total_episodes": item.get("total", 0) or 0,
-                    "audio_path": item.get("audio_path"),
-                    "video_path": item.get("video_path"),
-                    "lecture_path": item.get("lecture_path_audio") or item.get("lecture_path_video"),
-                    "poster_path": item.get("poster_path"),
-                    "comment": item.get("comment"),
+                    "location": item.get("location") or (existing.get("location") if existing else "美國法雲寺禪學院"),
+                    "time": item.get("time") or (existing.get("time") if existing else ""),
+                    "total_episodes": total_episodes,
+                    "audio_path": audio_p,
+                    "video_path": video_p,
+                    "lecture_path": lecture_p,
+                    "poster_path": item.get("poster_path") or (existing.get("poster_path") if existing else None),
+                    "comment": item.get("comment") or (existing.get("comment") if existing else None),
                     "pdfs": c_pdfs
                 }
 
                 if not existing:
                     new_items_count += 1
-                    log_message(f"🆕 Discovered NEW media: ID {c_id} - '{c_name}' ({main_title} / {sub_title})")
+                    log_message(f"🆕 [新增媒體] ID: {c_id} | 完整名稱: '{c_name}' | 分類: {main_title} ➔ {sub_title} ➔ {topic_title} | 音訊路徑: {course_obj.get('audio_path')} | 影音路徑: {course_obj.get('video_path')} | 講義路徑: {course_obj.get('lecture_path')}")
                 elif existing != course_obj:
                     updated_items_count += 1
+                    log_message(f"🔄 [更新同步] ID: {c_id} | 完整名稱: '{c_name}' | 分類: {main_title} ➔ {sub_title} ➔ {topic_title} | 音訊路徑: {course_obj.get('audio_path')} | 集數: {course_obj.get('total_episodes')}")
 
                 scanned_courses.append(course_obj)
         except Exception as e:
@@ -173,6 +240,13 @@ def run_scan():
 
     with open(DB_PATH, "w", encoding="utf-8") as f:
         json.dump(new_db, f, ensure_ascii=False, indent=2)
+
+    if os.path.exists(SRC_DB_PATH):
+        try:
+            with open(SRC_DB_PATH, "w", encoding="utf-8") as f:
+                json.dump(new_db, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            log_message(f"Notice: Could not sync to {SRC_DB_PATH}: {e}")
 
     log_message(f"✅ Scan finished. Total courses: {len(scanned_courses)} | New: {new_items_count} | Updated: {updated_items_count}")
     return {

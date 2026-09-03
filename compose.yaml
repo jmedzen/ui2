@@ -1,13 +1,12 @@
-# Docker Compose Configuration with HTTPS SSL Support
-# Usage:
-#   1. Login to GHCR (if private): echo "YOUR_PAT" | docker login ghcr.io -u jmedzen --password-stdin
-#   2. Start services: docker compose up -d
-#   3. Access HTTPS at: https://localhost or https://<YOUR_SERVER_IP>:8443
+# Docker Compose Configuration
+# Usage: docker compose up -d
+
+name: fyui2
 
 services:
-  fyweb:
+  ui2:
     image: ghcr.io/jmedzen/ui2:latest
-    container_name: fyweb
+    container_name: ui2
     restart: always
     ports:
       - "8410:8410"
@@ -15,6 +14,8 @@ services:
       - NODE_ENV=production
       - PORT=8410
       - HOSTNAME=0.0.0.0
+    volumes:
+      - ./data:/app/data
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8410/api/courses"]
       interval: 30s
@@ -22,21 +23,3 @@ services:
       retries: 3
       start_period: 10s
 
-  # HTTPS Automatic SSL Reverse Proxy
-  caddy:
-    image: caddy:2-alpine
-    container_name: fyweb-caddy
-    restart: always
-    ports:
-      - "443:443"
-      - "8443:8443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - fyweb
-
-volumes:
-  caddy_data:
-  caddy_config:

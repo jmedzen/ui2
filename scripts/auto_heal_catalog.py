@@ -15,19 +15,46 @@ import urllib.parse
 from datetime import datetime
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
-LOG_PATH = os.path.join(PROJECT_DIR, "auto_heal.log")
-LIST_PHP_URL = "https://www.fayun.org/public/php/list.php"
+DATA_DIR = os.path.join(PROJECT_DIR, "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(DATA_DIR, "courses_db.json")
 
-AUDIO_EXTS = ('.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac', '.mp4', '.m4v', '.webm', '.mov')
-VIDEO_EXTS = ('.mp4', '.m4v', '.wmv', '.flv', '.mov', '.avi', '.mkv', '.webm')
+# Fallback initialization from src/data/courses_db.json if data/courses_db.json doesn't exist
+SRC_DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
+if not os.path.exists(DB_PATH) and os.path.exists(SRC_DB_PATH):
+    try:
+        import shutil
+        shutil.copyfile(SRC_DB_PATH, DB_PATH)
+    except Exception as e:
+        print(f"Warning: Could not initialize {DB_PATH}: {e}")
+
+LOG_DIR = os.path.join(PROJECT_DIR, "data", "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
+LOG_PATH = os.path.join(LOG_DIR, "scanner.log")
+
+# Merge legacy auto_heal.log entries into scanner.log if present
+for old_heal in [os.path.join(LOG_DIR, "auto_heal.log"), os.path.join(PROJECT_DIR, "auto_heal.log")]:
+    if os.path.exists(old_heal):
+        try:
+            with open(old_heal, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+            if content:
+                with open(LOG_PATH, "a", encoding="utf-8") as f:
+                    f.write("\n" + content + "\n")
+            os.remove(old_heal)
+        except:
+            pass
 
 def log(msg):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {msg}"
-    print(line)
-    with open(LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(line + "\n")
+    print(line, flush=True)
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+    except Exception as e:
+        print(f"Failed to write log: {e}", flush=True)
 
 def quote_url(url):
     parts = urllib.parse.urlsplit(url)
@@ -58,6 +85,9 @@ def verify_media_url(url):
         return False, f"HTTP {e.code}"
     except Exception as e:
         return False, str(e)
+
+LIST_PHP_URL = "https://www.fayun.org/public/php/list.php"
+AUDIO_EXTS = (".mp3", ".m4a", ".wav", ".wma", ".aac", ".ogg", ".mp4", ".m4v", ".webm")
 
 def query_remote_list(src_path):
     """
@@ -173,15 +203,51 @@ def verify_and_heal_course(course):
     audio_path = course.get("audio_path")
     if audio_path:
         audio_data = query_remote_list(audio_path)
-        if not audio_data and "/audio" in audio_path:
-            # Try alternate path
-            parent = audio_path.split("/audio")[0]
-            alt_data = query_remote_list(parent)
-            if alt_data:
-                course["audio_path"] = parent
+        
+        # Check if audio_data files actually belong to this course
+        is_mismatched = False
+        if isinstance(audio_data, list) and len(audio_data) > 0:
+            fnames = [extract_fname(f) for f in audio_data]
+            # Check if any audio filename contains course_name (or key substring)
+            matched = any(course_name in fn or (len(course_name) > 2 and course_name[:3] in fn) for fn in fnames)
+            if not matched:
+                is_mismatched = True
+
+        if is_mismatched or not audio_data:
+            # Attempt to find real course directory under parent topic
+            parent_dir = audio_path.split("/audio")[0] if "/audio" in audio_path else os.path.dirname(audio_path)
+            topic_dir = os.path.dirname(parent_dir)
+            
+            candidates = [
+                f"{parent_dir}/{course_name}/audio",
+                f"{parent_dir}/{course_name}",
+                f"{topic_dir}/{course_name}/audio",
+                f"{topic_dir}/{course_name}"
+            ]
+            
+            repaired_path = None
+            for cand in candidates:
+                cand_data = query_remote_list(cand)
+                if isinstance(cand_data, list) and len(cand_data) > 0:
+                    cand_fnames = [extract_fname(f) for f in cand_data]
+                    if any(course_name in fn or (len(course_name) > 2 and course_name[:3] in fn) for fn in cand_fnames):
+                        repaired_path = cand
+                        audio_data = cand_data
+                        break
+
+            if repaired_path:
+                course["audio_path"] = repaired_path
                 modified = True
-                notes.append(f"Repaired audio_path to {parent}")
-        elif isinstance(audio_data, list):
+                notes.append(f"Repaired mismatched audio_path to {repaired_path}")
+            elif not audio_data and "/audio" in audio_path:
+                parent = audio_path.split("/audio")[0]
+                alt_data = query_remote_list(parent)
+                if alt_data:
+                    course["audio_path"] = parent
+                    modified = True
+                    notes.append(f"Repaired audio_path to {parent}")
+
+        if isinstance(audio_data, list):
             audio_files = [f for f in audio_data if extract_fname(f).lower().endswith(AUDIO_EXTS)]
             if len(audio_files) > 0 and course.get("total_episodes") != len(audio_files):
                 course["total_episodes"] = len(audio_files)
@@ -213,7 +279,7 @@ def extract_fname(item):
     return ""
 
 def run_auto_heal():
-    log("🚀 Starting Fayun Catalog Audit & Self-Healing Engine...")
+    log("🚑 === 開始執行全站自我巡檢與目錄自動修復 ===")
 
     if not os.path.exists(DB_PATH):
         log("❌ Database file not found!")
@@ -240,7 +306,7 @@ def run_auto_heal():
                     "name": course["name"],
                     "notes": notes
                 })
-                log(f"🔧 [{idx+1}/{total_courses}] Repaired '{course['name']}': {notes}")
+                log(f"🔧 [修復路徑] ID: {course['id']} | 完整名稱: '{course['name']}' | 分類: {course.get('main_menu_title','')} ➔ {course.get('sub_menu_title','')} | 修復結果: {notes}")
         except Exception as e:
             log(f"⚠️ Error auditing course {course.get('name')}: {e}")
 
@@ -250,6 +316,13 @@ def run_auto_heal():
 
     with open(DB_PATH, "w", encoding="utf-8") as f:
         json.dump(db, f, ensure_ascii=False, indent=2)
+
+    if os.path.exists(SRC_DB_PATH):
+        try:
+            with open(SRC_DB_PATH, "w", encoding="utf-8") as f:
+                json.dump(db, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            log(f"Notice: Could not sync to {SRC_DB_PATH}: {e}")
 
     summary_msg = f"✅ Self-Healing Complete! Audited: {total_courses} | Repaired: {total_repaired}"
     log(summary_msg)

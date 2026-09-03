@@ -117,18 +117,25 @@ npm run start
 
 本專案配置 GitHub Actions CI/CD 工作流，每次更新 `main` 分支均自動編譯並發布 Docker Image 至 GitHub Container Registry。
 
-### 1. 拉取 GHCR 鏡像並運行：
+### 1. 使用 Docker Compose 啟動（推薦，已自帶資料庫與媒體快取持久化）：
 ```bash
-docker pull ghcr.io/jmedzen/ui2:latest
-docker run -d -p 8410:8410 --name fyweb ghcr.io/jmedzen/ui2:latest
+docker compose up -d
 ```
 開啟瀏覽器造訪：`http://localhost:8410`
 
-### 2. 本機 Docker 手動編譯：
+### 2. 拉取 GHCR 鏡像並以 Docker CLI 運行（務必掛載 `-v $(pwd)/data:/app/data` 持久化目錄）：
+```bash
+docker pull ghcr.io/jmedzen/ui2:latest
+docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name fyweb ghcr.io/jmedzen/ui2:latest
+```
+
+### 3. 本機 Docker 手動編譯與運行：
 ```bash
 docker build -t fyweb:latest .
-docker run -d -p 8410:8410 fyweb:latest
+docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name fyweb fyweb:latest
 ```
+
+> **📌 持久化說明**：掛載 `./data` 目錄可確保資料庫 `data/courses_db.json`（包含所有路徑修正與掃描同步）、`data/media_cache/`（網頁主機媒體快取存檔）以及 `data/logs/` 在更新 Docker 映像時**永久保存**，不被容器刪除。
 
 ---
 

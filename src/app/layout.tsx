@@ -3,8 +3,14 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: '法雲資訊網 - 玅境長老經典講記音訊與講義典藏庫',
-  description: '完美呈現 fayun.org 完整課程資料，包含佛法經論、禪修止觀、戒律開示之 MP3 音訊播放與 PDF 講義筆記閱讀平台。',
-  keywords: ['法雲寺', '玅境長老', '瑜伽師地論', '金剛經', '摩訶般若波羅蜜經', '阿含經', '禪修', '佛法'],
+  description: '完美呈現 fayun.org 完整課程資料，包含佛法經論、禪修止觀、戒律開示之 MP3 音訊播放與 PDF 講義筆記閱讀平台。本站所有影音文檔版權均屬法雲資訊網 (fayun.org) 所有。',
+  keywords: ['法雲寺', '法雲資訊網', '玅境長老', '瑜伽師地論', '金剛經', '摩訶般若波羅蜜經', '阿含經', '禪修', '佛法', 'fayun.org'],
+  authors: [{ name: '玅境長老 (講述)' }, { name: '法雲資訊網 (fayun.org)' }],
+  publisher: '法雲資訊網 (fayun.org)',
+  creator: '法雲資訊網 (fayun.org)',
+  other: {
+    'copyright': '© 法雲資訊網 (fayun.org) 版權所有 | 僅供學修弘法無償流通'
+  }
 };
 
 export const viewport: Viewport = {

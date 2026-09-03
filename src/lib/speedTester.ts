@@ -68,17 +68,17 @@ export function triggerBackgroundServerCache(pathOrUrl: string): void {
 }
 
 /**
- * Measures download speed chunk (256KB) for a target URL
+ * Measures download speed chunk (32KB lightweight probe) for a target URL
  */
 async function measureChunkSpeed(targetUrl: string): Promise<number> {
   const startTime = performance.now();
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 sec timeout for probe
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 sec timeout for probe
 
     const res = await fetch(targetUrl, {
       method: 'GET',
-      headers: { Range: 'bytes=0-262143' }, // 256 KB probe chunk
+      headers: { Range: 'bytes=0-32767' }, // 32 KB lightweight probe chunk
       signal: controller.signal,
       cache: 'no-store'
     });
@@ -102,7 +102,8 @@ async function measureChunkSpeed(targetUrl: string): Promise<number> {
 
 /**
  * Evaluates optimal media route between direct Fayun.org and local server proxy.
- * ALWAYS triggers background server caching regardless of winner.
+ * If server already has local disk cache, instantly routes to local proxy (0ms).
+ * Otherwise triggers background server caching and tests connection speed to pick the faster host.
  */
 export async function getOptimalMediaRoute(
   rawPath: string,
@@ -111,10 +112,24 @@ export async function getOptimalMediaRoute(
   const path = cleanMediaPath(rawPath);
   const proxyUrl = `/api/proxy?path=${encodeURIComponent(path)}`;
 
-  // ALWAYS trigger server background cache as per user requirement
+  // 1. Always trigger server background cache to guarantee local disk copy
   triggerBackgroundServerCache(path);
 
-  // Check client memory cache
+  // 2. Check if file is ALREADY cached on web server disk
+  try {
+    const isCachedOnDisk = await fetchCacheStatus(path);
+    if (isCachedOnDisk) {
+      speedCache.set(path, { route: 'proxy', timestamp: Date.now() });
+      return {
+        route: 'proxy',
+        directSpeedKbps: 0,
+        proxySpeedKbps: 50000, // High-speed local disk stream
+        activeUrl: proxyUrl
+      };
+    }
+  } catch {}
+
+  // 3. Check client memory cache if recently evaluated
   const cachedRoute = speedCache.get(path);
   if (cachedRoute && Date.now() - cachedRoute.timestamp < CACHE_TTL_MS) {
     return {
@@ -125,7 +140,7 @@ export async function getOptimalMediaRoute(
     };
   }
 
-  // Run non-blocking parallel probe test
+  // 4. Run non-blocking parallel probe test between direct fayun.org and web proxy
   try {
     const [directSpeed, proxySpeed] = await Promise.all([
       measureChunkSpeed(directUrl),
