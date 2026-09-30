@@ -203,6 +203,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const targetTrack = formattedPlaylist[trackIndex];
     if (!targetTrack || !audioRef.current) return;
 
+    setIsExpanded(true);
     setPlaylist(formattedPlaylist);
 
     const reqId = ++playRequestIdRef.current;
