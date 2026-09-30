@@ -3,59 +3,26 @@ import path from 'path';
 import crypto from 'crypto';
 import { Readable } from 'stream';
 
-const CACHE_DIR = (() => {
+export function getCacheDir(): string {
   const envDir = process.env.MEDIA_CACHE_DIR;
   if (envDir && envDir.includes('data')) {
     return envDir;
   }
-  return path.join(process.cwd(), 'data', 'media_cache');
-})();
+  return path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'media_cache');
+}
+
+export function ensureCacheDir(): string {
+  const cacheDir = getCacheDir();
+  try {
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
+    }
+  } catch {}
+  return cacheDir;
+}
 
 const MAX_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_MAX_BYTES || '', 10) || 2 * 1024 * 1024 * 1024; // 2 GB
 const TARGET_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_TARGET_BYTES || '', 10) || Math.floor(MAX_CACHE_SIZE_BYTES * 0.8); // 1.6 GB High-water mark after eviction
-
-// Ensure target data/media_cache directory exists and migrate all legacy media cache folders (audio/video/PDF)
-try {
-  if (!fs.existsSync(CACHE_DIR)) {
-    fs.mkdirSync(CACHE_DIR, { recursive: true });
-  }
-
-  const legacyDirs = [
-    path.join(process.cwd(), 'media_cache'),
-    path.join(process.cwd(), 'cache')
-  ];
-
-  for (const legacyDir of legacyDirs) {
-    if (fs.existsSync(legacyDir) && legacyDir !== CACHE_DIR) {
-      const legacyFiles = fs.readdirSync(legacyDir);
-      for (const file of legacyFiles) {
-        const srcFile = path.join(legacyDir, file);
-        const destFile = path.join(CACHE_DIR, file);
-        try {
-          if (!fs.existsSync(destFile)) {
-            try {
-              fs.renameSync(srcFile, destFile);
-            } catch {
-              fs.copyFileSync(srcFile, destFile);
-              try { fs.unlinkSync(srcFile); } catch {}
-            }
-          } else {
-            try { fs.unlinkSync(srcFile); } catch {}
-          }
-        } catch (err) {
-          console.warn(`[Media Cache Migration] Could not move ${file}:`, err);
-        }
-      }
-      try {
-        if (fs.readdirSync(legacyDir).length === 0) {
-          fs.rmdirSync(legacyDir);
-        }
-      } catch {}
-    }
-  }
-} catch (e) {
-  console.warn('Failed to create or migrate media cache directory:', e);
-}
 
 export function getCacheKey(targetUrlOrPath: string): string {
   return crypto.createHash('md5').update(targetUrlOrPath).digest('hex');
@@ -65,33 +32,12 @@ export function getCacheFilePath(targetUrlOrPath: string, ext: string): string {
   const hash = getCacheKey(targetUrlOrPath);
   const rawExt = (ext || '').split('?')[0].replace(/^\./, '');
   const cleanExt = rawExt && /^[a-zA-Z0-9]+$/.test(rawExt) ? `.${rawExt}` : '.media';
-  return path.join(CACHE_DIR, `${hash}${cleanExt}`);
+  return path.join(ensureCacheDir(), `${hash}${cleanExt}`);
 }
 
 export function isCached(filePath: string): boolean {
   try {
-    if (fs.existsSync(filePath) && fs.statSync(filePath).size > 0) {
-      return true;
-    }
-    // Runtime safety net: check legacy media_cache folder for on-demand migration
-    const fileName = path.basename(filePath);
-    const legacyFilePath = path.join(process.cwd(), 'media_cache', fileName);
-    if (fs.existsSync(legacyFilePath) && fs.statSync(legacyFilePath).size > 0) {
-      try {
-        if (!fs.existsSync(path.dirname(filePath))) {
-          fs.mkdirSync(path.dirname(filePath), { recursive: true });
-        }
-        fs.renameSync(legacyFilePath, filePath);
-        return true;
-      } catch {
-        try {
-          fs.copyFileSync(legacyFilePath, filePath);
-          fs.unlinkSync(legacyFilePath);
-          return true;
-        } catch {}
-      }
-    }
-    return false;
+    return fs.existsSync(filePath) && fs.statSync(filePath).size > 0;
   } catch {
     return false;
   }
@@ -110,13 +56,14 @@ export function updateAccessTime(filePath: string): void {
  * Removes any stale temporary (.tmp) files left behind by interrupted downloads
  */
 export async function cleanStaleTempFiles(): Promise<void> {
+  const cacheDir = getCacheDir();
   try {
-    if (!fs.existsSync(CACHE_DIR)) return;
-    const files = await fs.promises.readdir(CACHE_DIR);
+    if (!fs.existsSync(cacheDir)) return;
+    const files = await fs.promises.readdir(cacheDir);
     const now = Date.now();
     for (const filename of files) {
       if (filename.endsWith('.tmp')) {
-        const fullPath = path.join(CACHE_DIR, filename);
+        const fullPath = path.join(cacheDir, filename);
         try {
           const stat = await fs.promises.stat(fullPath);
           // Delete .tmp files older than 3 minutes
@@ -132,26 +79,24 @@ export async function cleanStaleTempFiles(): Promise<void> {
   }
 }
 
-// Automatically clean stale .tmp files when module initializes
-cleanStaleTempFiles();
-
 /**
  * Enforces LRU Eviction Limit on Server Cache Directory
  */
 export async function enforceLRULimit(): Promise<void> {
+  const cacheDir = getCacheDir();
   try {
-    if (!fs.existsSync(CACHE_DIR)) return;
+    if (!fs.existsSync(cacheDir)) return;
 
     await cleanStaleTempFiles();
 
-    const files = await fs.promises.readdir(CACHE_DIR);
+    const files = await fs.promises.readdir(cacheDir);
     let totalSize = 0;
 
     const fileStats: { filePath: string; size: number; atimeMs: number }[] = [];
 
     for (const filename of files) {
       if (filename.endsWith('.tmp')) continue; // Exclude active temp files from LRU size
-      const fullPath = path.join(CACHE_DIR, filename);
+      const fullPath = path.join(cacheDir, filename);
       try {
         const stat = await fs.promises.stat(fullPath);
         if (stat.isFile()) {

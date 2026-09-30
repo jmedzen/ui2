@@ -4,15 +4,18 @@ import { NextResponse } from 'next/server';
 interface CacheEntry {
   data: any;
   timestamp: number;
+  ttl: number;
+  status: number;
 }
 
 const fileListCache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
-const MAX_CACHE_ITEMS = 200;
+const POSITIVE_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour for valid directory listings
+const NEGATIVE_CACHE_TTL_MS = 10 * 60 * 1000; // 10 mins for non-existent / empty directories
+const MAX_CACHE_ITEMS = 300;
 
 function cleanExpiredCache(now: number) {
   for (const [key, entry] of fileListCache.entries()) {
-    if (now - entry.timestamp >= CACHE_TTL_MS) {
+    if (now - entry.timestamp >= entry.ttl) {
       fileListCache.delete(key);
     }
   }
@@ -40,8 +43,13 @@ export async function POST(request: Request) {
     cleanExpiredCache(now);
 
     const cached = fileListCache.get(src);
-    if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+    if (cached && now - cached.timestamp < cached.ttl) {
+      // LRU Key Promotion on Hit
+      fileListCache.delete(src);
+      fileListCache.set(src, cached);
+
       return NextResponse.json(cached.data, {
+        status: cached.status || 200,
         headers: {
           'X-Cache-Status': 'HIT',
           'Cache-Control': 'public, max-age=3600'
@@ -60,15 +68,27 @@ export async function POST(request: Request) {
     });
 
     if (!res.ok) {
-      return NextResponse.json({ error: `Remote returned ${res.status}` }, { status: res.status });
+      const errData = { error: `Remote returned ${res.status}` };
+      // Negative cache 404/400 errors to prevent repeated hammering
+      fileListCache.set(src, {
+        data: errData,
+        timestamp: now,
+        ttl: NEGATIVE_CACHE_TTL_MS,
+        status: res.status
+      });
+      return NextResponse.json(errData, { status: res.status });
     }
 
     const data = await res.json();
 
-    // Cache successful responses with LRU safety
-    if (data && data.status) {
-      fileListCache.set(src, { data, timestamp: now });
-    }
+    // Cache successful responses with standard TTL, empty with negative TTL
+    const isSuccess = data && data.status;
+    fileListCache.set(src, {
+      data,
+      timestamp: now,
+      ttl: isSuccess ? POSITIVE_CACHE_TTL_MS : NEGATIVE_CACHE_TTL_MS,
+      status: 200
+    });
 
     return NextResponse.json(data, {
       headers: {

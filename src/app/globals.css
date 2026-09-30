@@ -1452,6 +1452,147 @@ body {
   line-height: 1.6;
 }
 
+/* Copyright Declaration Card in CourseDetail Info Tab */
+.copyright-info-card {
+  margin-top: 18px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--gold-accent);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.copyright-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.copyright-icon {
+  font-size: calc(20px * var(--font-scale));
+}
+
+.copyright-title {
+  font-size: calc(16px * var(--font-scale));
+  font-weight: 700;
+  color: var(--gold-accent);
+  margin: 0;
+}
+
+.copyright-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.copyright-text {
+  font-size: calc(14px * var(--font-scale));
+  color: var(--text-primary);
+  line-height: 1.7;
+}
+
+.copyright-link {
+  color: var(--gold-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+  transition: color 0.15s ease;
+}
+
+.copyright-link:hover {
+  color: var(--text-primary);
+}
+
+.copyright-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.term-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: calc(13px * var(--font-scale));
+}
+
+.term-icon {
+  font-size: calc(16px * var(--font-scale));
+  margin-top: 2px;
+}
+
+.term-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.term-content strong {
+  color: var(--text-primary);
+}
+
+.term-content p {
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Sidebar Footer Copyright Link */
+.sidebar-copyright-link {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: calc(11px * var(--font-scale));
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  text-align: center;
+  width: 100%;
+  display: block;
+}
+
+.sidebar-copyright-link:hover {
+  color: var(--gold-accent);
+  background: var(--bg-hover);
+}
+
+/* Settings Modal Copyright Box */
+.settings-copyright-box {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.copyright-line {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: calc(13px * var(--font-scale));
+}
+
+.copyright-line .c-tag {
+  font-weight: 700;
+  color: var(--gold-accent);
+  font-size: calc(12px * var(--font-scale));
+}
+
+.copyright-line .c-content {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
 /* PDF Viewer Component Styling */
 .pdf-viewer-card {
   display: flex;

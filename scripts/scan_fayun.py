@@ -181,10 +181,21 @@ def run_scan():
                         lecture_p = PATH_OVERRIDES[c_id]["lecture_path"]
 
                 if existing:
+                    # Preserve all repaired/corrected paths and data from existing database
                     if existing.get("audio_path"):
                         audio_p = existing["audio_path"]
                     if existing.get("lecture_path"):
                         lecture_p = existing["lecture_path"]
+                    if existing.get("video_path") is not None:
+                        video_p = existing["video_path"]
+                    if existing.get("pdfs"):
+                        c_pdfs = existing["pdfs"]
+                    if existing.get("total_episodes") and existing["total_episodes"] > 0:
+                        total_episodes = existing["total_episodes"]
+                    else:
+                        total_episodes = item.get("total", 0) or 0
+                else:
+                    total_episodes = item.get("total", 0) or 0
 
                 course_obj = {
                     "id": c_id,
@@ -195,14 +206,14 @@ def run_scan():
                     "sub_menu_title": sub_title,
                     "topic": topic,
                     "topic_title": topic_title,
-                    "location": item.get("location") or "美國法雲寺禪學院",
-                    "time": item.get("time") or "",
-                    "total_episodes": item.get("total", 0) or 0,
+                    "location": item.get("location") or (existing.get("location") if existing else "美國法雲寺禪學院"),
+                    "time": item.get("time") or (existing.get("time") if existing else ""),
+                    "total_episodes": total_episodes,
                     "audio_path": audio_p,
                     "video_path": video_p,
                     "lecture_path": lecture_p,
-                    "poster_path": item.get("poster_path"),
-                    "comment": item.get("comment"),
+                    "poster_path": item.get("poster_path") or (existing.get("poster_path") if existing else None),
+                    "comment": item.get("comment") or (existing.get("comment") if existing else None),
                     "pdfs": c_pdfs
                 }
 
@@ -217,6 +228,12 @@ def run_scan():
         except Exception as e:
             log_message(f"❌ Error scanning {main_menu}/{sub_menu}: {e}")
 
+    # Preserve any existing courses in database that were not returned in current scan
+    scanned_ids = {c["id"] for c in scanned_courses}
+    for old_c in existing_db.get("courses", []):
+        if old_c["id"] not in scanned_ids:
+            scanned_courses.append(old_c)
+
     scanned_courses.sort(key=lambda x: (x["main_menu"], x["sub_menu"], x["topic"], x["name"]))
 
     new_db = {
@@ -226,6 +243,11 @@ def run_scan():
         "topic_schema": TOPIC_MAP,
         "courses": scanned_courses
     }
+    if existing_db:
+        if "last_auto_healed_at" in existing_db:
+            new_db["last_auto_healed_at"] = existing_db["last_auto_healed_at"]
+        if "total_repaired_courses" in existing_db:
+            new_db["total_repaired_courses"] = existing_db["total_repaired_courses"]
 
     with open(DB_PATH, "w", encoding="utf-8") as f:
         json.dump(new_db, f, ensure_ascii=False, indent=2)

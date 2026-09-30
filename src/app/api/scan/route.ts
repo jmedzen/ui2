@@ -4,27 +4,13 @@ import path from 'path';
 import fs from 'fs';
 
 function getScannerLogPath(): string {
-  const dataLogsDir = path.join(process.cwd(), 'data', 'logs');
+  const dataLogsDir = path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'logs');
   if (!fs.existsSync(dataLogsDir)) {
-    fs.mkdirSync(dataLogsDir, { recursive: true });
+    try {
+      fs.mkdirSync(dataLogsDir, { recursive: true });
+    } catch {}
   }
-  const persistentPath = path.join(dataLogsDir, 'scanner.log');
-
-  const legacyPaths = [
-    path.join(process.cwd(), 'logs', 'scanner.log'),
-    path.join(process.cwd(), 'scanner.log')
-  ];
-
-  for (const oldPath of legacyPaths) {
-    if (fs.existsSync(oldPath) && !fs.existsSync(persistentPath)) {
-      try {
-        fs.copyFileSync(oldPath, persistentPath);
-        break;
-      } catch {}
-    }
-  }
-
-  return persistentPath;
+  return path.join(dataLogsDir, 'scanner.log');
 }
 
 export async function GET() {
@@ -37,8 +23,8 @@ export async function GET() {
       logContent = lines.slice(-500).join('\n');
     }
 
-    const dataDbPath = path.join(process.cwd(), 'data', 'courses_db.json');
-    const srcDbPath = path.join(process.cwd(), 'src', 'data', 'courses_db.json');
+    const dataDbPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'courses_db.json');
+    const srcDbPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'src', 'data', 'courses_db.json');
     const dbPath = fs.existsSync(dataDbPath) ? dataDbPath : srcDbPath;
     let dbInfo = { generated_at: 'Unknown', total_courses: 0 };
     if (fs.existsSync(dbPath)) {

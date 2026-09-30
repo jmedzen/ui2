@@ -28,6 +28,7 @@ export default function VideoPlayer({
 }: VideoPlayerProps) {
   const { isPlaying: isAudioPlaying, togglePlay: toggleAudioPlay } = useAudio();
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const videoRequestIdRef = useRef<number>(0);
   const [playbackRate, setPlaybackRate] = useState<number>(1.0);
   const [autoPlayNext, setAutoPlayNext] = useState<boolean>(true);
 
@@ -56,6 +57,7 @@ export default function VideoPlayer({
   useEffect(() => {
     let isMounted = true;
     if (!currentTrack) return;
+    const reqId = ++videoRequestIdRef.current;
 
     // Trigger background cache on server
     triggerBackgroundServerCache(currentTrack.proxyUrl);
@@ -64,20 +66,22 @@ export default function VideoPlayer({
       getOptimalMediaRoute(currentTrack.proxyUrl, currentTrack.url),
       fetchCacheStatus(currentTrack.proxyUrl)
     ]).then(([routeRes, isCached]) => {
-      if (!isMounted) return;
+      if (!isMounted || reqId !== videoRequestIdRef.current) return;
       setActiveRoute(routeRes.route);
       setIsServerCached(isCached);
 
       if (videoRef.current) {
-        videoRef.current.src = routeRes.activeUrl;
-        videoRef.current.load();
+        if (videoRef.current.getAttribute('src') !== routeRes.activeUrl) {
+          videoRef.current.src = routeRes.activeUrl;
+          videoRef.current.load();
+        }
       }
     });
 
     return () => {
       isMounted = false;
     };
-  }, [currentTrackIndex, currentTrack]);
+  }, [currentTrackIndex, currentTrack?.proxyUrl]);
 
   // Dynamic Cache Status Polling for Current Video
   useEffect(() => {

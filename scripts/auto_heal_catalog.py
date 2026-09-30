@@ -12,6 +12,7 @@ import json
 import time
 import urllib.request
 import urllib.parse
+import re
 from datetime import datetime
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -92,6 +93,10 @@ AUDIO_EXTS = (".mp3", ".m4a", ".wav", ".wma", ".aac", ".ogg", ".mp4", ".m4v", ".
 def query_remote_list(src_path):
     """
     Queries fayun.org list.php for file listings inside a directory path.
+    Returns:
+      - list/dict if directory exists and has entries
+      - [] if directory explicitly returned 400 or empty data
+      - None if network error / timeout occurred
     """
     if not src_path:
         return None
@@ -108,9 +113,24 @@ def query_remote_list(src_path):
                 return res["data"]
             elif isinstance(res, list):
                 return res
-    except Exception as e:
-        pass
-    return None
+            return []
+    except urllib.error.HTTPError as e:
+        if e.code == 400:
+            return []
+        return None
+    except Exception:
+        return None
+
+def course_matches_filename(c_name, fname):
+    """
+    Robust matching of course titles and filenames, handling sutra prefixes like 雜阿含經．
+    """
+    if not c_name or not fname:
+        return False
+    if c_name in fname:
+        return True
+    parts = [p.strip() for p in re.split(r"[．·\.\:\s\-_/\\()（）]+", c_name) if len(p.strip()) >= 2]
+    return any(p in fname for p in parts)
 
 def find_real_pdfs_for_course(course):
     """
@@ -208,8 +228,7 @@ def verify_and_heal_course(course):
         is_mismatched = False
         if isinstance(audio_data, list) and len(audio_data) > 0:
             fnames = [extract_fname(f) for f in audio_data]
-            # Check if any audio filename contains course_name (or key substring)
-            matched = any(course_name in fn or (len(course_name) > 2 and course_name[:3] in fn) for fn in fnames)
+            matched = any(course_matches_filename(course_name, fn) for fn in fnames)
             if not matched:
                 is_mismatched = True
 
@@ -230,7 +249,7 @@ def verify_and_heal_course(course):
                 cand_data = query_remote_list(cand)
                 if isinstance(cand_data, list) and len(cand_data) > 0:
                     cand_fnames = [extract_fname(f) for f in cand_data]
-                    if any(course_name in fn or (len(course_name) > 2 and course_name[:3] in fn) for fn in cand_fnames):
+                    if any(course_matches_filename(course_name, fn) for fn in cand_fnames):
                         repaired_path = cand
                         audio_data = cand_data
                         break
@@ -254,22 +273,24 @@ def verify_and_heal_course(course):
                 modified = True
                 notes.append(f"Updated audio total_episodes: {len(audio_files)}")
 
-    # 3. Audit Video Path
+    # 3. Audit Video Path safely (never clear on network error)
     video_path = course.get("video_path")
     if video_path:
         vdata = query_remote_list(video_path)
-        if not vdata:
-            # Check if parent contains video
+        # Only inspect if query returned an explicit empty list (server 400 or empty directory)
+        if vdata is not None and len(vdata) == 0:
             parent = video_path.split("/video")[0]
             vdata_parent = query_remote_list(parent)
-            if vdata_parent and isinstance(vdata_parent, dict) and "video" in vdata_parent:
-                course["video_path"] = parent
-                modified = True
-                notes.append(f"Repaired video_path to {parent}")
-            elif not vdata_parent:
+            if isinstance(vdata_parent, dict) and "video" in vdata_parent and len(vdata_parent["video"]) > 0:
+                repaired = f"{parent}/video"
+                if course.get("video_path") != repaired:
+                    course["video_path"] = repaired
+                    modified = True
+                    notes.append(f"Repaired video_path to {repaired}")
+            elif vdata_parent is not None and (len(vdata_parent) == 0 or (isinstance(vdata_parent, dict) and "video" not in vdata_parent)):
                 course["video_path"] = None
                 modified = True
-                notes.append("Cleared invalid video_path")
+                notes.append("Cleared invalid video_path (verified absent on server)")
 
     return modified, "; ".join(notes)
 

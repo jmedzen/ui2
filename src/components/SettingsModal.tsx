@@ -366,6 +366,34 @@ export default function SettingsModal({
                   </p>
                 </div>
               </div>
+
+              {/* Copyright & Dharma Source Section */}
+              <div className="settings-section copyright-section">
+                <h4 className="settings-section-title">📜 著作權與典藏法源申告 (Copyright)</h4>
+                <p className="settings-section-desc">
+                  本系統為佛教學人便利研讀玅境長老宣說經論講記所開發之非營利輔助學修工具
+                </p>
+                <div className="settings-copyright-box">
+                  <div className="copyright-line">
+                    <span className="c-tag">著作權歸屬</span>
+                    <span className="c-content">
+                      全站所有經論講記錄音、影音、文字講義及 PDF 筆記，其智慧財產權與著作權<strong>全權屬於 法雲資訊網 (<a href="https://www.fayun.org" target="_blank" rel="noopener noreferrer" className="copyright-link">fayun.org</a>) 及相關著作權人</strong>。
+                    </span>
+                  </div>
+                  <div className="copyright-line">
+                    <span className="c-tag">非營利宗旨</span>
+                    <span className="c-content">
+                      本平台完全免費、無償流通，供一切大眾研習正法。<strong>嚴禁任何未經原機構書面許可之商業轉售、營利授課或付費營銷用途</strong>。
+                    </span>
+                  </div>
+                  <div className="copyright-line">
+                    <span className="c-tag">官方原創網址</span>
+                    <span className="c-content">
+                      法雲資訊網原典藏出處：<a href="https://www.fayun.org" target="_blank" rel="noopener noreferrer" className="copyright-link">https://www.fayun.org</a>
+                    </span>
+                  </div>
+                </div>
+              </div>
             </>
           ) : (
             /* Log Tab Content */

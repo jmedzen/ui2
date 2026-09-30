@@ -51,4 +51,6 @@ media_cache/
 *.mp3
 *.mp4
 *.m4a
-*.tmp
+# python cache
+__pycache__/
+*.pyc

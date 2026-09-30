@@ -57,6 +57,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const currentTrackRef = useRef<PlayingTrack | null>(currentTrack);
   currentTrackRef.current = currentTrack;
 
+  const playRequestIdRef = useRef<number>(0);
+
   // Restore last played track from localStorage on mount
   useEffect(() => {
     try {
@@ -138,13 +140,33 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         const nextIdx = curr.index + 1;
         if (nextIdx < list.length) {
           const nextTrack = list[nextIdx];
-          setCurrentTrack(nextTrack);
-
-          // Always trigger background server caching for requested media
+          const reqId = ++playRequestIdRef.current;
           triggerBackgroundServerCache(nextTrack.proxyUrl);
 
-          audio.src = nextTrack.proxyUrl;
-          audio.play().then(() => setIsPlaying(true)).catch(console.warn);
+          Promise.all([
+            getOptimalMediaRoute(nextTrack.proxyUrl, nextTrack.url),
+            fetchCacheStatus(nextTrack.proxyUrl)
+          ]).then(([routeRes, isCached]) => {
+            if (reqId !== playRequestIdRef.current) return;
+            const updatedTrack: PlayingTrack = {
+              ...nextTrack,
+              activeRoute: routeRes.route,
+              isServerCached: isCached
+            };
+            setCurrentTrack(updatedTrack);
+
+            if (audioRef.current) {
+              audioRef.current.src = routeRes.activeUrl;
+              audioRef.current.load();
+              audioRef.current
+                .play()
+                .then(() => setIsPlaying(true))
+                .catch((err) => {
+                  console.warn('Auto-play next playback error:', err);
+                  setIsPlaying(false);
+                });
+            }
+          });
         }
       }
     };
@@ -183,11 +205,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     setPlaylist(formattedPlaylist);
 
+    const reqId = ++playRequestIdRef.current;
+
     // Initial cache status check & dual-path speed evaluation
     Promise.all([
       getOptimalMediaRoute(targetTrack.proxyUrl, targetTrack.url),
       fetchCacheStatus(targetTrack.proxyUrl)
     ]).then(([routeRes, isCached]) => {
+      if (reqId !== playRequestIdRef.current) return;
       const updatedTrack: PlayingTrack = {
         ...targetTrack,
         activeRoute: routeRes.route,

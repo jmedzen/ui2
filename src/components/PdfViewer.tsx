@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PdfItem } from '@/types/course';
 
 interface PdfViewerProps {
@@ -11,6 +11,10 @@ interface PdfViewerProps {
 export default function PdfViewer({ pdfs, courseTitle }: PdfViewerProps) {
   const [selectedPdfIndex, setSelectedPdfIndex] = useState<number>(0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  useEffect(() => {
+    setSelectedPdfIndex(0);
+  }, [courseTitle, pdfs]);
 
   if (!pdfs || pdfs.length === 0) {
     return (
