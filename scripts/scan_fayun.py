@@ -141,7 +141,8 @@ PATH_OVERRIDES = {
     },
     97: {
         "audio_path": "/media/釋論/瑜伽師地論・本地分",
-        "lecture_path": "/media/釋論/瑜伽師地論・本地分"
+        "lecture_path": "/media/釋論/瑜伽師地論・本地分",
+        "video_path": "/media/釋論/瑜伽師地論・本地分"
     }
 }
 
@@ -183,6 +184,8 @@ def run_scan():
                         audio_p = PATH_OVERRIDES[c_id]["audio_path"]
                     if "lecture_path" in PATH_OVERRIDES[c_id]:
                         lecture_p = PATH_OVERRIDES[c_id]["lecture_path"]
+                    if "video_path" in PATH_OVERRIDES[c_id]:
+                        video_p = PATH_OVERRIDES[c_id]["video_path"]
 
                 if existing:
                     # Preserve all repaired/corrected paths and data from existing database

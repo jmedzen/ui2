@@ -9,6 +9,8 @@ export interface VideoTrackInfo {
   filename: string;
   url: string;
   proxyUrl: string;
+  volume?: string;
+  displayName?: string;
 }
 
 interface VideoPlayerProps {
@@ -151,7 +153,7 @@ export default function VideoPlayer({
               </span>
             )}
           </div>
-          <h4 className="video-name">{currentTrack.filename}</h4>
+          <h4 className="video-name">{currentTrack.displayName || currentTrack.filename}</h4>
           <span className="video-sub-info">
             {courseTitle} • 第 {currentTrackIndex + 1} / {tracks.length} 集
           </span>
@@ -223,7 +225,7 @@ export default function VideoPlayer({
               >
                 {tracks.map((t, idx) => (
                   <option key={idx} value={idx}>
-                    第 {idx + 1} 集 / 共 {tracks.length} 集 - {t.filename}
+                    第 {idx + 1} 集 / 共 {tracks.length} 集 - {t.displayName || t.filename}
                   </option>
                 ))}
               </select>
@@ -282,9 +284,10 @@ export default function VideoPlayer({
                     key={idx}
                     onClick={() => handleSelectTrack(idx)}
                     className={`video-grid-btn ${isActive ? 'active' : ''}`}
-                    title={t.filename}
+                    title={t.displayName || t.filename}
                   >
                     <span className="grid-ep-num">第 {idx + 1} 集</span>
+                    {t.volume && <span className="video-grid-vol-tag">{t.volume}</span>}
                   </button>
                 );
               })}

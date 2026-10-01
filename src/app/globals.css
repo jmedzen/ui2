@@ -1703,6 +1703,14 @@ html, body {
   box-shadow: 0 2px 8px var(--purple-glow, rgba(139, 92, 246, 0.3));
 }
 
+.video-grid-vol-tag {
+  display: block;
+  font-size: 10px;
+  opacity: 0.75;
+  margin-top: 2px;
+  line-height: 1;
+}
+
 .video-list-heading {
   font-size: calc(17px * var(--font-scale));
   font-weight: 600;

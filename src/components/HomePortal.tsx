@@ -174,7 +174,7 @@ export default function HomePortal({
         <div className="home-stat-card">
           <span className="stat-icon">🎥</span>
           <div className="stat-data">
-            <span className="stat-number">{totalVideoCourses || 267}</span>
+            <span className="stat-number">{totalVideoCourses || 268}</span>
             <span className="stat-label">部隨身影音開示</span>
           </div>
         </div>

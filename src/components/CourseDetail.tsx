@@ -299,21 +299,23 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
       setCurrentVideoIndex(0);
 
       let fetchedVideos: VideoTrackInfo[] = [];
+      const vPath = course.video_path || (course.name.includes('本地分') ? '/media/釋論/瑜伽師地論・本地分' : undefined);
 
-      if (course.video_path) {
+      if (vPath) {
         try {
           const res = await fetch('/api/list-files', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ src: course.video_path }),
+            body: JSON.stringify({ src: vPath }),
             signal: controller.signal
           });
           if (res.ok) {
             const rawData = await res.json();
-            const dataList = Array.isArray(rawData) ? rawData : (rawData && Array.isArray(rawData.data) ? rawData.data : []);
+            const listData = rawData && typeof rawData === 'object' && rawData.data !== undefined ? rawData.data : rawData;
 
-            if (Array.isArray(dataList) && dataList.length > 0) {
-              const videoFiles = dataList
+            // Case 1: Standard flat array of video filenames
+            if (Array.isArray(listData) && listData.length > 0) {
+              const videoFiles = listData
                 .map(extractFilename)
                 .filter((filename: string) => {
                   const ext = '.' + filename.split('.').pop()?.toLowerCase();
@@ -324,14 +326,101 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
                 );
 
               fetchedVideos = videoFiles.map((filename: string, idx: number) => {
-                const fullPath = `${course.video_path}/${filename}`;
+                const fullPath = `${vPath}/${filename}`;
                 return {
                   index: idx,
                   filename: filename,
+                  displayName: filename,
                   url: `https://www.fayun.org/ftpadmin${fullPath}`,
                   proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
                 };
               });
+            } else if (listData && typeof listData === 'object') {
+              // Case 2: Object response
+              // Case 2a: Single folder object { video: [...], audio: [...], bilu: [...] }
+              if (Array.isArray(listData.video)) {
+                const videoFiles = (listData.video || [])
+                  .map(extractFilename)
+                  .filter((filename: string) => {
+                    const ext = '.' + filename.split('.').pop()?.toLowerCase();
+                    return VIDEO_EXTS.includes(ext);
+                  })
+                  .sort((a: string, b: string) =>
+                    a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+                  );
+
+                fetchedVideos = videoFiles.map((filename: string, idx: number) => {
+                  const fullPath = `${vPath}/video/${filename}`;
+                  return {
+                    index: idx,
+                    filename: filename,
+                    displayName: filename,
+                    url: `https://www.fayun.org/ftpadmin${fullPath}`,
+                    proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
+                  };
+                });
+              } else {
+                // Case 2b: Multi-volume course (e.g. 瑜伽師地論．本地分 with 51 volumes)
+                const sortedVols = sortVolumes(Object.keys(listData));
+                const parsedVideoTracks: VideoTrackInfo[] = [];
+
+                sortedVols.forEach((vol) => {
+                  const vData = listData[vol];
+                  let videoList: any[] = [];
+                  let videoSubfolder = 'video';
+
+                  if (Array.isArray(vData)) {
+                    videoList = vData;
+                    videoSubfolder = '';
+                  } else if (vData && typeof vData === 'object') {
+                    if (Array.isArray(vData.video)) {
+                      videoList = vData.video;
+                      videoSubfolder = 'video';
+                    } else {
+                      for (const subKey of Object.keys(vData)) {
+                        if (Array.isArray(vData[subKey])) {
+                          const sample = vData[subKey][0];
+                          if (typeof sample === 'string' && VIDEO_EXTS.some((ext: string) => sample.toLowerCase().endsWith(ext))) {
+                            videoList = vData[subKey];
+                            videoSubfolder = subKey;
+                            break;
+                          }
+                        }
+                      }
+                    }
+                  }
+
+                  const validVideos = videoList
+                    .map(extractFilename)
+                    .filter((fn: string) => VIDEO_EXTS.includes('.' + fn.split('.').pop()?.toLowerCase()))
+                    .sort((a: string, b: string) => {
+                      // Natural numeric sort by extracting episode number before extension
+                      const baseA = a.substring(0, a.lastIndexOf('.')) || a;
+                      const baseB = b.substring(0, b.lastIndexOf('.')) || b;
+                      const numsA = baseA.match(/\d+/g);
+                      const numsB = baseB.match(/\d+/g);
+                      const numA = numsA ? parseInt(numsA[numsA.length - 1], 10) : 99999;
+                      const numB = numsB ? parseInt(numsB[numsB.length - 1], 10) : 99999;
+                      if (numA !== numB) return numA - numB;
+                      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+                    });
+
+                  validVideos.forEach((fn: string) => {
+                    const subPath = videoSubfolder ? `${vol}/${videoSubfolder}/${fn}` : `${vol}/${fn}`;
+                    const fullPath = `${vPath}/${subPath}`;
+                    parsedVideoTracks.push({
+                      index: parsedVideoTracks.length,
+                      filename: fn,
+                      volume: vol,
+                      displayName: `[${vol}] ${fn}`,
+                      url: `https://www.fayun.org/ftpadmin${fullPath}`,
+                      proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
+                    });
+                  });
+                });
+
+                fetchedVideos = parsedVideoTracks;
+              }
             }
           }
         } catch (e: any) {
@@ -489,12 +578,14 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
     };
   }, [course]);
 
+  const hasVideo = Boolean(course.video_path || (course.name && course.name.includes('本地分')));
+
   // Restore saved active tab & video index per course on mount/course change
   useEffect(() => {
     try {
       const savedTab = localStorage.getItem(`fayun_last_tab_${course.id}`);
       if (savedTab && ['audio', 'video', 'pdf', 'info', 'split'].includes(savedTab)) {
-        if ((savedTab === 'video' || savedTab === 'split') && !course.video_path) {
+        if ((savedTab === 'video' || savedTab === 'split') && !hasVideo) {
           setActiveTab('audio');
         } else {
           setActiveTab(savedTab as any);
@@ -517,10 +608,10 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
     } catch (e) {
       console.warn('Failed to restore course tab state:', e);
     }
-  }, [course.id, course.video_path]);
+  }, [course.id, course.video_path, hasVideo]);
 
   const handleTabClick = (tab: 'audio' | 'video' | 'pdf' | 'info' | 'split') => {
-    if ((tab === 'video' || tab === 'split') && !course.video_path) {
+    if ((tab === 'video' || tab === 'split') && !hasVideo) {
       return;
     }
     if (tab === 'video' && isPlaying) {
@@ -608,7 +699,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
           <span className="meta-tag venue">地點：{course.location || '法雲寺'}</span>
           <span className="meta-tag time">日期：{course.time || '典藏'}</span>
           <span className="meta-tag episodes">音訊集數：{course.total_episodes || audioTracks.length} 集</span>
-          {course.video_path && (
+          {hasVideo && (
             <span className="meta-tag video-badge-tag">🎥 影音講記檔</span>
           )}
           {course.pdfs && course.pdfs.length > 0 && (
@@ -626,7 +717,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
           >
             🎵 音訊錄音 ({audioTracks.length || course.total_episodes || 0})
           </button>
-          {course.video_path && (
+          {hasVideo && (
             <button
               className={`tab-btn ${activeTab === 'video' ? 'active' : ''}`}
               onClick={() => handleTabClick('video')}
@@ -640,7 +731,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
           >
             📄 筆記講義 ({pdfTracks.length})
           </button>
-          {course.video_path && pdfTracks.length > 0 && (
+          {hasVideo && pdfTracks.length > 0 && (
             <button
               className={`tab-btn split-btn ${activeTab === 'split' ? 'active' : ''}`}
               onClick={() => handleTabClick('split')}

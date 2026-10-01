@@ -41,7 +41,7 @@ test('Database Integrity Suite - courses_db.json validation', async (t) => {
     const db = JSON.parse(fs.readFileSync(srcDbPath, 'utf-8'));
     const videoCourses = db.courses.filter((c: any) => c.video_path && c.video_path.trim() !== '');
 
-    assert.strictEqual(videoCourses.length, 267, 'Must have exactly 267 courses with video_path');
+    assert.strictEqual(videoCourses.length, 268, 'Must have exactly 268 courses with video_path');
 
     for (const course of videoCourses) {
       assert.ok(

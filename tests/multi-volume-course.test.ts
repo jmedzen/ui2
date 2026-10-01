@@ -25,6 +25,7 @@ function sortVolumes(vols: string[]): string[] {
 }
 
 const AUDIO_EXTS = ['.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac', '.mp4', '.m4v', '.webm', '.mov'];
+const VIDEO_EXTS = ['.mp4', '.m4v', '.wmv', '.flv', '.mov', '.avi', '.mkv', '.webm', '.mpg', '.mpeg'];
 
 function extractFilename(item: any): string {
   if (typeof item === 'string') return item;
@@ -84,6 +85,67 @@ function parseMultiVolumeAudio(
   return parsedTracks;
 }
 
+function parseMultiVolumeVideos(
+  basePath: string,
+  dataObj: Record<string, any>
+): { filename: string; volume: string; displayName: string; fullPath: string }[] {
+  const sortedVols = sortVolumes(Object.keys(dataObj));
+  const parsedVideos: { filename: string; volume: string; displayName: string; fullPath: string }[] = [];
+
+  sortedVols.forEach((vol) => {
+    const vData = dataObj[vol];
+    let videoList: any[] = [];
+    let videoSubfolder = 'video';
+
+    if (Array.isArray(vData)) {
+      videoList = vData;
+      videoSubfolder = '';
+    } else if (vData && typeof vData === 'object') {
+      if (Array.isArray(vData.video)) {
+        videoList = vData.video;
+        videoSubfolder = 'video';
+      } else {
+        for (const subKey of Object.keys(vData)) {
+          if (Array.isArray(vData[subKey])) {
+            const sample = vData[subKey][0];
+            if (typeof sample === 'string' && VIDEO_EXTS.some((ext: string) => sample.toLowerCase().endsWith(ext))) {
+              videoList = vData[subKey];
+              videoSubfolder = subKey;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    const validVideos = videoList
+      .map(extractFilename)
+      .filter((fn: string) => VIDEO_EXTS.includes('.' + fn.split('.').pop()?.toLowerCase()))
+      .sort((a: string, b: string) => {
+        const baseA = a.substring(0, a.lastIndexOf('.')) || a;
+        const baseB = b.substring(0, b.lastIndexOf('.')) || b;
+        const numsA = baseA.match(/\d+/g);
+        const numsB = baseB.match(/\d+/g);
+        const numA = numsA ? parseInt(numsA[numsA.length - 1], 10) : 99999;
+        const numB = numsB ? parseInt(numsB[numsB.length - 1], 10) : 99999;
+        if (numA !== numB) return numA - numB;
+        return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+      });
+
+    validVideos.forEach((fn: string) => {
+      const subPath = videoSubfolder ? `${vol}/${videoSubfolder}/${fn}` : `${vol}/${fn}`;
+      parsedVideos.push({
+        filename: fn,
+        volume: vol,
+        displayName: `[${vol}] ${fn}`,
+        fullPath: `${basePath}/${subPath}`
+      });
+    });
+  });
+
+  return parsedVideos;
+}
+
 function parseMultiVolumePdfs(
   basePath: string,
   dataObj: Record<string, any>
@@ -131,6 +193,11 @@ test('Multi-Volume Course Parsing & Course 97 Integrity Suite', async (t) => {
       'Course 97 audio_path must be correctly overridden'
     );
     assert.strictEqual(
+      c97.video_path,
+      '/media/釋論/瑜伽師地論・本地分',
+      'Course 97 video_path must point to 本地分 directory'
+    );
+    assert.strictEqual(
       c97.lecture_path,
       '/media/釋論/瑜伽師地論・本地分',
       'Course 97 lecture_path must be correctly overridden'
@@ -153,6 +220,7 @@ test('Multi-Volume Course Parsing & Course 97 Integrity Suite', async (t) => {
 
     assert.ok(c97, 'Course 97 must exist in data/courses_db.json');
     assert.strictEqual(c97.audio_path, '/media/釋論/瑜伽師地論・本地分');
+    assert.strictEqual(c97.video_path, '/media/釋論/瑜伽師地論・本地分');
     assert.strictEqual(c97.pdfs.length, 503);
   });
 
@@ -162,8 +230,8 @@ test('Multi-Volume Course Parsing & Course 97 Integrity Suite', async (t) => {
 
     assert.ok(content.includes('97: {'), 'Scanner must contain override for Course 97');
     assert.ok(
-      content.includes('/media/釋論/瑜伽師地論・本地分'),
-      'Scanner override must specify correct 本地分 path'
+      content.includes('"video_path": "/media/釋論/瑜伽師地論・本地分"'),
+      'Scanner override must specify correct video_path'
     );
   });
 
@@ -227,6 +295,48 @@ test('Multi-Volume Course Parsing & Course 97 Integrity Suite', async (t) => {
     // Followed by 卷02
     assert.strictEqual(tracks[3].volume, '卷02');
     assert.strictEqual(tracks[3].displayName, '[卷02] 瑜伽師地論-002.m4a');
+  });
+
+  await t.test('parseMultiVolumeVideos parses and naturally orders video files across volumes', () => {
+    const mockApiResponse = {
+      '卷12至13-1': {
+        video: ['155.m4v', '130.m4v']
+      },
+      '初發論端': {
+        video: ['W01.瑜伽師地論-初發論端-02.mp4', 'W01.瑜伽師地論-初發論端-01.mp4']
+      },
+      '卷01': {
+        video: ['W02.瑜伽師地論-卷一-09.mp4', 'W02.瑜伽師地論-卷一-08.mp4']
+      }
+    };
+
+    const videos = parseMultiVolumeVideos('/media/釋論/瑜伽師地論・本地分', mockApiResponse);
+
+    assert.strictEqual(videos.length, 6);
+    // Episode 1
+    assert.strictEqual(videos[0].volume, '初發論端');
+    assert.strictEqual(videos[0].displayName, '[初發論端] W01.瑜伽師地論-初發論端-01.mp4');
+    assert.strictEqual(
+      videos[0].fullPath,
+      '/media/釋論/瑜伽師地論・本地分/初發論端/video/W01.瑜伽師地論-初發論端-01.mp4'
+    );
+
+    // Episode 2
+    assert.strictEqual(videos[1].displayName, '[初發論端] W01.瑜伽師地論-初發論端-02.mp4');
+
+    // Episode 8
+    assert.strictEqual(videos[2].volume, '卷01');
+    assert.strictEqual(videos[2].displayName, '[卷01] W02.瑜伽師地論-卷一-08.mp4');
+
+    // Episode 9
+    assert.strictEqual(videos[3].displayName, '[卷01] W02.瑜伽師地論-卷一-09.mp4');
+
+    // Episode 130
+    assert.strictEqual(videos[4].volume, '卷12至13-1');
+    assert.strictEqual(videos[4].displayName, '[卷12至13-1] 130.m4v');
+
+    // Episode 155
+    assert.strictEqual(videos[5].displayName, '[卷12至13-1] 155.m4v');
   });
 
   await t.test('parseMultiVolumePdfs extracts all PDFs across volumes', () => {
