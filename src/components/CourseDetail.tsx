@@ -16,6 +16,35 @@ interface CourseDetailProps {
 const AUDIO_EXTS = ['.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac', '.mp4', '.m4v', '.webm', '.mov'];
 const VIDEO_EXTS = ['.mp4', '.m4v', '.wmv', '.flv', '.mov', '.avi', '.mkv', '.webm', '.mpg', '.mpeg'];
 
+export interface AudioTrackInfo {
+  filename: string;
+  proxyUrl: string;
+  url: string;
+  index: number;
+  volume?: string;
+  displayName?: string;
+}
+
+const sortVolumes = (vols: string[]): string[] => {
+  return [...vols].sort((a, b) => {
+    const isSpecialA = /初發|序|概說/.test(a);
+    const isSpecialB = /初發|序|概說/.test(b);
+    if (isSpecialA && !isSpecialB) return -1;
+    if (!isSpecialA && isSpecialB) return 1;
+
+    const getNum = (str: string) => {
+      if (str.includes('13-2')) return 13.5;
+      const m = str.match(/\d+/);
+      return m ? parseFloat(m[0]) : 9999;
+    };
+
+    const numA = getNum(a);
+    const numB = getNum(b);
+    if (numA !== numB) return numA - numB;
+    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  });
+};
+
 const extractFilename = (item: any): string => {
   if (typeof item === 'string') return item;
   if (item && typeof item.name === 'string') return item.name;
@@ -26,7 +55,9 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
 
   const [activeTab, setActiveTab] = useState<'audio' | 'video' | 'pdf' | 'info' | 'split'>('audio');
-  const [audioTracks, setAudioTracks] = useState<{ filename: string; proxyUrl: string; url: string; index: number }[]>([]);
+  const [audioTracks, setAudioTracks] = useState<AudioTrackInfo[]>([]);
+  const [availableVolumes, setAvailableVolumes] = useState<string[]>([]);
+  const [selectedVolume, setSelectedVolume] = useState<string>('all');
   const [videoTracks, setVideoTracks] = useState<VideoTrackInfo[]>([]);
   const [pdfTracks, setPdfTracks] = useState<PdfItem[]>(course.pdfs || []);
   const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
@@ -79,10 +110,12 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
     async function loadAudioTracks() {
       setIsLoadingAudio(true);
       setAudioTracks([]);
+      setAvailableVolumes([]);
 
-      let fetchedTracks: { filename: string; proxyUrl: string; url: string; index: number }[] = [];
+      let fetchedTracks: AudioTrackInfo[] = [];
+      let detectedVolumes: string[] = [];
 
-      const queryDirectory = async (aPath: string) => {
+      const queryDirectory = async (aPath: string): Promise<{ path: string; tracks: { filename: string; subPath: string; volume?: string }[]; volumes: string[] }> => {
         try {
           const res = await fetch('/api/list-files', {
             method: 'POST',
@@ -90,50 +123,133 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
             body: JSON.stringify({ src: aPath }),
             signal: controller.signal
           });
-          if (!res.ok) return { path: aPath, files: [] };
+          if (!res.ok) return { path: aPath, tracks: [], volumes: [] };
           const rawData = await res.json();
-          const dataList = Array.isArray(rawData) ? rawData : (rawData && Array.isArray(rawData.data) ? rawData.data : []);
-          if (!Array.isArray(dataList)) return { path: aPath, files: [] };
-          const audioFiles = dataList
-            .map(extractFilename)
-            .filter((filename: string) => {
-              const ext = '.' + filename.split('.').pop()?.toLowerCase();
-              return AUDIO_EXTS.includes(ext);
-            })
-            .sort((a: string, b: string) =>
-              a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-            );
-          return { path: aPath, files: audioFiles };
+          const listData = rawData && typeof rawData === 'object' && rawData.data !== undefined ? rawData.data : rawData;
+
+          // Case 1: Standard flat array of filenames
+          if (Array.isArray(listData)) {
+            const audioFiles = listData
+              .map(extractFilename)
+              .filter((filename: string) => {
+                const ext = '.' + filename.split('.').pop()?.toLowerCase();
+                return AUDIO_EXTS.includes(ext);
+              })
+              .sort((a: string, b: string) =>
+                a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+              );
+            return {
+              path: aPath,
+              tracks: audioFiles.map((fn: string) => ({ filename: fn, subPath: fn })),
+              volumes: []
+            };
+          }
+
+          // Case 2: Object response
+          if (listData && typeof listData === 'object') {
+            // Case 2a: Single folder object { audio: [...], video: [...], bilu: [...] }
+            if (Array.isArray(listData.audio) || Array.isArray(listData.video) || Array.isArray(listData.bilu)) {
+              const audios = (listData.audio || [])
+                .map(extractFilename)
+                .filter((fn: string) => AUDIO_EXTS.includes('.' + fn.split('.').pop()?.toLowerCase()))
+                .sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+              return {
+                path: aPath,
+                tracks: audios.map((fn: string) => ({ filename: fn, subPath: `audio/${fn}` })),
+                volumes: []
+              };
+            }
+
+            // Case 2b: Multi-volume course (e.g. 瑜伽師地論．本地分 with 51 volumes)
+            const sortedVols = sortVolumes(Object.keys(listData));
+            const parsedTracks: { filename: string; subPath: string; volume?: string }[] = [];
+
+            sortedVols.forEach((vol) => {
+              const vData = listData[vol];
+              let audioList: any[] = [];
+              let audioSubfolder = 'audio';
+
+              if (Array.isArray(vData)) {
+                audioList = vData;
+                audioSubfolder = '';
+              } else if (vData && typeof vData === 'object') {
+                if (Array.isArray(vData.audio)) {
+                  audioList = vData.audio;
+                  audioSubfolder = 'audio';
+                } else {
+                  for (const subKey of Object.keys(vData)) {
+                    if (Array.isArray(vData[subKey])) {
+                      const sample = vData[subKey][0];
+                      if (typeof sample === 'string' && AUDIO_EXTS.some((ext: string) => sample.toLowerCase().endsWith(ext))) {
+                        audioList = vData[subKey];
+                        audioSubfolder = subKey;
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+
+              const validFiles = audioList
+                .map(extractFilename)
+                .filter((fn: string) => AUDIO_EXTS.includes('.' + fn.split('.').pop()?.toLowerCase()))
+                .sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+              validFiles.forEach((fn: string) => {
+                const subPath = audioSubfolder ? `${vol}/${audioSubfolder}/${fn}` : `${vol}/${fn}`;
+                parsedTracks.push({
+                  filename: fn,
+                  subPath,
+                  volume: vol
+                });
+              });
+            });
+
+            return {
+              path: aPath,
+              tracks: parsedTracks,
+              volumes: sortedVols
+            };
+          }
+
+          return { path: aPath, tracks: [], volumes: [] };
         } catch {
-          return { path: aPath, files: [] };
+          return { path: aPath, tracks: [], volumes: [] };
         }
       };
 
       // 1. Fast-Path: Probe primary course.audio_path first
-      if (course.audio_path) {
+      if (course.audio_path && course.audio_path !== '/media') {
         const primaryResult = await queryDirectory(course.audio_path);
-        if (primaryResult.files.length > 0 && isMounted) {
-          const hasMatchingFile = primaryResult.files.some(
-            fn => fn.includes(course.name) || (course.name.length > 2 && fn.includes(course.name.slice(0, 3)))
-          );
-          if (hasMatchingFile || primaryResult.path.includes(course.name) || primaryResult.files.length > 0) {
-            fetchedTracks = primaryResult.files.map((filename: string, idx: number) => {
-              const fullPath = `${primaryResult.path}/${filename}`;
-              return {
-                index: idx,
-                filename,
-                url: `https://www.fayun.org/ftpadmin${fullPath}`,
-                proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
-              };
-            });
-          }
+        if (primaryResult.tracks.length > 0 && isMounted) {
+          fetchedTracks = primaryResult.tracks.map((t, idx) => {
+            const fullPath = `${primaryResult.path}/${t.subPath}`;
+            return {
+              index: idx,
+              filename: t.filename,
+              volume: t.volume,
+              displayName: t.volume ? `[${t.volume}] ${t.filename}` : t.filename,
+              url: `https://www.fayun.org/ftpadmin${fullPath}`,
+              proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
+            };
+          });
+          detectedVolumes = primaryResult.volumes;
         }
       }
 
       // 2. Parallel Candidate Probe if fast-path yielded no tracks
       if (fetchedTracks.length === 0 && isMounted) {
         const potentialAudioPaths: string[] = [];
-        if (course.audio_path) {
+
+        // Special rule for 本地分 or any multi-volume yoga course
+        if (course.name.includes('本地分')) {
+          potentialAudioPaths.push('/media/釋論/瑜伽師地論・本地分');
+          potentialAudioPaths.push('/media/釋論/瑜伽師地論.本地分');
+          potentialAudioPaths.push('/media/釋論/瑜伽師地論·本地分');
+          potentialAudioPaths.push('/media/釋論/瑜伽師地論/本地分');
+        }
+
+        if (course.audio_path && course.audio_path !== '/media') {
           const parentDir = course.audio_path.split('/audio')[0];
           const topicDir = parentDir.includes('/') ? parentDir.substring(0, parentDir.lastIndexOf('/')) : '';
           potentialAudioPaths.push(`${parentDir}/${course.name}/audio`);
@@ -145,47 +261,26 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
         }
         if (course.video_path) potentialAudioPaths.push(course.video_path);
 
-        const uniqueCandidatePaths = Array.from(new Set(potentialAudioPaths)).filter(p => p !== course.audio_path);
+        const uniqueCandidatePaths = Array.from(new Set(potentialAudioPaths)).filter((p) => p !== course.audio_path && p !== '/media');
 
         if (uniqueCandidatePaths.length > 0) {
           const results = await Promise.allSettled(uniqueCandidatePaths.map(queryDirectory));
 
-          // Priority 1: Candidate with files matching course name
           for (const res of results) {
-            if (res.status === 'fulfilled' && res.value.files.length > 0) {
-              const hasMatching = res.value.files.some(
-                fn => fn.includes(course.name) || (course.name.length > 2 && fn.includes(course.name.slice(0, 3)))
-              );
-              if (hasMatching || res.value.path.includes(course.name)) {
-                fetchedTracks = res.value.files.map((filename: string, idx: number) => {
-                  const fullPath = `${res.value.path}/${filename}`;
-                  return {
-                    index: idx,
-                    filename,
-                    url: `https://www.fayun.org/ftpadmin${fullPath}`,
-                    proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
-                  };
-                });
-                break;
-              }
-            }
-          }
-
-          // Priority 2: First candidate with any audio files
-          if (fetchedTracks.length === 0) {
-            for (const res of results) {
-              if (res.status === 'fulfilled' && res.value.files.length > 0) {
-                fetchedTracks = res.value.files.map((filename: string, idx: number) => {
-                  const fullPath = `${res.value.path}/${filename}`;
-                  return {
-                    index: idx,
-                    filename,
-                    url: `https://www.fayun.org/ftpadmin${fullPath}`,
-                    proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
-                  };
-                });
-                break;
-              }
+            if (res.status === 'fulfilled' && res.value.tracks.length > 0) {
+              fetchedTracks = res.value.tracks.map((t, idx) => {
+                const fullPath = `${res.value.path}/${t.subPath}`;
+                return {
+                  index: idx,
+                  filename: t.filename,
+                  volume: t.volume,
+                  displayName: t.volume ? `[${t.volume}] ${t.filename}` : t.filename,
+                  url: `https://www.fayun.org/ftpadmin${fullPath}`,
+                  proxyUrl: `/api/proxy?path=${encodeURIComponent(fullPath)}`
+                };
+              });
+              detectedVolumes = res.value.volumes;
+              break;
             }
           }
         }
@@ -193,6 +288,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
 
       if (isMounted) {
         setAudioTracks(fetchedTracks);
+        setAvailableVolumes(detectedVolumes);
         setIsLoadingAudio(false);
       }
     }
@@ -260,7 +356,11 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
       if ((course as any).lecture_path) potentialPaths.push((course as any).lecture_path);
       if ((course as any).pdf_path) potentialPaths.push((course as any).pdf_path);
 
-      if (course.audio_path) {
+      if (course.name.includes('本地分')) {
+        potentialPaths.push('/media/釋論/瑜伽師地論・本地分');
+      }
+
+      if (course.audio_path && course.audio_path !== '/media') {
         potentialPaths.push(course.audio_path);
         const parentDir = course.audio_path.replace(/\/audio\/?$/, '');
         if (parentDir && parentDir !== course.audio_path) {
@@ -282,7 +382,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
         }
       }
 
-      const uniquePaths = Array.from(new Set(potentialPaths));
+      const uniquePaths = Array.from(new Set(potentialPaths)).filter((p) => p !== '/media');
       const discoveredPdfs: PdfItem[] = [];
 
       try {
@@ -296,8 +396,8 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
             });
             if (!res.ok) return [];
             const rawData = await res.json();
-            const pdfFilenames: { name: string; folder: string }[] = [];
             const listData = Array.isArray(rawData) ? rawData : (rawData && typeof rawData === 'object' ? (rawData.data || rawData) : []);
+            const pdfFilenames: { name: string; displayName?: string; folder: string }[] = [];
 
             if (Array.isArray(listData)) {
               listData.forEach((item: any) => {
@@ -307,14 +407,35 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
                 }
               });
             } else if (listData && typeof listData === 'object') {
-              Object.keys(listData).forEach((key) => {
+              // Case 1: Multi-volume structure
+              const volKeys = sortVolumes(Object.keys(listData));
+              volKeys.forEach((vol) => {
+                const val = listData[vol];
+                if (val && typeof val === 'object') {
+                  const pdfList = Array.isArray(val)
+                    ? val
+                    : (Array.isArray(val.bilu) ? val.bilu : (Array.isArray(val.pdf) ? val.pdf : []));
+                  pdfList.forEach((item: any) => {
+                    const fname = extractFilename(item);
+                    if (fname.toLowerCase().endsWith('.pdf')) {
+                      pdfFilenames.push({
+                        name: fname,
+                        displayName: `[${vol}] ${fname}`,
+                        folder: `${dirPath}/${vol}/bilu`
+                      });
+                    }
+                  });
+                }
+              });
+
+              // Case 2: Single folder object with bilu/pdf/beizhu keys
+              ['bilu', 'pdf', 'beizhu'].forEach((key) => {
                 const val = listData[key];
                 if (Array.isArray(val)) {
                   val.forEach((item: any) => {
                     const fname = extractFilename(item);
                     if (fname.toLowerCase().endsWith('.pdf')) {
-                      const subFolder = ['bilu', 'pdf', 'beizhu'].includes(key) ? `${dirPath}/${key}` : dirPath;
-                      pdfFilenames.push({ name: fname, folder: subFolder });
+                      pdfFilenames.push({ name: fname, folder: `${dirPath}/${key}` });
                     }
                   });
                 }
@@ -331,7 +452,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
               if (!discoveredPdfs.some((p) => p.url === pdfUrl)) {
                 discoveredPdfs.push({
                   num: discoveredPdfs.length + 1,
-                  filename: pf.name,
+                  filename: pf.displayName || pf.name,
                   url: pdfUrl
                 });
               }
@@ -423,9 +544,22 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
     }
   };
 
-  const filteredAudioTracks = audioTracks.filter((t) =>
-    episodeSearch.trim() ? t.filename.toLowerCase().includes(episodeSearch.toLowerCase()) : true
-  );
+  useEffect(() => {
+    setSelectedVolume('all');
+    setAvailableVolumes([]);
+    setEpisodeSearch('');
+  }, [course.id]);
+
+  const filteredAudioTracks = audioTracks.filter((t) => {
+    const matchVol = selectedVolume === 'all' || t.volume === selectedVolume;
+    const q = episodeSearch.trim().toLowerCase();
+    const matchSearch = q
+      ? (t.filename.toLowerCase().includes(q) ||
+         (t.displayName && t.displayName.toLowerCase().includes(q)) ||
+         (t.volume && t.volume.toLowerCase().includes(q)))
+      : true;
+    return matchVol && matchSearch;
+  });
 
   return (
     <div className="course-detail-pane">
@@ -527,13 +661,46 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
           {activeTab === 'audio' && (
             <div className="audio-tab-content">
               <div className="track-list-toolbar">
-                <input
-                  type="text"
-                  placeholder="🔍 搜尋單集檔名或集數..."
-                  value={episodeSearch}
-                  onChange={(e) => setEpisodeSearch(e.target.value)}
-                  className="episode-search-input"
-                />
+                <div className="toolbar-search-wrapper">
+                  <input
+                    type="text"
+                    placeholder="🔍 搜尋單集檔名、卷次或集數..."
+                    value={episodeSearch}
+                    onChange={(e) => setEpisodeSearch(e.target.value)}
+                    className="episode-search-input"
+                  />
+                  {episodeSearch && (
+                    <button
+                      className="search-clear-btn"
+                      onClick={() => setEpisodeSearch('')}
+                      title="清除搜尋"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {availableVolumes.length > 1 && (
+                  <div className="toolbar-volume-selector">
+                    <span className="volume-select-label">📑 卷次導覽：</span>
+                    <select
+                      value={selectedVolume}
+                      onChange={(e) => setSelectedVolume(e.target.value)}
+                      className="volume-dropdown"
+                    >
+                      <option value="all">全部卷次（共 {audioTracks.length} 講）</option>
+                      {availableVolumes.map((vol) => {
+                        const count = audioTracks.filter((t) => t.volume === vol).length;
+                        return (
+                          <option key={vol} value={vol}>
+                            {vol}（{count} 講）
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+
                 <span className="track-count-info">
                   顯示 {filteredAudioTracks.length} / {audioTracks.length} 集
                 </span>
@@ -552,16 +719,24 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
                 <ul className="episodes-list">
                   {filteredAudioTracks.map((track) => {
                     const isCurrentlyPlayingTrack =
-                      currentTrack?.courseId === course.id && currentTrack?.filename === track.filename;
+                      currentTrack?.courseId === course.id && currentTrack?.filename === (track.displayName || track.filename);
 
                     return (
                       <li
                         key={track.index}
                         className={`episode-item ${isCurrentlyPlayingTrack ? 'playing' : ''}`}
-                        onClick={() => playTrack(course.name, course.id, audioTracks, track.index)}
+                        onClick={() => playTrack(course.name, course.id, audioTracks.map(t => ({
+                          filename: t.displayName || t.filename,
+                          url: t.url,
+                          proxyUrl: t.proxyUrl,
+                          index: t.index
+                        })), track.index)}
                       >
                         <span className="episode-index">{track.index + 1}</span>
                         <div className="episode-info">
+                          {track.volume && (
+                            <span className="track-volume-pill">{track.volume}</span>
+                          )}
                           <span className="episode-name">{track.filename}</span>
                         </div>
                         <div className="episode-actions">

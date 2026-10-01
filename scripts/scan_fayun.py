@@ -138,6 +138,10 @@ PATH_OVERRIDES = {
     14: {
         "audio_path": "/media/止觀坐禪/靜坐漫談/audio",
         "lecture_path": "/media/止觀坐禪/靜坐漫談/bilu"
+    },
+    97: {
+        "audio_path": "/media/釋論/瑜伽師地論・本地分",
+        "lecture_path": "/media/釋論/瑜伽師地論・本地分"
     }
 }
 

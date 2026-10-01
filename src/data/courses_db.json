@@ -4333,12 +4333,2528 @@
       "location": "美國法雲寺佛學院",
       "time": "1996-2002",
       "total_episodes": 478,
-      "audio_path": "/media",
+      "audio_path": "/media/釋論/瑜伽師地論・本地分",
       "video_path": null,
-      "lecture_path": null,
+      "lecture_path": "/media/釋論/瑜伽師地論・本地分",
       "poster_path": "/media/poster/fayun-cover1.png",
       "comment": null,
-      "pdfs": []
+      "pdfs": [
+        {
+          "num": 1,
+          "filename": "[初發論端] T0.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/初發論端/bilu/T0.pdf"
+        },
+        {
+          "num": 2,
+          "filename": "[初發論端] T1.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/初發論端/bilu/T1.pdf"
+        },
+        {
+          "num": 3,
+          "filename": "[初發論端] T2.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/初發論端/bilu/T2.pdf"
+        },
+        {
+          "num": 4,
+          "filename": "[初發論端] T3.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/初發論端/bilu/T3.pdf"
+        },
+        {
+          "num": 5,
+          "filename": "[初發論端] T4.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/初發論端/bilu/T4.pdf"
+        },
+        {
+          "num": 6,
+          "filename": "[初發論端] T5.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/初發論端/bilu/T5.pdf"
+        },
+        {
+          "num": 7,
+          "filename": "[初發論端] T6.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/初發論端/bilu/T6.pdf"
+        },
+        {
+          "num": 8,
+          "filename": "[初發論端] T7.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/初發論端/bilu/T7.pdf"
+        },
+        {
+          "num": 9,
+          "filename": "[卷01] T08.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T08.pdf"
+        },
+        {
+          "num": 10,
+          "filename": "[卷01] T09.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T09.pdf"
+        },
+        {
+          "num": 11,
+          "filename": "[卷01] T10.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T10.pdf"
+        },
+        {
+          "num": 12,
+          "filename": "[卷01] T11.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T11.pdf"
+        },
+        {
+          "num": 13,
+          "filename": "[卷01] T12.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T12.pdf"
+        },
+        {
+          "num": 14,
+          "filename": "[卷01] T13.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T13.pdf"
+        },
+        {
+          "num": 15,
+          "filename": "[卷01] T14.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T14.pdf"
+        },
+        {
+          "num": 16,
+          "filename": "[卷01] T15.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T15.pdf"
+        },
+        {
+          "num": 17,
+          "filename": "[卷01] T16.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T16.pdf"
+        },
+        {
+          "num": 18,
+          "filename": "[卷01] T17.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T17.pdf"
+        },
+        {
+          "num": 19,
+          "filename": "[卷01] T18.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T18.pdf"
+        },
+        {
+          "num": 20,
+          "filename": "[卷01] T19.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T19.pdf"
+        },
+        {
+          "num": 21,
+          "filename": "[卷01] T20.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T20.pdf"
+        },
+        {
+          "num": 22,
+          "filename": "[卷01] T21B.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T21B.pdf"
+        },
+        {
+          "num": 23,
+          "filename": "[卷01] T21A.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷01/bilu/T21A.pdf"
+        },
+        {
+          "num": 24,
+          "filename": "[卷02] T22.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T22.pdf"
+        },
+        {
+          "num": 25,
+          "filename": "[卷02] T23.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T23.pdf"
+        },
+        {
+          "num": 26,
+          "filename": "[卷02] T24.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T24.pdf"
+        },
+        {
+          "num": 27,
+          "filename": "[卷02] T25.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T25.pdf"
+        },
+        {
+          "num": 28,
+          "filename": "[卷02] T26.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T26.pdf"
+        },
+        {
+          "num": 29,
+          "filename": "[卷02] T27.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T27.pdf"
+        },
+        {
+          "num": 30,
+          "filename": "[卷02] T28.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T28.pdf"
+        },
+        {
+          "num": 31,
+          "filename": "[卷02] T29.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T29.pdf"
+        },
+        {
+          "num": 32,
+          "filename": "[卷02] T30.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T30.pdf"
+        },
+        {
+          "num": 33,
+          "filename": "[卷02] T31.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T31.pdf"
+        },
+        {
+          "num": 34,
+          "filename": "[卷02] T32.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T32.pdf"
+        },
+        {
+          "num": 35,
+          "filename": "[卷02] T33.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T33.pdf"
+        },
+        {
+          "num": 36,
+          "filename": "[卷02] T34B.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T34B.pdf"
+        },
+        {
+          "num": 37,
+          "filename": "[卷02] T34A.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷02/bilu/T34A.pdf"
+        },
+        {
+          "num": 38,
+          "filename": "[卷03] T35.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷03/bilu/T35.pdf"
+        },
+        {
+          "num": 39,
+          "filename": "[卷03] T36.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷03/bilu/T36.pdf"
+        },
+        {
+          "num": 40,
+          "filename": "[卷03] T37.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷03/bilu/T37.pdf"
+        },
+        {
+          "num": 41,
+          "filename": "[卷03] T38.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷03/bilu/T38.pdf"
+        },
+        {
+          "num": 42,
+          "filename": "[卷03] T39.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷03/bilu/T39.pdf"
+        },
+        {
+          "num": 43,
+          "filename": "[卷03] T40.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷03/bilu/T40.pdf"
+        },
+        {
+          "num": 44,
+          "filename": "[卷03] T41.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷03/bilu/T41.pdf"
+        },
+        {
+          "num": 45,
+          "filename": "[卷03] T42.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷03/bilu/T42.pdf"
+        },
+        {
+          "num": 46,
+          "filename": "[卷04] T43.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷04/bilu/T43.pdf"
+        },
+        {
+          "num": 47,
+          "filename": "[卷04] T44.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷04/bilu/T44.pdf"
+        },
+        {
+          "num": 48,
+          "filename": "[卷04] T45.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷04/bilu/T45.pdf"
+        },
+        {
+          "num": 49,
+          "filename": "[卷04] T46.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷04/bilu/T46.pdf"
+        },
+        {
+          "num": 50,
+          "filename": "[卷04] T47b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷04/bilu/T47b.pdf"
+        },
+        {
+          "num": 51,
+          "filename": "[卷04] T47A.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷04/bilu/T47A.pdf"
+        },
+        {
+          "num": 52,
+          "filename": "[卷05] T48.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷05/bilu/T48.pdf"
+        },
+        {
+          "num": 53,
+          "filename": "[卷05] T49.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷05/bilu/T49.pdf"
+        },
+        {
+          "num": 54,
+          "filename": "[卷05] T50.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷05/bilu/T50.pdf"
+        },
+        {
+          "num": 55,
+          "filename": "[卷05] T51.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷05/bilu/T51.pdf"
+        },
+        {
+          "num": 56,
+          "filename": "[卷05] T52.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷05/bilu/T52.pdf"
+        },
+        {
+          "num": 57,
+          "filename": "[卷05] T53.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷05/bilu/T53.pdf"
+        },
+        {
+          "num": 58,
+          "filename": "[卷05] T54.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷05/bilu/T54.pdf"
+        },
+        {
+          "num": 59,
+          "filename": "[卷05] T55.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷05/bilu/T55.pdf"
+        },
+        {
+          "num": 60,
+          "filename": "[卷05] T56.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷05/bilu/T56.pdf"
+        },
+        {
+          "num": 61,
+          "filename": "[卷05] T57.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷05/bilu/T57.pdf"
+        },
+        {
+          "num": 62,
+          "filename": "[卷06] T58.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷06/bilu/T58.pdf"
+        },
+        {
+          "num": 63,
+          "filename": "[卷06] T59.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷06/bilu/T59.pdf"
+        },
+        {
+          "num": 64,
+          "filename": "[卷06] T60.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷06/bilu/T60.pdf"
+        },
+        {
+          "num": 65,
+          "filename": "[卷06] T61.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷06/bilu/T61.pdf"
+        },
+        {
+          "num": 66,
+          "filename": "[卷06] T62.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷06/bilu/T62.pdf"
+        },
+        {
+          "num": 67,
+          "filename": "[卷06] T63.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷06/bilu/T63.pdf"
+        },
+        {
+          "num": 68,
+          "filename": "[卷06] T64.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷06/bilu/T64.pdf"
+        },
+        {
+          "num": 69,
+          "filename": "[卷06] T65.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷06/bilu/T65.pdf"
+        },
+        {
+          "num": 70,
+          "filename": "[卷06] T66.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷06/bilu/T66.pdf"
+        },
+        {
+          "num": 71,
+          "filename": "[卷07] T67.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷07/bilu/T67.pdf"
+        },
+        {
+          "num": 72,
+          "filename": "[卷07] T68.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷07/bilu/T68.pdf"
+        },
+        {
+          "num": 73,
+          "filename": "[卷07] T69.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷07/bilu/T69.pdf"
+        },
+        {
+          "num": 74,
+          "filename": "[卷07] T70.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷07/bilu/T70.pdf"
+        },
+        {
+          "num": 75,
+          "filename": "[卷07] T71.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷07/bilu/T71.pdf"
+        },
+        {
+          "num": 76,
+          "filename": "[卷07] T72.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷07/bilu/T72.pdf"
+        },
+        {
+          "num": 77,
+          "filename": "[卷07] T73.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷07/bilu/T73.pdf"
+        },
+        {
+          "num": 78,
+          "filename": "[卷07] T74B.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷07/bilu/T74B.pdf"
+        },
+        {
+          "num": 79,
+          "filename": "[卷07] T74A.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷07/bilu/T74A.pdf"
+        },
+        {
+          "num": 80,
+          "filename": "[卷08] T75.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷08/bilu/T75.pdf"
+        },
+        {
+          "num": 81,
+          "filename": "[卷08] T76.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷08/bilu/T76.pdf"
+        },
+        {
+          "num": 82,
+          "filename": "[卷08] T77.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷08/bilu/T77.pdf"
+        },
+        {
+          "num": 83,
+          "filename": "[卷08] T78.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷08/bilu/T78.pdf"
+        },
+        {
+          "num": 84,
+          "filename": "[卷08] T79.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷08/bilu/T79.pdf"
+        },
+        {
+          "num": 85,
+          "filename": "[卷08] T80.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷08/bilu/T80.pdf"
+        },
+        {
+          "num": 86,
+          "filename": "[卷08] T81.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷08/bilu/T81.pdf"
+        },
+        {
+          "num": 87,
+          "filename": "[卷08] T82.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷08/bilu/T82.pdf"
+        },
+        {
+          "num": 88,
+          "filename": "[卷08] T83.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷08/bilu/T83.pdf"
+        },
+        {
+          "num": 89,
+          "filename": "[卷08] T84B.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷08/bilu/T84B.pdf"
+        },
+        {
+          "num": 90,
+          "filename": "[卷08] T84A.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷08/bilu/T84A.pdf"
+        },
+        {
+          "num": 91,
+          "filename": "[卷09] T85.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T85.pdf"
+        },
+        {
+          "num": 92,
+          "filename": "[卷09] T86.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T86.pdf"
+        },
+        {
+          "num": 93,
+          "filename": "[卷09] T87.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T87.pdf"
+        },
+        {
+          "num": 94,
+          "filename": "[卷09] T88.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T88.pdf"
+        },
+        {
+          "num": 95,
+          "filename": "[卷09] T89.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T89.pdf"
+        },
+        {
+          "num": 96,
+          "filename": "[卷09] T90.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T90.pdf"
+        },
+        {
+          "num": 97,
+          "filename": "[卷09] T91.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T91.pdf"
+        },
+        {
+          "num": 98,
+          "filename": "[卷09] T92.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T92.pdf"
+        },
+        {
+          "num": 99,
+          "filename": "[卷09] T93.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T93.pdf"
+        },
+        {
+          "num": 100,
+          "filename": "[卷09] T94.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T94.pdf"
+        },
+        {
+          "num": 101,
+          "filename": "[卷09] T95.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T95.pdf"
+        },
+        {
+          "num": 102,
+          "filename": "[卷09] T96.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T96.pdf"
+        },
+        {
+          "num": 103,
+          "filename": "[卷09] T97.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T97.pdf"
+        },
+        {
+          "num": 104,
+          "filename": "[卷09] T98.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷09/bilu/T98.pdf"
+        },
+        {
+          "num": 105,
+          "filename": "[卷10] T099.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T099.pdf"
+        },
+        {
+          "num": 106,
+          "filename": "[卷10] T100.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T100.pdf"
+        },
+        {
+          "num": 107,
+          "filename": "[卷10] T101.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T101.pdf"
+        },
+        {
+          "num": 108,
+          "filename": "[卷10] T102.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T102.pdf"
+        },
+        {
+          "num": 109,
+          "filename": "[卷10] T103.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T103.pdf"
+        },
+        {
+          "num": 110,
+          "filename": "[卷10] T104.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T104.pdf"
+        },
+        {
+          "num": 111,
+          "filename": "[卷10] T105.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T105.pdf"
+        },
+        {
+          "num": 112,
+          "filename": "[卷10] T106.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T106.pdf"
+        },
+        {
+          "num": 113,
+          "filename": "[卷10] T107.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T107.pdf"
+        },
+        {
+          "num": 114,
+          "filename": "[卷10] T108.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T108.pdf"
+        },
+        {
+          "num": 115,
+          "filename": "[卷10] T109.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T109.pdf"
+        },
+        {
+          "num": 116,
+          "filename": "[卷10] T110.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T110.pdf"
+        },
+        {
+          "num": 117,
+          "filename": "[卷10] T111.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T111.pdf"
+        },
+        {
+          "num": 118,
+          "filename": "[卷10] T112.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷10/bilu/T112.pdf"
+        },
+        {
+          "num": 119,
+          "filename": "[卷11] T113.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T113.pdf"
+        },
+        {
+          "num": 120,
+          "filename": "[卷11] T114.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T114.pdf"
+        },
+        {
+          "num": 121,
+          "filename": "[卷11] T115.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T115.pdf"
+        },
+        {
+          "num": 122,
+          "filename": "[卷11] T116.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T116.pdf"
+        },
+        {
+          "num": 123,
+          "filename": "[卷11] T117.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T117.pdf"
+        },
+        {
+          "num": 124,
+          "filename": "[卷11] T118.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T118.pdf"
+        },
+        {
+          "num": 125,
+          "filename": "[卷11] T119.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T119.pdf"
+        },
+        {
+          "num": 126,
+          "filename": "[卷11] T120.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T120.pdf"
+        },
+        {
+          "num": 127,
+          "filename": "[卷11] T121.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T121.pdf"
+        },
+        {
+          "num": 128,
+          "filename": "[卷11] T122.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T122.pdf"
+        },
+        {
+          "num": 129,
+          "filename": "[卷11] T123.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T123.pdf"
+        },
+        {
+          "num": 130,
+          "filename": "[卷11] T124.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T124.pdf"
+        },
+        {
+          "num": 131,
+          "filename": "[卷11] T125.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T125.pdf"
+        },
+        {
+          "num": 132,
+          "filename": "[卷11] T126.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T126.pdf"
+        },
+        {
+          "num": 133,
+          "filename": "[卷11] T127.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T127.pdf"
+        },
+        {
+          "num": 134,
+          "filename": "[卷11] T128.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T128.pdf"
+        },
+        {
+          "num": 135,
+          "filename": "[卷11] T129.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷11/bilu/T129.pdf"
+        },
+        {
+          "num": 136,
+          "filename": "[卷12至13-1] T130.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T130.pdf"
+        },
+        {
+          "num": 137,
+          "filename": "[卷12至13-1] T131.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T131.pdf"
+        },
+        {
+          "num": 138,
+          "filename": "[卷12至13-1] T132.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T132.pdf"
+        },
+        {
+          "num": 139,
+          "filename": "[卷12至13-1] T133.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T133.pdf"
+        },
+        {
+          "num": 140,
+          "filename": "[卷12至13-1] T134.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T134.pdf"
+        },
+        {
+          "num": 141,
+          "filename": "[卷12至13-1] T135.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T135.pdf"
+        },
+        {
+          "num": 142,
+          "filename": "[卷12至13-1] T136.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T136.pdf"
+        },
+        {
+          "num": 143,
+          "filename": "[卷12至13-1] T137.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T137.pdf"
+        },
+        {
+          "num": 144,
+          "filename": "[卷12至13-1] T138.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T138.pdf"
+        },
+        {
+          "num": 145,
+          "filename": "[卷12至13-1] T139.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T139.pdf"
+        },
+        {
+          "num": 146,
+          "filename": "[卷12至13-1] T140.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T140.pdf"
+        },
+        {
+          "num": 147,
+          "filename": "[卷12至13-1] T141.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T141.pdf"
+        },
+        {
+          "num": 148,
+          "filename": "[卷12至13-1] T142.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T142.pdf"
+        },
+        {
+          "num": 149,
+          "filename": "[卷12至13-1] T143.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T143.pdf"
+        },
+        {
+          "num": 150,
+          "filename": "[卷12至13-1] T144.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T144.pdf"
+        },
+        {
+          "num": 151,
+          "filename": "[卷12至13-1] T145.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T145.pdf"
+        },
+        {
+          "num": 152,
+          "filename": "[卷12至13-1] T146.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T146.pdf"
+        },
+        {
+          "num": 153,
+          "filename": "[卷12至13-1] T147.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T147.pdf"
+        },
+        {
+          "num": 154,
+          "filename": "[卷12至13-1] T148.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T148.pdf"
+        },
+        {
+          "num": 155,
+          "filename": "[卷12至13-1] T149.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T149.pdf"
+        },
+        {
+          "num": 156,
+          "filename": "[卷12至13-1] T150.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T150.pdf"
+        },
+        {
+          "num": 157,
+          "filename": "[卷12至13-1] T151.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T151.pdf"
+        },
+        {
+          "num": 158,
+          "filename": "[卷12至13-1] T152.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T152.pdf"
+        },
+        {
+          "num": 159,
+          "filename": "[卷12至13-1] T153.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T153.pdf"
+        },
+        {
+          "num": 160,
+          "filename": "[卷12至13-1] T154.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T154.pdf"
+        },
+        {
+          "num": 161,
+          "filename": "[卷12至13-1] T155.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷12至13-1/bilu/T155.pdf"
+        },
+        {
+          "num": 162,
+          "filename": "[卷13-2] T156.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷13-2/bilu/T156.pdf"
+        },
+        {
+          "num": 163,
+          "filename": "[卷13-2] T157.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷13-2/bilu/T157.pdf"
+        },
+        {
+          "num": 164,
+          "filename": "[卷13-2] T158.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷13-2/bilu/T158.pdf"
+        },
+        {
+          "num": 165,
+          "filename": "[卷13-2] T159.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷13-2/bilu/T159.pdf"
+        },
+        {
+          "num": 166,
+          "filename": "[卷13-2] T160.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷13-2/bilu/T160.pdf"
+        },
+        {
+          "num": 167,
+          "filename": "[卷13-2] T161.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷13-2/bilu/T161.pdf"
+        },
+        {
+          "num": 168,
+          "filename": "[卷13-2] T162.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷13-2/bilu/T162.pdf"
+        },
+        {
+          "num": 169,
+          "filename": "[卷13-2] T163b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷13-2/bilu/T163b.pdf"
+        },
+        {
+          "num": 170,
+          "filename": "[卷13-2] T163a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷13-2/bilu/T163a.pdf"
+        },
+        {
+          "num": 171,
+          "filename": "[卷14] T163b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T163b.pdf"
+        },
+        {
+          "num": 172,
+          "filename": "[卷14] T164.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T164.pdf"
+        },
+        {
+          "num": 173,
+          "filename": "[卷14] T165.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T165.pdf"
+        },
+        {
+          "num": 174,
+          "filename": "[卷14] T166.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T166.pdf"
+        },
+        {
+          "num": 175,
+          "filename": "[卷14] T167.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T167.pdf"
+        },
+        {
+          "num": 176,
+          "filename": "[卷14] T168.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T168.pdf"
+        },
+        {
+          "num": 177,
+          "filename": "[卷14] T169.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T169.pdf"
+        },
+        {
+          "num": 178,
+          "filename": "[卷14] T170.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T170.pdf"
+        },
+        {
+          "num": 179,
+          "filename": "[卷14] T171.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T171.pdf"
+        },
+        {
+          "num": 180,
+          "filename": "[卷14] T172.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T172.pdf"
+        },
+        {
+          "num": 181,
+          "filename": "[卷14] T173.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T173.pdf"
+        },
+        {
+          "num": 182,
+          "filename": "[卷14] T174.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T174.pdf"
+        },
+        {
+          "num": 183,
+          "filename": "[卷14] T175.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T175.pdf"
+        },
+        {
+          "num": 184,
+          "filename": "[卷14] T176.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T176.pdf"
+        },
+        {
+          "num": 185,
+          "filename": "[卷14] T177.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T177.pdf"
+        },
+        {
+          "num": 186,
+          "filename": "[卷14] T178.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T178.pdf"
+        },
+        {
+          "num": 187,
+          "filename": "[卷14] T179.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T179.pdf"
+        },
+        {
+          "num": 188,
+          "filename": "[卷14] T180.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T180.pdf"
+        },
+        {
+          "num": 189,
+          "filename": "[卷14] T181.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T181.pdf"
+        },
+        {
+          "num": 190,
+          "filename": "[卷14] T182.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T182.pdf"
+        },
+        {
+          "num": 191,
+          "filename": "[卷14] T183b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T183b.pdf"
+        },
+        {
+          "num": 192,
+          "filename": "[卷14] T183a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T183a.pdf"
+        },
+        {
+          "num": 193,
+          "filename": "[卷14] T183.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷14/bilu/T183.pdf"
+        },
+        {
+          "num": 194,
+          "filename": "[卷15] T184.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷15/bilu/T184.pdf"
+        },
+        {
+          "num": 195,
+          "filename": "[卷15] T185.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷15/bilu/T185.pdf"
+        },
+        {
+          "num": 196,
+          "filename": "[卷15] T186.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷15/bilu/T186.pdf"
+        },
+        {
+          "num": 197,
+          "filename": "[卷15] T187.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷15/bilu/T187.pdf"
+        },
+        {
+          "num": 198,
+          "filename": "[卷15] T188.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷15/bilu/T188.pdf"
+        },
+        {
+          "num": 199,
+          "filename": "[卷15] T189.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷15/bilu/T189.pdf"
+        },
+        {
+          "num": 200,
+          "filename": "[卷15] T190.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷15/bilu/T190.pdf"
+        },
+        {
+          "num": 201,
+          "filename": "[卷15] T191.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷15/bilu/T191.pdf"
+        },
+        {
+          "num": 202,
+          "filename": "[卷15] T192.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷15/bilu/T192.pdf"
+        },
+        {
+          "num": 203,
+          "filename": "[卷15] T193.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷15/bilu/T193.pdf"
+        },
+        {
+          "num": 204,
+          "filename": "[卷15] T194.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷15/bilu/T194.pdf"
+        },
+        {
+          "num": 205,
+          "filename": "[卷16] T195.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T195.pdf"
+        },
+        {
+          "num": 206,
+          "filename": "[卷16] T196.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T196.pdf"
+        },
+        {
+          "num": 207,
+          "filename": "[卷16] T197.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T197.pdf"
+        },
+        {
+          "num": 208,
+          "filename": "[卷16] T198.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T198.pdf"
+        },
+        {
+          "num": 209,
+          "filename": "[卷16] T199.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T199.pdf"
+        },
+        {
+          "num": 210,
+          "filename": "[卷16] T200.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T200.pdf"
+        },
+        {
+          "num": 211,
+          "filename": "[卷16] T201.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T201.pdf"
+        },
+        {
+          "num": 212,
+          "filename": "[卷16] T202.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T202.pdf"
+        },
+        {
+          "num": 213,
+          "filename": "[卷16] T203.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T203.pdf"
+        },
+        {
+          "num": 214,
+          "filename": "[卷16] T204.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T204.pdf"
+        },
+        {
+          "num": 215,
+          "filename": "[卷16] T205.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T205.pdf"
+        },
+        {
+          "num": 216,
+          "filename": "[卷16] T206.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T206.pdf"
+        },
+        {
+          "num": 217,
+          "filename": "[卷16] T207b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T207b.pdf"
+        },
+        {
+          "num": 218,
+          "filename": "[卷16] T207a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷16/bilu/T207a.pdf"
+        },
+        {
+          "num": 219,
+          "filename": "[卷17] T208.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷17/bilu/T208.pdf"
+        },
+        {
+          "num": 220,
+          "filename": "[卷17] T209.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷17/bilu/T209.pdf"
+        },
+        {
+          "num": 221,
+          "filename": "[卷17] T210.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷17/bilu/T210.pdf"
+        },
+        {
+          "num": 222,
+          "filename": "[卷17] T211.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷17/bilu/T211.pdf"
+        },
+        {
+          "num": 223,
+          "filename": "[卷17] T212.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷17/bilu/T212.pdf"
+        },
+        {
+          "num": 224,
+          "filename": "[卷17] T213.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷17/bilu/T213.pdf"
+        },
+        {
+          "num": 225,
+          "filename": "[卷17] T214.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷17/bilu/T214.pdf"
+        },
+        {
+          "num": 226,
+          "filename": "[卷17] T215.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷17/bilu/T215.pdf"
+        },
+        {
+          "num": 227,
+          "filename": "[卷17] T216.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷17/bilu/T216.pdf"
+        },
+        {
+          "num": 228,
+          "filename": "[卷18] T217.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷18/bilu/T217.pdf"
+        },
+        {
+          "num": 229,
+          "filename": "[卷18] T218.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷18/bilu/T218.pdf"
+        },
+        {
+          "num": 230,
+          "filename": "[卷18] T219.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷18/bilu/T219.pdf"
+        },
+        {
+          "num": 231,
+          "filename": "[卷18] T220.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷18/bilu/T220.pdf"
+        },
+        {
+          "num": 232,
+          "filename": "[卷18] T221.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷18/bilu/T221.pdf"
+        },
+        {
+          "num": 233,
+          "filename": "[卷18] T222.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷18/bilu/T222.pdf"
+        },
+        {
+          "num": 234,
+          "filename": "[卷18] T223.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷18/bilu/T223.pdf"
+        },
+        {
+          "num": 235,
+          "filename": "[卷18] T224.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷18/bilu/T224.pdf"
+        },
+        {
+          "num": 236,
+          "filename": "[卷19] T225.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷19/bilu/T225.pdf"
+        },
+        {
+          "num": 237,
+          "filename": "[卷19] T226.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷19/bilu/T226.pdf"
+        },
+        {
+          "num": 238,
+          "filename": "[卷19] T227.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷19/bilu/T227.pdf"
+        },
+        {
+          "num": 239,
+          "filename": "[卷19] T228.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷19/bilu/T228.pdf"
+        },
+        {
+          "num": 240,
+          "filename": "[卷19] T229.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷19/bilu/T229.pdf"
+        },
+        {
+          "num": 241,
+          "filename": "[卷19] T230.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷19/bilu/T230.pdf"
+        },
+        {
+          "num": 242,
+          "filename": "[卷19] T231.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷19/bilu/T231.pdf"
+        },
+        {
+          "num": 243,
+          "filename": "[卷19] T232.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷19/bilu/T232.pdf"
+        },
+        {
+          "num": 244,
+          "filename": "[卷19] T233.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷19/bilu/T233.pdf"
+        },
+        {
+          "num": 245,
+          "filename": "[卷20] T234.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T234.pdf"
+        },
+        {
+          "num": 246,
+          "filename": "[卷20] T235.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T235.pdf"
+        },
+        {
+          "num": 247,
+          "filename": "[卷20] T236.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T236.pdf"
+        },
+        {
+          "num": 248,
+          "filename": "[卷20] T237.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T237.pdf"
+        },
+        {
+          "num": 249,
+          "filename": "[卷20] T238.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T238.pdf"
+        },
+        {
+          "num": 250,
+          "filename": "[卷20] T239.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T239.pdf"
+        },
+        {
+          "num": 251,
+          "filename": "[卷20] T240.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T240.pdf"
+        },
+        {
+          "num": 252,
+          "filename": "[卷20] T241.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T241.pdf"
+        },
+        {
+          "num": 253,
+          "filename": "[卷20] T242.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T242.pdf"
+        },
+        {
+          "num": 254,
+          "filename": "[卷20] T243.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T243.pdf"
+        },
+        {
+          "num": 255,
+          "filename": "[卷20] T244.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T244.pdf"
+        },
+        {
+          "num": 256,
+          "filename": "[卷20] T245.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷20/bilu/T245.pdf"
+        },
+        {
+          "num": 257,
+          "filename": "[卷21] T246.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷21/bilu/T246.pdf"
+        },
+        {
+          "num": 258,
+          "filename": "[卷21] T247.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷21/bilu/T247.pdf"
+        },
+        {
+          "num": 259,
+          "filename": "[卷21] T248.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷21/bilu/T248.pdf"
+        },
+        {
+          "num": 260,
+          "filename": "[卷21] T249.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷21/bilu/T249.pdf"
+        },
+        {
+          "num": 261,
+          "filename": "[卷21] T250.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷21/bilu/T250.pdf"
+        },
+        {
+          "num": 262,
+          "filename": "[卷21] T251.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷21/bilu/T251.pdf"
+        },
+        {
+          "num": 263,
+          "filename": "[卷21] T252.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷21/bilu/T252.pdf"
+        },
+        {
+          "num": 264,
+          "filename": "[卷22] T253.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷22/bilu/T253.pdf"
+        },
+        {
+          "num": 265,
+          "filename": "[卷22] T254.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷22/bilu/T254.pdf"
+        },
+        {
+          "num": 266,
+          "filename": "[卷22] T255.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷22/bilu/T255.pdf"
+        },
+        {
+          "num": 267,
+          "filename": "[卷22] T256.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷22/bilu/T256.pdf"
+        },
+        {
+          "num": 268,
+          "filename": "[卷23] T257.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷23/bilu/T257.pdf"
+        },
+        {
+          "num": 269,
+          "filename": "[卷23] T258.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷23/bilu/T258.pdf"
+        },
+        {
+          "num": 270,
+          "filename": "[卷23] T259.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷23/bilu/T259.pdf"
+        },
+        {
+          "num": 271,
+          "filename": "[卷23] T260.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷23/bilu/T260.pdf"
+        },
+        {
+          "num": 272,
+          "filename": "[卷24] T261.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷24/bilu/T261.pdf"
+        },
+        {
+          "num": 273,
+          "filename": "[卷24] T262.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷24/bilu/T262.pdf"
+        },
+        {
+          "num": 274,
+          "filename": "[卷24] T263.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷24/bilu/T263.pdf"
+        },
+        {
+          "num": 275,
+          "filename": "[卷24] T264.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷24/bilu/T264.pdf"
+        },
+        {
+          "num": 276,
+          "filename": "[卷24] T265b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷24/bilu/T265b.pdf"
+        },
+        {
+          "num": 277,
+          "filename": "[卷24] T265a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷24/bilu/T265a.pdf"
+        },
+        {
+          "num": 278,
+          "filename": "[卷25] T266.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷25/bilu/T266.pdf"
+        },
+        {
+          "num": 279,
+          "filename": "[卷25] T267.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷25/bilu/T267.pdf"
+        },
+        {
+          "num": 280,
+          "filename": "[卷25] T268.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷25/bilu/T268.pdf"
+        },
+        {
+          "num": 281,
+          "filename": "[卷25] T269.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷25/bilu/T269.pdf"
+        },
+        {
+          "num": 282,
+          "filename": "[卷25] T270.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷25/bilu/T270.pdf"
+        },
+        {
+          "num": 283,
+          "filename": "[卷25] T271.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷25/bilu/T271.pdf"
+        },
+        {
+          "num": 284,
+          "filename": "[卷25] T272.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷25/bilu/T272.pdf"
+        },
+        {
+          "num": 285,
+          "filename": "[卷26] T273.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷26/bilu/T273.pdf"
+        },
+        {
+          "num": 286,
+          "filename": "[卷26] T274.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷26/bilu/T274.pdf"
+        },
+        {
+          "num": 287,
+          "filename": "[卷26] T275.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷26/bilu/T275.pdf"
+        },
+        {
+          "num": 288,
+          "filename": "[卷26] T276.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷26/bilu/T276.pdf"
+        },
+        {
+          "num": 289,
+          "filename": "[卷26] T277.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷26/bilu/T277.pdf"
+        },
+        {
+          "num": 290,
+          "filename": "[卷26] T278.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷26/bilu/T278.pdf"
+        },
+        {
+          "num": 291,
+          "filename": "[卷26] T279.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷26/bilu/T279.pdf"
+        },
+        {
+          "num": 292,
+          "filename": "[卷26] T280.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷26/bilu/T280.pdf"
+        },
+        {
+          "num": 293,
+          "filename": "[卷27] T281.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷27/bilu/T281.pdf"
+        },
+        {
+          "num": 294,
+          "filename": "[卷27] T282.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷27/bilu/T282.pdf"
+        },
+        {
+          "num": 295,
+          "filename": "[卷27] T283.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷27/bilu/T283.pdf"
+        },
+        {
+          "num": 296,
+          "filename": "[卷27] T284.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷27/bilu/T284.pdf"
+        },
+        {
+          "num": 297,
+          "filename": "[卷27] T285.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷27/bilu/T285.pdf"
+        },
+        {
+          "num": 298,
+          "filename": "[卷27] T286.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷27/bilu/T286.pdf"
+        },
+        {
+          "num": 299,
+          "filename": "[卷27] T287.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷27/bilu/T287.pdf"
+        },
+        {
+          "num": 300,
+          "filename": "[卷27] T288b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷27/bilu/T288b.pdf"
+        },
+        {
+          "num": 301,
+          "filename": "[卷27] T288a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷27/bilu/T288a.pdf"
+        },
+        {
+          "num": 302,
+          "filename": "[卷28] T289.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷28/bilu/T289.pdf"
+        },
+        {
+          "num": 303,
+          "filename": "[卷28] T290.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷28/bilu/T290.pdf"
+        },
+        {
+          "num": 304,
+          "filename": "[卷28] T291.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷28/bilu/T291.pdf"
+        },
+        {
+          "num": 305,
+          "filename": "[卷28] T292.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷28/bilu/T292.pdf"
+        },
+        {
+          "num": 306,
+          "filename": "[卷28] T293.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷28/bilu/T293.pdf"
+        },
+        {
+          "num": 307,
+          "filename": "[卷28] T294.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷28/bilu/T294.pdf"
+        },
+        {
+          "num": 308,
+          "filename": "[卷28] T295b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷28/bilu/T295b.pdf"
+        },
+        {
+          "num": 309,
+          "filename": "[卷28] T295a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷28/bilu/T295a.pdf"
+        },
+        {
+          "num": 310,
+          "filename": "[卷29] T296.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷29/bilu/T296.pdf"
+        },
+        {
+          "num": 311,
+          "filename": "[卷29] T297.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷29/bilu/T297.pdf"
+        },
+        {
+          "num": 312,
+          "filename": "[卷29] T298.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷29/bilu/T298.pdf"
+        },
+        {
+          "num": 313,
+          "filename": "[卷29] T299.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷29/bilu/T299.pdf"
+        },
+        {
+          "num": 314,
+          "filename": "[卷29] T300.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷29/bilu/T300.pdf"
+        },
+        {
+          "num": 315,
+          "filename": "[卷29] T301.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷29/bilu/T301.pdf"
+        },
+        {
+          "num": 316,
+          "filename": "[卷30] T302.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷30/bilu/T302.pdf"
+        },
+        {
+          "num": 317,
+          "filename": "[卷30] T303.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷30/bilu/T303.pdf"
+        },
+        {
+          "num": 318,
+          "filename": "[卷30] T304.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷30/bilu/T304.pdf"
+        },
+        {
+          "num": 319,
+          "filename": "[卷30] T305.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷30/bilu/T305.pdf"
+        },
+        {
+          "num": 320,
+          "filename": "[卷30] T306b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷30/bilu/T306b.pdf"
+        },
+        {
+          "num": 321,
+          "filename": "[卷30] T306a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷30/bilu/T306a.pdf"
+        },
+        {
+          "num": 322,
+          "filename": "[卷31] T307.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷31/bilu/T307.pdf"
+        },
+        {
+          "num": 323,
+          "filename": "[卷31] T308.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷31/bilu/T308.pdf"
+        },
+        {
+          "num": 324,
+          "filename": "[卷31] T309.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷31/bilu/T309.pdf"
+        },
+        {
+          "num": 325,
+          "filename": "[卷31] T310b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷31/bilu/T310b.pdf"
+        },
+        {
+          "num": 326,
+          "filename": "[卷31] T310a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷31/bilu/T310a.pdf"
+        },
+        {
+          "num": 327,
+          "filename": "[卷32] T311.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷32/bilu/T311.pdf"
+        },
+        {
+          "num": 328,
+          "filename": "[卷32] T312.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷32/bilu/T312.pdf"
+        },
+        {
+          "num": 329,
+          "filename": "[卷32] T313.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷32/bilu/T313.pdf"
+        },
+        {
+          "num": 330,
+          "filename": "[卷32] T314b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷32/bilu/T314b.pdf"
+        },
+        {
+          "num": 331,
+          "filename": "[卷32] T314a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷32/bilu/T314a.pdf"
+        },
+        {
+          "num": 332,
+          "filename": "[卷33] T315.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷33/bilu/T315.pdf"
+        },
+        {
+          "num": 333,
+          "filename": "[卷33] T316.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷33/bilu/T316.pdf"
+        },
+        {
+          "num": 334,
+          "filename": "[卷33] T317.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷33/bilu/T317.pdf"
+        },
+        {
+          "num": 335,
+          "filename": "[卷33] T318.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷33/bilu/T318.pdf"
+        },
+        {
+          "num": 336,
+          "filename": "[卷33] T319.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷33/bilu/T319.pdf"
+        },
+        {
+          "num": 337,
+          "filename": "[卷34] T320.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷34/bilu/T320.pdf"
+        },
+        {
+          "num": 338,
+          "filename": "[卷34] T321.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷34/bilu/T321.pdf"
+        },
+        {
+          "num": 339,
+          "filename": "[卷34] T322.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷34/bilu/T322.pdf"
+        },
+        {
+          "num": 340,
+          "filename": "[卷34] T323.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷34/bilu/T323.pdf"
+        },
+        {
+          "num": 341,
+          "filename": "[卷34] T324.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷34/bilu/T324.pdf"
+        },
+        {
+          "num": 342,
+          "filename": "[卷34] T325.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷34/bilu/T325.pdf"
+        },
+        {
+          "num": 343,
+          "filename": "[卷34] T326.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷34/bilu/T326.pdf"
+        },
+        {
+          "num": 344,
+          "filename": "[卷35] T327.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷35/bilu/T327.pdf"
+        },
+        {
+          "num": 345,
+          "filename": "[卷35] T328.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷35/bilu/T328.pdf"
+        },
+        {
+          "num": 346,
+          "filename": "[卷35] T329.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷35/bilu/T329.pdf"
+        },
+        {
+          "num": 347,
+          "filename": "[卷35] T330.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷35/bilu/T330.pdf"
+        },
+        {
+          "num": 348,
+          "filename": "[卷35] T331.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷35/bilu/T331.pdf"
+        },
+        {
+          "num": 349,
+          "filename": "[卷35] T332.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷35/bilu/T332.pdf"
+        },
+        {
+          "num": 350,
+          "filename": "[卷35] T333.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷35/bilu/T333.pdf"
+        },
+        {
+          "num": 351,
+          "filename": "[卷35] T334.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷35/bilu/T334.pdf"
+        },
+        {
+          "num": 352,
+          "filename": "[卷35] T335b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷35/bilu/T335b.pdf"
+        },
+        {
+          "num": 353,
+          "filename": "[卷35] T335a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷35/bilu/T335a.pdf"
+        },
+        {
+          "num": 354,
+          "filename": "[卷36] T336.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T336.pdf"
+        },
+        {
+          "num": 355,
+          "filename": "[卷36] T337.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T337.pdf"
+        },
+        {
+          "num": 356,
+          "filename": "[卷36] T338.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T338.pdf"
+        },
+        {
+          "num": 357,
+          "filename": "[卷36] T339.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T339.pdf"
+        },
+        {
+          "num": 358,
+          "filename": "[卷36] T340.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T340.pdf"
+        },
+        {
+          "num": 359,
+          "filename": "[卷36] T341.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T341.pdf"
+        },
+        {
+          "num": 360,
+          "filename": "[卷36] T342.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T342.pdf"
+        },
+        {
+          "num": 361,
+          "filename": "[卷36] T343.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T343.pdf"
+        },
+        {
+          "num": 362,
+          "filename": "[卷36] T344.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T344.pdf"
+        },
+        {
+          "num": 363,
+          "filename": "[卷36] T345.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T345.pdf"
+        },
+        {
+          "num": 364,
+          "filename": "[卷36] T346.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T346.pdf"
+        },
+        {
+          "num": 365,
+          "filename": "[卷36] T347.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T347.pdf"
+        },
+        {
+          "num": 366,
+          "filename": "[卷36] T348.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T348.pdf"
+        },
+        {
+          "num": 367,
+          "filename": "[卷36] T349.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T349.pdf"
+        },
+        {
+          "num": 368,
+          "filename": "[卷36] T350.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T350.pdf"
+        },
+        {
+          "num": 369,
+          "filename": "[卷36] T351b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T351b.pdf"
+        },
+        {
+          "num": 370,
+          "filename": "[卷36] T351a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷36/bilu/T351a.pdf"
+        },
+        {
+          "num": 371,
+          "filename": "[卷37] T352.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷37/bilu/T352.pdf"
+        },
+        {
+          "num": 372,
+          "filename": "[卷37] T353.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷37/bilu/T353.pdf"
+        },
+        {
+          "num": 373,
+          "filename": "[卷37] T354.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷37/bilu/T354.pdf"
+        },
+        {
+          "num": 374,
+          "filename": "[卷37] T355.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷37/bilu/T355.pdf"
+        },
+        {
+          "num": 375,
+          "filename": "[卷37] T356.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷37/bilu/T356.pdf"
+        },
+        {
+          "num": 376,
+          "filename": "[卷37] T357b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷37/bilu/T357b.pdf"
+        },
+        {
+          "num": 377,
+          "filename": "[卷37] T357a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷37/bilu/T357a.pdf"
+        },
+        {
+          "num": 378,
+          "filename": "[卷38] T358.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷38/bilu/T358.pdf"
+        },
+        {
+          "num": 379,
+          "filename": "[卷38] T359.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷38/bilu/T359.pdf"
+        },
+        {
+          "num": 380,
+          "filename": "[卷38] T360.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷38/bilu/T360.pdf"
+        },
+        {
+          "num": 381,
+          "filename": "[卷38] T361.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷38/bilu/T361.pdf"
+        },
+        {
+          "num": 382,
+          "filename": "[卷38] T362.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷38/bilu/T362.pdf"
+        },
+        {
+          "num": 383,
+          "filename": "[卷38] T363.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷38/bilu/T363.pdf"
+        },
+        {
+          "num": 384,
+          "filename": "[卷38] T364.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷38/bilu/T364.pdf"
+        },
+        {
+          "num": 385,
+          "filename": "[卷38] T365.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷38/bilu/T365.pdf"
+        },
+        {
+          "num": 386,
+          "filename": "[卷38] T366.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷38/bilu/T366.pdf"
+        },
+        {
+          "num": 387,
+          "filename": "[卷38] T367b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷38/bilu/T367b.pdf"
+        },
+        {
+          "num": 388,
+          "filename": "[卷38] T367a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷38/bilu/T367a.pdf"
+        },
+        {
+          "num": 389,
+          "filename": "[卷39] T367b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷39/bilu/T367b.pdf"
+        },
+        {
+          "num": 390,
+          "filename": "[卷39] T368.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷39/bilu/T368.pdf"
+        },
+        {
+          "num": 391,
+          "filename": "[卷39] T369.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷39/bilu/T369.pdf"
+        },
+        {
+          "num": 392,
+          "filename": "[卷39] T370.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷39/bilu/T370.pdf"
+        },
+        {
+          "num": 393,
+          "filename": "[卷39] T371.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷39/bilu/T371.pdf"
+        },
+        {
+          "num": 394,
+          "filename": "[卷40] T372.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T372.pdf"
+        },
+        {
+          "num": 395,
+          "filename": "[卷40] T373.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T373.pdf"
+        },
+        {
+          "num": 396,
+          "filename": "[卷40] T374.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T374.pdf"
+        },
+        {
+          "num": 397,
+          "filename": "[卷40] T375.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T375.pdf"
+        },
+        {
+          "num": 398,
+          "filename": "[卷40] T376.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T376.pdf"
+        },
+        {
+          "num": 399,
+          "filename": "[卷40] T377.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T377.pdf"
+        },
+        {
+          "num": 400,
+          "filename": "[卷40] T378.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T378.pdf"
+        },
+        {
+          "num": 401,
+          "filename": "[卷40] T379.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T379.pdf"
+        },
+        {
+          "num": 402,
+          "filename": "[卷40] T380.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T380.pdf"
+        },
+        {
+          "num": 403,
+          "filename": "[卷40] T381.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T381.pdf"
+        },
+        {
+          "num": 404,
+          "filename": "[卷40] T382.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T382.pdf"
+        },
+        {
+          "num": 405,
+          "filename": "[卷40] T383.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T383.pdf"
+        },
+        {
+          "num": 406,
+          "filename": "[卷40] T384.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T384.pdf"
+        },
+        {
+          "num": 407,
+          "filename": "[卷40] T385.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T385.pdf"
+        },
+        {
+          "num": 408,
+          "filename": "[卷40] T386.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T386.pdf"
+        },
+        {
+          "num": 409,
+          "filename": "[卷40] T387.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T387.pdf"
+        },
+        {
+          "num": 410,
+          "filename": "[卷40] T388b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T388b.pdf"
+        },
+        {
+          "num": 411,
+          "filename": "[卷40] T388a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷40/bilu/T388a.pdf"
+        },
+        {
+          "num": 412,
+          "filename": "[卷41] T389.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷41/bilu/T389.pdf"
+        },
+        {
+          "num": 413,
+          "filename": "[卷41] T390.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷41/bilu/T390.pdf"
+        },
+        {
+          "num": 414,
+          "filename": "[卷41] T391.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷41/bilu/T391.pdf"
+        },
+        {
+          "num": 415,
+          "filename": "[卷41] T392.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷41/bilu/T392.pdf"
+        },
+        {
+          "num": 416,
+          "filename": "[卷41] T393.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷41/bilu/T393.pdf"
+        },
+        {
+          "num": 417,
+          "filename": "[卷41] T394.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷41/bilu/T394.pdf"
+        },
+        {
+          "num": 418,
+          "filename": "[卷41] T395.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷41/bilu/T395.pdf"
+        },
+        {
+          "num": 419,
+          "filename": "[卷41] T396.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷41/bilu/T396.pdf"
+        },
+        {
+          "num": 420,
+          "filename": "[卷42] T397.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷42/bilu/T397.pdf"
+        },
+        {
+          "num": 421,
+          "filename": "[卷42] T398.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷42/bilu/T398.pdf"
+        },
+        {
+          "num": 422,
+          "filename": "[卷42] T399.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷42/bilu/T399.pdf"
+        },
+        {
+          "num": 423,
+          "filename": "[卷42] T400.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷42/bilu/T400.pdf"
+        },
+        {
+          "num": 424,
+          "filename": "[卷42] T401.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷42/bilu/T401.pdf"
+        },
+        {
+          "num": 425,
+          "filename": "[卷42] T402.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷42/bilu/T402.pdf"
+        },
+        {
+          "num": 426,
+          "filename": "[卷42] T403.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷42/bilu/T403.pdf"
+        },
+        {
+          "num": 427,
+          "filename": "[卷42] T404.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷42/bilu/T404.pdf"
+        },
+        {
+          "num": 428,
+          "filename": "[卷42] T405.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷42/bilu/T405.pdf"
+        },
+        {
+          "num": 429,
+          "filename": "[卷42] T406b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷42/bilu/T406b.pdf"
+        },
+        {
+          "num": 430,
+          "filename": "[卷42] T406a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷42/bilu/T406a.pdf"
+        },
+        {
+          "num": 431,
+          "filename": "[卷43] T407.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷43/bilu/T407.pdf"
+        },
+        {
+          "num": 432,
+          "filename": "[卷43] T408.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷43/bilu/T408.pdf"
+        },
+        {
+          "num": 433,
+          "filename": "[卷43] T409.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷43/bilu/T409.pdf"
+        },
+        {
+          "num": 434,
+          "filename": "[卷43] T410.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷43/bilu/T410.pdf"
+        },
+        {
+          "num": 435,
+          "filename": "[卷43] T411.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷43/bilu/T411.pdf"
+        },
+        {
+          "num": 436,
+          "filename": "[卷43] T412.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷43/bilu/T412.pdf"
+        },
+        {
+          "num": 437,
+          "filename": "[卷43] T413.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷43/bilu/T413.pdf"
+        },
+        {
+          "num": 438,
+          "filename": "[卷43] T414.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷43/bilu/T414.pdf"
+        },
+        {
+          "num": 439,
+          "filename": "[卷43] T415.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷43/bilu/T415.pdf"
+        },
+        {
+          "num": 440,
+          "filename": "[卷43] T416.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷43/bilu/T416.pdf"
+        },
+        {
+          "num": 441,
+          "filename": "[卷44] T417.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷44/bilu/T417.pdf"
+        },
+        {
+          "num": 442,
+          "filename": "[卷44] T418.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷44/bilu/T418.pdf"
+        },
+        {
+          "num": 443,
+          "filename": "[卷44] T419.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷44/bilu/T419.pdf"
+        },
+        {
+          "num": 444,
+          "filename": "[卷44] T420.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷44/bilu/T420.pdf"
+        },
+        {
+          "num": 445,
+          "filename": "[卷44] T421.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷44/bilu/T421.pdf"
+        },
+        {
+          "num": 446,
+          "filename": "[卷44] T422.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷44/bilu/T422.pdf"
+        },
+        {
+          "num": 447,
+          "filename": "[卷45] T423.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷45/bilu/T423.pdf"
+        },
+        {
+          "num": 448,
+          "filename": "[卷45] T424.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷45/bilu/T424.pdf"
+        },
+        {
+          "num": 449,
+          "filename": "[卷45] T425.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷45/bilu/T425.pdf"
+        },
+        {
+          "num": 450,
+          "filename": "[卷45] T426.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷45/bilu/T426.pdf"
+        },
+        {
+          "num": 451,
+          "filename": "[卷45] T427.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷45/bilu/T427.pdf"
+        },
+        {
+          "num": 452,
+          "filename": "[卷45] T428.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷45/bilu/T428.pdf"
+        },
+        {
+          "num": 453,
+          "filename": "[卷46] T429.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷46/bilu/T429.pdf"
+        },
+        {
+          "num": 454,
+          "filename": "[卷46] T430.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷46/bilu/T430.pdf"
+        },
+        {
+          "num": 455,
+          "filename": "[卷46] T431.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷46/bilu/T431.pdf"
+        },
+        {
+          "num": 456,
+          "filename": "[卷46] T432.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷46/bilu/T432.pdf"
+        },
+        {
+          "num": 457,
+          "filename": "[卷46] T433.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷46/bilu/T433.pdf"
+        },
+        {
+          "num": 458,
+          "filename": "[卷46] T434.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷46/bilu/T434.pdf"
+        },
+        {
+          "num": 459,
+          "filename": "[卷46] T435.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷46/bilu/T435.pdf"
+        },
+        {
+          "num": 460,
+          "filename": "[卷46] T436.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷46/bilu/T436.pdf"
+        },
+        {
+          "num": 461,
+          "filename": "[卷46] T437.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷46/bilu/T437.pdf"
+        },
+        {
+          "num": 462,
+          "filename": "[卷46] T438.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷46/bilu/T438.pdf"
+        },
+        {
+          "num": 463,
+          "filename": "[卷46] T439.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷46/bilu/T439.pdf"
+        },
+        {
+          "num": 464,
+          "filename": "[卷47] T440.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷47/bilu/T440.pdf"
+        },
+        {
+          "num": 465,
+          "filename": "[卷47] T441.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷47/bilu/T441.pdf"
+        },
+        {
+          "num": 466,
+          "filename": "[卷47] T442.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷47/bilu/T442.pdf"
+        },
+        {
+          "num": 467,
+          "filename": "[卷47] T443.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷47/bilu/T443.pdf"
+        },
+        {
+          "num": 468,
+          "filename": "[卷47] T444.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷47/bilu/T444.pdf"
+        },
+        {
+          "num": 469,
+          "filename": "[卷47] T445.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷47/bilu/T445.pdf"
+        },
+        {
+          "num": 470,
+          "filename": "[卷47] T446.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷47/bilu/T446.pdf"
+        },
+        {
+          "num": 471,
+          "filename": "[卷47] T447.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷47/bilu/T447.pdf"
+        },
+        {
+          "num": 472,
+          "filename": "[卷47] T448.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷47/bilu/T448.pdf"
+        },
+        {
+          "num": 473,
+          "filename": "[卷47] T449.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷47/bilu/T449.pdf"
+        },
+        {
+          "num": 474,
+          "filename": "[卷48] T450.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T450.pdf"
+        },
+        {
+          "num": 475,
+          "filename": "[卷48] T451.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T451.pdf"
+        },
+        {
+          "num": 476,
+          "filename": "[卷48] T452.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T452.pdf"
+        },
+        {
+          "num": 477,
+          "filename": "[卷48] T453.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T453.pdf"
+        },
+        {
+          "num": 478,
+          "filename": "[卷48] T454.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T454.pdf"
+        },
+        {
+          "num": 479,
+          "filename": "[卷48] T455.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T455.pdf"
+        },
+        {
+          "num": 480,
+          "filename": "[卷48] T456.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T456.pdf"
+        },
+        {
+          "num": 481,
+          "filename": "[卷48] T457.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T457.pdf"
+        },
+        {
+          "num": 482,
+          "filename": "[卷48] T458.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T458.pdf"
+        },
+        {
+          "num": 483,
+          "filename": "[卷48] T459.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T459.pdf"
+        },
+        {
+          "num": 484,
+          "filename": "[卷48] T460.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T460.pdf"
+        },
+        {
+          "num": 485,
+          "filename": "[卷48] T461.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T461.pdf"
+        },
+        {
+          "num": 486,
+          "filename": "[卷48] T462.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T462.pdf"
+        },
+        {
+          "num": 487,
+          "filename": "[卷48] T463.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷48/bilu/T463.pdf"
+        },
+        {
+          "num": 488,
+          "filename": "[卷49] T464.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷49/bilu/T464.pdf"
+        },
+        {
+          "num": 489,
+          "filename": "[卷49] T465.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷49/bilu/T465.pdf"
+        },
+        {
+          "num": 490,
+          "filename": "[卷49] T466.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷49/bilu/T466.pdf"
+        },
+        {
+          "num": 491,
+          "filename": "[卷49] T467.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷49/bilu/T467.pdf"
+        },
+        {
+          "num": 492,
+          "filename": "[卷49] T468.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷49/bilu/T468.pdf"
+        },
+        {
+          "num": 493,
+          "filename": "[卷49] T469.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷49/bilu/T469.pdf"
+        },
+        {
+          "num": 494,
+          "filename": "[卷49] T470b.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷49/bilu/T470b.pdf"
+        },
+        {
+          "num": 495,
+          "filename": "[卷49] T470a.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷49/bilu/T470a.pdf"
+        },
+        {
+          "num": 496,
+          "filename": "[卷50] T471.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷50/bilu/T471.pdf"
+        },
+        {
+          "num": 497,
+          "filename": "[卷50] T472.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷50/bilu/T472.pdf"
+        },
+        {
+          "num": 498,
+          "filename": "[卷50] T473.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷50/bilu/T473.pdf"
+        },
+        {
+          "num": 499,
+          "filename": "[卷50] T474.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷50/bilu/T474.pdf"
+        },
+        {
+          "num": 500,
+          "filename": "[卷50] T475.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷50/bilu/T475.pdf"
+        },
+        {
+          "num": 501,
+          "filename": "[卷50] T476.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷50/bilu/T476.pdf"
+        },
+        {
+          "num": 502,
+          "filename": "[卷50] T477.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷50/bilu/T477.pdf"
+        },
+        {
+          "num": 503,
+          "filename": "[卷50] T478.pdf",
+          "url": "https://www.fayun.org/ftpadmin/media/釋論/瑜伽師地論・本地分/卷50/bilu/T478.pdf"
+        }
+      ]
     },
     {
       "id": 247,
