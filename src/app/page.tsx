@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { CourseItem, ThemeType } from '@/types/course';
-import { AudioProvider } from '@/context/AudioContext';
+import { AudioProvider, useAudio } from '@/context/AudioContext';
 import TreeNav from '@/components/TreeNav';
 import CourseDetail from '@/components/CourseDetail';
 import GlobalAudioPlayer from '@/components/GlobalAudioPlayer';
@@ -12,6 +12,81 @@ import initialDb from '@/data/courses_db.json';
 const THEME_STORAGE_KEY = 'fayun_theme';
 const FONT_SIZE_PX_STORAGE_KEY = 'fayun_font_size_px';
 const LAST_COURSE_STORAGE_KEY = 'fayun_last_selected_course_id';
+
+interface MainLayoutProps {
+  isMobileSidebarOpen: boolean;
+  setIsMobileSidebarOpen: (open: boolean) => void;
+  courses: CourseItem[];
+  selectedCourse: CourseItem | null;
+  handleSelectCourse: (course: CourseItem) => void;
+  fetchCourses: () => Promise<void>;
+  theme: ThemeType;
+  handleSelectTheme: (theme: ThemeType) => void;
+  setIsSettingsOpen: (open: boolean) => void;
+  isLoading: boolean;
+  error: string | null;
+}
+
+function MainLayout({
+  isMobileSidebarOpen,
+  setIsMobileSidebarOpen,
+  courses,
+  selectedCourse,
+  handleSelectCourse,
+  fetchCourses,
+  theme,
+  handleSelectTheme,
+  setIsSettingsOpen,
+  isLoading,
+  error
+}: MainLayoutProps) {
+  const { currentTrack, isExpanded } = useAudio();
+  const hasExpandedPlayer = Boolean(currentTrack && isExpanded);
+
+  return (
+    <div className={`layout-wrapper ${hasExpandedPlayer ? 'player-expanded' : 'player-collapsed'}`}>
+      {/* Left Sidebar Tree Navigation */}
+      <div className={`sidebar-wrapper ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
+        <TreeNav
+          courses={courses}
+          selectedCourse={selectedCourse}
+          onSelectCourse={handleSelectCourse}
+          onRefreshCourses={fetchCourses}
+          theme={theme}
+          onSelectTheme={handleSelectTheme}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
+      </div>
+
+      {/* Mobile Backdrop Overlay */}
+      {isMobileSidebarOpen && (
+        <div
+          className="mobile-backdrop"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
+      {/* Right Main Content Pane */}
+      <div className="main-content-wrapper">
+        {isLoading ? (
+          <div className="global-loading">
+            <span className="loading-spinner">🌸</span>
+            <p>正在載入法雲資訊網典藏數據庫...</p>
+          </div>
+        ) : error ? (
+          <div className="global-error">
+            <h3>載入錯誤</h3>
+            <p>{error}</p>
+          </div>
+        ) : selectedCourse ? (
+          <CourseDetail course={selectedCourse} />
+        ) : (
+          <div className="global-empty">請點選左側目錄選擇課程</div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   // Initialize state immediately from bundled JSON data for 0ms load time
@@ -159,47 +234,19 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="layout-wrapper">
-          {/* Left Sidebar Tree Navigation */}
-          <div className={`sidebar-wrapper ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
-            <TreeNav
-              courses={courses}
-              selectedCourse={selectedCourse}
-              onSelectCourse={handleSelectCourse}
-              onRefreshCourses={fetchCourses}
-              theme={theme}
-              onSelectTheme={handleSelectTheme}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-            />
-          </div>
-
-          {/* Mobile Backdrop Overlay */}
-          {isMobileSidebarOpen && (
-            <div
-              className="mobile-backdrop"
-              onClick={() => setIsMobileSidebarOpen(false)}
-            />
-          )}
-
-          {/* Right Main Content Pane */}
-          <div className="main-content-wrapper">
-            {isLoading ? (
-              <div className="global-loading">
-                <span className="loading-spinner">🌸</span>
-                <p>正在載入法雲資訊網典藏數據庫...</p>
-              </div>
-            ) : error ? (
-              <div className="global-error">
-                <h3>載入錯誤</h3>
-                <p>{error}</p>
-              </div>
-            ) : selectedCourse ? (
-              <CourseDetail course={selectedCourse} />
-            ) : (
-              <div className="global-empty">請點選左側目錄選擇課程</div>
-            )}
-          </div>
-        </div>
+        <MainLayout
+          isMobileSidebarOpen={isMobileSidebarOpen}
+          setIsMobileSidebarOpen={setIsMobileSidebarOpen}
+          courses={courses}
+          selectedCourse={selectedCourse}
+          handleSelectCourse={handleSelectCourse}
+          fetchCourses={fetchCourses}
+          theme={theme}
+          handleSelectTheme={handleSelectTheme}
+          setIsSettingsOpen={setIsSettingsOpen}
+          isLoading={isLoading}
+          error={error}
+        />
 
         {/* Settings Modal Panel */}
         <SettingsModal

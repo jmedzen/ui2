@@ -63,54 +63,32 @@ export default function GlobalAudioPlayer() {
 
   return (
     <>
-      {/* Floating Restore Pill when Minimized */}
+      {/* Compact Floating Restore Trigger when Minimized */}
       {!isExpanded && (
-        <div
-          className="global-player-restore-pill"
+        <button
+          className="player-floating-restore-btn"
           onClick={toggleExpanded}
-          title="點擊展開音訊播放器"
+          title={`展開音訊播放器：${currentTrack.filename}`}
         >
-          <button
-            className="restore-pill-play-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePlay();
-            }}
-            title={isPlaying ? '暫停 (空白鍵)' : '播放 (空白鍵)'}
-          >
-            {isPlaying ? '⏸' : '▶'}
-          </button>
-
-          <div className="restore-pill-info">
-            <span className={`pulse-dot ${isPlaying ? 'active' : ''}`} />
-            <span className="restore-pill-title" title={currentTrack.filename}>
-              {currentTrack.filename}
-            </span>
-          </div>
-
-          <button
-            className="restore-pill-expand-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleExpanded();
-            }}
-            title="展開播放列"
-          >
-            ▲ 展開播放器
-          </button>
-        </div>
+          <span className="fab-icon">{isPlaying ? '🎵' : '⏸️'}</span>
+          {isPlaying && <span className="pulse-dot active" />}
+          <span className="fab-label">{isPlaying ? '播放中' : '播放器'}</span>
+          <span className="fab-arrow">▲</span>
+        </button>
       )}
 
       {/* Main Persistent Bottom Player Bar */}
       <div className={`global-player-bar ${isExpanded ? 'expanded' : 'minimized'}`}>
         {/* Top Edge Collapse Tab */}
-        <button
-          onClick={toggleExpanded}
-          className="global-player-collapse-tab"
-          title="隱藏播放列 (可在右下角隨時展開)"
-        >
-          ▼ 隱藏
-        </button>
+        {isExpanded && (
+          <button
+            onClick={toggleExpanded}
+            className="global-player-collapse-tab"
+            title="隱藏播放列"
+          >
+            ▼ 隱藏
+          </button>
+        )}
 
         <div className="global-player-inner">
           {/* Course & Track Info */}

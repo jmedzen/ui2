@@ -176,7 +176,12 @@ body {
   height: 100vh;
   width: 100vw;
   overflow: hidden;
-  padding-bottom: 90px;
+  padding-bottom: 0;
+  transition: padding-bottom 0.25s ease;
+}
+
+.layout-wrapper.player-expanded {
+  padding-bottom: 84px;
 }
 
 /* Mobile Top Bar */
@@ -899,6 +904,7 @@ body {
   transform: translateY(120%);
   opacity: 0;
   pointer-events: none;
+  visibility: hidden;
 }
 
 /* Top Edge Collapse Tab on Player Bar */
@@ -928,89 +934,55 @@ body {
   border-color: var(--gold-accent);
 }
 
-/* Floating Restore Pill when Player is Minimized */
-.global-player-restore-pill {
+/* Compact Floating Restore Trigger when Player is Minimized */
+.player-floating-restore-btn {
   position: fixed;
   bottom: 20px;
   right: 24px;
   z-index: 1001;
   background: var(--bg-card);
   border: 1px solid var(--gold-accent);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 15px var(--gold-glow);
-  border-radius: 30px;
-  padding: 6px 14px 6px 8px;
-  display: flex;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 12px var(--gold-glow);
+  border-radius: 24px;
+  padding: 8px 16px;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
-  animation: slideUpFade 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(10px);
-  transition: all 0.2s ease;
-  max-width: 480px;
+  animation: slideUpFade 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--text-primary);
 }
 
-.global-player-restore-pill:hover {
+.player-floating-restore-btn:hover {
   border-color: var(--gold-accent);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5), 0 0 20px var(--gold-glow);
+  background: var(--bg-hover);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), 0 0 16px var(--gold-glow);
   transform: translateY(-2px);
 }
 
-.restore-pill-play-btn {
-  background: var(--gold-accent);
-  color: #fff;
-  border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(13px * var(--font-scale));
-  cursor: pointer;
-  box-shadow: 0 2px 8px var(--gold-glow);
-  flex-shrink: 0;
-  transition: transform 0.15s ease;
+.player-floating-restore-btn .fab-icon {
+  font-size: calc(14px * var(--font-scale));
+  line-height: 1;
 }
 
-.restore-pill-play-btn:hover {
-  transform: scale(1.08);
-}
-
-.restore-pill-info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.restore-pill-title {
-  font-size: calc(13px * var(--font-scale));
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
-}
-
-.restore-pill-expand-btn {
-  background: var(--bg-hover);
-  border: 1px solid var(--border-color);
-  color: var(--gold-accent);
-  padding: 4px 10px;
-  border-radius: 14px;
+.player-floating-restore-btn .fab-label {
   font-size: calc(12px * var(--font-scale));
   font-weight: 600;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.15s ease;
+  color: var(--gold-accent);
+  white-space: nowrap;
 }
 
-.restore-pill-expand-btn:hover {
-  background: var(--gold-accent);
-  color: #fff;
-  border-color: var(--gold-accent);
+.player-floating-restore-btn .fab-arrow {
+  font-size: calc(10px * var(--font-scale));
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.player-floating-restore-btn:hover .fab-arrow {
+  color: var(--gold-accent);
+  transform: translateY(-1px);
 }
 
 @keyframes slideUpFade {
@@ -2162,7 +2134,12 @@ body {
   .layout-wrapper {
     flex-direction: column;
     height: calc(100dvh - 56px);
-    padding-bottom: 84px;
+    padding-bottom: 0;
+    transition: padding-bottom 0.25s ease;
+  }
+
+  .layout-wrapper.player-expanded {
+    padding-bottom: 140px;
   }
 
   .mobile-navbar {
@@ -2287,16 +2264,10 @@ body {
     justify-content: space-between;
   }
 
-  .global-player-restore-pill {
-    bottom: max(12px, env(safe-area-inset-bottom));
-    left: 12px;
-    right: 12px;
-    max-width: calc(100vw - 24px);
-    justify-content: space-between;
-  }
-
-  .restore-pill-title {
-    max-width: 140px;
+  .player-floating-restore-btn {
+    bottom: max(14px, env(safe-area-inset-bottom));
+    right: 14px;
+    padding: 6px 12px;
   }
 
   .settings-modal-card {
