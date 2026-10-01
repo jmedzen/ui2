@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ThemeType } from '@/types/course';
+import packageInfo from '../../package.json';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -406,6 +407,12 @@ export default function SettingsModal({
                 </p>
                 <div className="settings-copyright-box">
                   <div className="copyright-line">
+                    <span className="c-tag">系統版本</span>
+                    <span className="c-content">
+                      <strong>v{packageInfo.version}</strong> (Zen Modern Edition 禪風現代版)
+                    </span>
+                  </div>
+                  <div className="copyright-line">
                     <span className="c-tag">著作權歸屬</span>
                     <span className="c-content">
                       全站所有經論講記錄音、影音、文字講義及 PDF 筆記，其智慧財產權與著作權<strong>全權屬於 法雲資訊網 (<a href="https://www.fayun.org" target="_blank" rel="noopener noreferrer" className="copyright-link">fayun.org</a>) 及相關著作權人</strong>。
@@ -507,6 +514,10 @@ export default function SettingsModal({
         </div>
 
         <div className="settings-modal-footer">
+          <div className="settings-version-tag">
+            <span className="settings-version-label">法雲資訊網典藏系統</span>
+            <span className="settings-version-badge">v{packageInfo.version}</span>
+          </div>
           <button className="settings-save-btn" onClick={onClose}>
             完成設定
           </button>

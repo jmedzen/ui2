@@ -2539,7 +2539,34 @@ html, body {
   padding: 12px 20px;
   border-top: 1px solid var(--border-color);
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.settings-version-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(12px * var(--font-scale));
+  color: var(--text-muted);
+}
+
+.settings-version-label {
+  font-weight: 500;
+}
+
+.settings-version-badge {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--gold-accent);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-family: monospace;
+  font-size: calc(11px * var(--font-scale));
+  letter-spacing: 0.5px;
 }
 
 .settings-save-btn {
