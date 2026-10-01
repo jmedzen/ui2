@@ -1,0 +1,29 @@
+name: Prune Old GHCR Docker Images
+
+on:
+  schedule:
+    # Run every Sunday at 02:00 UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      min_versions_to_keep:
+        description: 'Number of latest image versions to keep'
+        required: true
+        default: '5'
+        type: string
+
+jobs:
+  prune-images:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+
+    steps:
+      - name: Prune old container versions from GHCR
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: 'ui2'
+          package-type: 'container'
+          min-versions-to-keep: ${{ inputs.min_versions_to_keep || '5' }}
+          delete-only-untagged-versions: 'false'

@@ -68,3 +68,13 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Prune old container images from GHCR (keep latest 5)
+        uses: actions/delete-package-versions@v5
+        continue-on-error: true
+        with:
+          package-name: 'ui2'
+          package-type: 'container'
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: 'false'
+
