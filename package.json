@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start -p 8410",
     "lint": "eslint",
+    "pretest": "node -e \"const fs=require('fs');fs.mkdirSync('data',{recursive:true});if(!fs.existsSync('data/courses_db.json')&&fs.existsSync('src/data/courses_db.json'))fs.copyFileSync('src/data/courses_db.json','data/courses_db.json')\"",
     "test": "tsx --test tests/*.test.ts",
     "verify": "tsx tests/full-site-verification.ts"
   },

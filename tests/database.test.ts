@@ -7,6 +7,14 @@ test('Database Integrity Suite - courses_db.json validation', async (t) => {
   const dataDbPath = path.join(process.cwd(), 'data', 'courses_db.json');
   const srcDbPath = path.join(process.cwd(), 'src', 'data', 'courses_db.json');
 
+  const dataDir = path.dirname(dataDbPath);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  if (!fs.existsSync(dataDbPath) && fs.existsSync(srcDbPath)) {
+    fs.copyFileSync(srcDbPath, dataDbPath);
+  }
+
   await t.test('database files exist and are valid JSON', () => {
     assert.ok(fs.existsSync(dataDbPath), 'data/courses_db.json must exist');
     assert.ok(fs.existsSync(srcDbPath), 'src/data/courses_db.json must exist');

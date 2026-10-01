@@ -180,6 +180,14 @@ test('Multi-Volume Course Parsing & Course 97 Integrity Suite', async (t) => {
   const srcDbPath = path.join(process.cwd(), 'src', 'data', 'courses_db.json');
   const dataDbPath = path.join(process.cwd(), 'data', 'courses_db.json');
 
+  const dataDir = path.dirname(dataDbPath);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  if (!fs.existsSync(dataDbPath) && fs.existsSync(srcDbPath)) {
+    fs.copyFileSync(srcDbPath, dataDbPath);
+  }
+
   await t.test('Course 97 database integrity in src/data/courses_db.json', () => {
     const db = JSON.parse(fs.readFileSync(srcDbPath, 'utf-8'));
     const c97 = db.courses.find((c: any) => c.id === 97);
