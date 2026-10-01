@@ -5,6 +5,7 @@ import { CourseItem, ThemeType } from '@/types/course';
 import { AudioProvider, useAudio } from '@/context/AudioContext';
 import TreeNav from '@/components/TreeNav';
 import CourseDetail from '@/components/CourseDetail';
+import HomePortal from '@/components/HomePortal';
 import GlobalAudioPlayer from '@/components/GlobalAudioPlayer';
 import SettingsModal from '@/components/SettingsModal';
 import initialDb from '@/data/courses_db.json';
@@ -28,6 +29,7 @@ interface MainLayoutProps {
   isZenMode: boolean;
   setIsZenMode: React.Dispatch<React.SetStateAction<boolean>>;
   isMobileViewport: boolean;
+  onGoHome: () => void;
 }
 
 function MainLayout({
@@ -44,7 +46,8 @@ function MainLayout({
   error,
   isZenMode,
   setIsZenMode,
-  isMobileViewport
+  isMobileViewport,
+  onGoHome
 }: MainLayoutProps) {
   const { currentTrack, isExpanded } = useAudio();
   const hasExpandedPlayer = Boolean(currentTrack && isExpanded);
@@ -61,6 +64,7 @@ function MainLayout({
           theme={theme}
           onSelectTheme={handleSelectTheme}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onGoHome={onGoHome}
         />
       </div>
 
@@ -89,9 +93,14 @@ function MainLayout({
             course={selectedCourse}
             isZenMode={isZenMode}
             onToggleZenMode={() => setIsZenMode((prev) => !prev)}
+            onGoHome={onGoHome}
           />
         ) : (
-          <div className="global-empty">請點選左側目錄選擇課程</div>
+          <HomePortal
+            courses={courses}
+            onSelectCourse={handleSelectCourse}
+            onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+          />
         )}
       </div>
     </div>
@@ -101,11 +110,9 @@ function MainLayout({
 export default function Home() {
   // Initialize state immediately from bundled JSON data for 0ms load time
   const initialCourses: CourseItem[] = (initialDb.courses as CourseItem[]) || [];
-  const initialDefaultCourse =
-    initialCourses.find((c) => c.name.includes('瑜伽師地論')) || initialCourses[0] || null;
 
   const [courses, setCourses] = useState<CourseItem[]>(initialCourses);
-  const [selectedCourse, setSelectedCourse] = useState<CourseItem | null>(initialDefaultCourse);
+  const [selectedCourse, setSelectedCourse] = useState<CourseItem | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -259,7 +266,7 @@ export default function Home() {
             const updated = courseList.find((c) => c.id === prevSelected.id);
             return updated || prevSelected;
           }
-          return courseList.find((c) => c.name.includes('瑜伽師地論')) || courseList[0] || null;
+          return null;
         });
       }
     } catch (err: any) {
@@ -283,6 +290,24 @@ export default function Home() {
     }
   };
 
+  const handleGoHome = useCallback(() => {
+    setSelectedCourse(null);
+    setIsMobileSidebarOpen(false);
+    setIsZenMode(false);
+    try {
+      localStorage.removeItem(LAST_COURSE_STORAGE_KEY);
+    } catch (e) {
+      console.warn('Failed to clear last course in localStorage:', e);
+    }
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const mainEl = document.querySelector('.main-content-wrapper');
+      if (mainEl) {
+        mainEl.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+  }, []);
+
   return (
     <AudioProvider>
       <div
@@ -302,7 +327,21 @@ export default function Home() {
           >
             ☰ 目錄選單
           </button>
-          <span className="mobile-title">法雲資訊網</span>
+          <span
+            className="mobile-title clickable"
+            onClick={handleGoHome}
+            role="button"
+            tabIndex={0}
+            title="點擊回到法雲資訊網首頁"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleGoHome();
+              }
+            }}
+          >
+            法雲資訊網
+          </span>
           <button
             className="settings-open-btn mobile-settings-btn"
             onClick={() => setIsSettingsOpen(true)}
@@ -327,6 +366,7 @@ export default function Home() {
           isZenMode={isZenMode}
           setIsZenMode={setIsZenMode}
           isMobileViewport={isMobileViewport}
+          onGoHome={handleGoHome}
         />
 
         {/* Settings Modal Panel */}

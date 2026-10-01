@@ -12,6 +12,7 @@ interface TreeNavProps {
   theme: ThemeType;
   onSelectTheme: (theme: ThemeType) => void;
   onOpenSettings: () => void;
+  onGoHome?: () => void;
 }
 
 type MediaFilterType = 'all' | 'audio' | 'video' | 'pdf';
@@ -23,7 +24,8 @@ export default function TreeNav({
   onRefreshCourses,
   theme,
   onSelectTheme,
-  onOpenSettings
+  onOpenSettings,
+  onGoHome
 }: TreeNavProps) {
   const { currentTrack, isPlaying } = useAudio();
   const [searchQuery, setSearchQuery] = useState('');
@@ -280,10 +282,30 @@ export default function TreeNav({
     });
   };
 
+  const handleBrandClick = () => {
+    setSearchQuery('');
+    setMediaFilter('all');
+    if (onGoHome) {
+      onGoHome();
+    }
+  };
+
   return (
     <aside className={`sidebar ${theme}`}>
       <div className="sidebar-header">
-        <div className="brand">
+        <div
+          className="brand"
+          onClick={handleBrandClick}
+          role="button"
+          tabIndex={0}
+          title="點擊回到法雲資訊網首頁"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleBrandClick();
+            }
+          }}
+        >
           <div className="logo-icon">🌸</div>
           <div>
             <h1 className="brand-title">法雲資訊網</h1>

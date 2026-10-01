@@ -54,4 +54,34 @@ test('UI, Mobile Configuration & Theme Integrity Suite', async (t) => {
     const dockerfileContent = fs.readFileSync(dockerfilePath, 'utf-8');
     assert.ok(dockerfileContent.includes('ENV MEDIA_CACHE_MAX_BYTES=21474836480'), 'Dockerfile must specify 20GB limit');
   });
+
+  await t.test('brand header in TreeNav and mobile navbar are interactive with return-to-home support', () => {
+    const treeNavPath = path.join(process.cwd(), 'src', 'components', 'TreeNav.tsx');
+    const treeNavContent = fs.readFileSync(treeNavPath, 'utf-8');
+
+    assert.ok(treeNavContent.includes('onGoHome?: () => void;'), 'TreeNavProps must define onGoHome');
+    assert.ok(treeNavContent.includes('handleBrandClick'), 'TreeNav must define handleBrandClick to clear search and trigger onGoHome');
+    assert.ok(treeNavContent.includes('role="button"'), 'Brand header must have role="button" for accessibility');
+    assert.ok(treeNavContent.includes('tabIndex={0}'), 'Brand header must be keyboard focusable');
+
+    const pagePath = path.join(process.cwd(), 'src', 'app', 'page.tsx');
+    const pageContent = fs.readFileSync(pagePath, 'utf-8');
+    assert.ok(pageContent.includes('handleGoHome'), 'page.tsx must define handleGoHome');
+    assert.ok(pageContent.includes('HomePortal'), 'page.tsx must render HomePortal when no course is selected');
+  });
+
+  await t.test('HomePortal component and CSS definitions exist with Zen aesthetic', () => {
+    const homePortalPath = path.join(process.cwd(), 'src', 'components', 'HomePortal.tsx');
+    assert.ok(fs.existsSync(homePortalPath), 'HomePortal.tsx must exist');
+    const homeContent = fs.readFileSync(homePortalPath, 'utf-8');
+    assert.ok(homeContent.includes('瑜伽師地論'), 'HomePortal must feature 瑜伽師地論 entrance');
+    assert.ok(homeContent.includes('home-hero-card'), 'HomePortal must contain hero banner');
+    assert.ok(homeContent.includes('home-divisions-grid'), 'HomePortal must contain 4 Dharma divisions');
+
+    const cssPath = path.join(process.cwd(), 'src', 'app', 'globals.css');
+    const css = fs.readFileSync(cssPath, 'utf-8');
+    assert.ok(css.includes('.brand:hover'), 'Must define .brand:hover for return to home visual affordance');
+    assert.ok(css.includes('.breadcrumb-home'), 'Must define .breadcrumb-home styling');
+    assert.ok(css.includes('.home-portal-pane'), 'Must define .home-portal-pane styles');
+  });
 });

@@ -273,6 +273,35 @@ html, body {
   display: flex;
   align-items: center;
   gap: 12px;
+  cursor: pointer;
+  padding: 6px 8px;
+  margin: -6px -8px;
+  border-radius: 12px;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+}
+
+.brand:hover {
+  background: var(--bg-hover);
+}
+
+.brand:hover .logo-icon {
+  transform: scale(1.08) rotate(4deg);
+  box-shadow: 0 0 14px var(--gold-glow);
+  border-color: var(--gold-accent);
+}
+
+.brand:hover .brand-title {
+  color: var(--gold-accent);
+}
+
+.brand:active {
+  transform: scale(0.97);
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--gold-accent);
+  outline-offset: 2px;
 }
 
 .logo-icon {
@@ -285,6 +314,7 @@ html, body {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--gold-accent);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .brand-title {
@@ -292,11 +322,36 @@ html, body {
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: 0.5px;
+  transition: color 0.2s ease;
 }
 
 .brand-subtitle {
   font-size: calc(12px * var(--font-scale));
   color: var(--text-secondary);
+}
+
+.breadcrumb-home {
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.breadcrumb-home:hover {
+  color: var(--gold-accent);
+  text-decoration: underline;
+}
+
+.mobile-title.clickable {
+  cursor: pointer;
+  transition: color 0.2s ease, opacity 0.2s ease;
+  user-select: none;
+}
+
+.mobile-title.clickable:hover {
+  color: var(--gold-accent);
+}
+
+.mobile-title.clickable:active {
+  opacity: 0.8;
 }
 
 .theme-toggle {
@@ -3055,4 +3110,482 @@ html, body {
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* ============================================================
+   Home Portal (典藏首頁總覽) Zen Aesthetic Styles
+   ============================================================ */
+
+.home-portal-pane {
+  padding: 32px 36px;
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+  animation: fadeInPortal 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInPortal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hero Welcome Banner */
+.home-hero-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 36px 40px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 20px var(--shadow-color);
+  background-image: radial-gradient(circle at top right, var(--gold-glow), transparent 60%);
+}
+
+.home-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  padding: 4px 12px;
+  border-radius: 99px;
+  margin-bottom: 16px;
+}
+
+.home-hero-flower {
+  font-size: 16px;
+  display: inline-block;
+  animation: gentlePulse 3s ease-in-out infinite;
+}
+
+@keyframes gentlePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+.home-hero-tag {
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 600;
+  color: var(--gold-accent);
+  letter-spacing: 0.5px;
+}
+
+.home-hero-title {
+  font-family: var(--font-serif);
+  font-size: calc(30px * var(--font-scale));
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+}
+
+.home-hero-subtitle {
+  font-size: calc(15px * var(--font-scale));
+  font-weight: 500;
+  color: var(--gold-accent);
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.home-hero-intro {
+  font-size: calc(14px * var(--font-scale));
+  color: var(--text-secondary);
+  line-height: 1.8;
+  max-width: 900px;
+  margin-bottom: 24px;
+}
+
+.home-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+}
+
+.home-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: calc(14px * var(--font-scale));
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  border: none;
+}
+
+.home-action-btn.primary {
+  background: var(--gold-accent);
+  color: #111;
+  box-shadow: 0 2px 10px var(--gold-glow);
+}
+
+.home-action-btn.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px var(--gold-glow);
+  filter: brightness(1.08);
+}
+
+.home-action-btn.secondary {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.home-action-btn.secondary:hover {
+  background: var(--bg-active);
+  border-color: var(--gold-accent);
+  color: var(--gold-accent);
+}
+
+.mobile-only {
+  display: none;
+}
+
+/* Archive Stats Grid */
+.home-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.home-stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 2px 10px var(--shadow-color);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.home-stat-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--gold-accent);
+}
+
+.stat-icon {
+  font-size: calc(26px * var(--font-scale));
+  background: var(--bg-hover);
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.stat-data {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-number {
+  font-family: var(--font-serif);
+  font-size: calc(20px * var(--font-scale));
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stat-label {
+  font-size: calc(12px * var(--font-scale));
+  color: var(--text-secondary);
+}
+
+/* Four Dharma Divisions */
+.section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 18px;
+}
+
+.section-title {
+  font-family: var(--font-serif);
+  font-size: calc(20px * var(--font-scale));
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-subtitle {
+  font-size: calc(13px * var(--font-scale));
+  color: var(--text-muted);
+}
+
+.home-divisions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+.division-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 2px 10px var(--shadow-color);
+  transition: all 0.2s ease;
+}
+
+.division-card:hover {
+  border-color: var(--gold-accent);
+}
+
+.division-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.division-icon {
+  font-size: calc(22px * var(--font-scale));
+  background: var(--bg-hover);
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.division-name {
+  font-family: var(--font-serif);
+  font-size: calc(16px * var(--font-scale));
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.division-meta {
+  font-size: calc(11px * var(--font-scale));
+  color: var(--gold-accent);
+}
+
+.division-desc {
+  font-size: calc(13px * var(--font-scale));
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.division-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.division-chip {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.division-chip:hover {
+  background: var(--gold-accent);
+  color: #111;
+  border-color: var(--gold-accent);
+  transform: translateY(-1px);
+}
+
+/* Featured Scriptures Grid */
+.featured-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.featured-course-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px var(--shadow-color);
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.featured-course-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--gold-accent);
+  box-shadow: 0 8px 24px var(--shadow-color);
+}
+
+.featured-course-card:focus-visible {
+  outline: 2px solid var(--gold-accent);
+}
+
+.featured-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.featured-icon {
+  font-size: 20px;
+}
+
+.featured-tag {
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 600;
+  color: var(--gold-accent);
+  background: var(--gold-glow);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--gold-accent);
+}
+
+.featured-title {
+  font-family: var(--font-serif);
+  font-size: calc(16px * var(--font-scale));
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.featured-desc {
+  font-size: calc(12px * var(--font-scale));
+  color: var(--text-secondary);
+  line-height: 1.6;
+  flex: 1;
+}
+
+.featured-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: calc(11px * var(--font-scale));
+  color: var(--text-muted);
+  border-top: 1px dashed var(--border-color);
+  padding-top: 10px;
+}
+
+.featured-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.featured-badges {
+  display: flex;
+  gap: 6px;
+}
+
+.media-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.featured-enter-btn {
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 600;
+  color: var(--gold-accent);
+  transition: transform 0.2s ease;
+}
+
+.featured-course-card:hover .featured-enter-btn {
+  transform: translateX(4px);
+}
+
+/* Home Footer Disclaimer */
+.home-footer-disclaimer {
+  text-align: center;
+  padding: 28px 20px 10px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.footer-zen-divider {
+  font-size: 14px;
+  color: var(--gold-accent);
+  letter-spacing: 4px;
+  opacity: 0.8;
+}
+
+.footer-line {
+  font-size: calc(12px * var(--font-scale));
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.footer-subline {
+  font-size: calc(11px * var(--font-scale));
+  color: var(--text-muted);
+}
+
+/* Responsive Overrides for Home Portal */
+@media (max-width: 960px) {
+  .home-portal-pane {
+    padding: 20px 16px;
+    gap: 24px;
+  }
+
+  .home-hero-card {
+    padding: 24px 20px;
+  }
+
+  .home-hero-title {
+    font-size: calc(22px * var(--font-scale));
+  }
+
+  .home-hero-subtitle {
+    font-size: calc(13px * var(--font-scale));
+  }
+
+  .mobile-only {
+    display: inline-flex;
+  }
+
+  .home-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .home-divisions-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .featured-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
 }

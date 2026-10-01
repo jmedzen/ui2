@@ -10,6 +10,7 @@ interface CourseDetailProps {
   course: CourseItem;
   isZenMode?: boolean;
   onToggleZenMode?: () => void;
+  onGoHome?: () => void;
 }
 
 const AUDIO_EXTS = ['.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac', '.mp4', '.m4v', '.webm', '.mov'];
@@ -21,7 +22,7 @@ const extractFilename = (item: any): string => {
   return String(item || '');
 };
 
-export default function CourseDetail({ course, isZenMode, onToggleZenMode }: CourseDetailProps) {
+export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoHome }: CourseDetailProps) {
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
 
   const [activeTab, setActiveTab] = useState<'audio' | 'video' | 'pdf' | 'info' | 'split'>('audio');
@@ -432,7 +433,21 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode }: Cou
       <div className="shadow-card">
         <div className="course-header-top-row">
           <div className="breadcrumb">
-            <span>法雲資訊網</span>
+            <span
+              className="breadcrumb-home"
+              onClick={onGoHome}
+              role="button"
+              tabIndex={0}
+              title="點擊回到法雲資訊網首頁"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onGoHome?.();
+                }
+              }}
+            >
+              法雲資訊網
+            </span>
             <span>/</span>
             <span>{course.main_menu_title}</span>
             <span>/</span>
