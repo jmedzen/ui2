@@ -27,6 +27,7 @@ interface MainLayoutProps {
   error: string | null;
   isZenMode: boolean;
   setIsZenMode: React.Dispatch<React.SetStateAction<boolean>>;
+  isMobileViewport: boolean;
 }
 
 function MainLayout({
@@ -42,13 +43,14 @@ function MainLayout({
   isLoading,
   error,
   isZenMode,
-  setIsZenMode
+  setIsZenMode,
+  isMobileViewport
 }: MainLayoutProps) {
   const { currentTrack, isExpanded } = useAudio();
   const hasExpandedPlayer = Boolean(currentTrack && isExpanded);
 
   return (
-    <div className={`layout-wrapper ${hasExpandedPlayer ? 'player-expanded' : 'player-collapsed'} ${isZenMode ? 'zen-focus-mode' : ''}`}>
+    <div className={`layout-wrapper ${hasExpandedPlayer ? 'player-expanded' : 'player-collapsed'} ${isZenMode ? 'zen-focus-mode' : ''} ${isMobileViewport ? 'is-mobile-screen' : ''}`}>
       {/* Left Sidebar Tree Navigation */}
       <div className={`sidebar-wrapper ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
         <TreeNav
@@ -112,6 +114,62 @@ export default function Home() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isZenMode, setIsZenMode] = useState<boolean>(false);
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(false);
+
+  // Auto-detect mobile viewport / user-agent across all browsers (including Firefox Mobile)
+  useEffect(() => {
+    const checkMobile = () => {
+      const isNarrow = window.innerWidth <= 960;
+      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Firefox.*Mobile/i.test(
+        navigator.userAgent
+      );
+      setIsMobileViewport(isNarrow || (isMobileUA && window.innerWidth <= 1024));
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Touch gesture edge swipe to pull open/close mobile sidebar drawer
+  useEffect(() => {
+    let startX = 0;
+    let startY = 0;
+    let isEdgeSwipe = false;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      // Start within 45px of screen left edge
+      isEdgeSwipe = startX <= 45;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.changedTouches.length !== 1) return;
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      const deltaX = endX - startX;
+      const deltaY = Math.abs(endY - startY);
+
+      // Horizontal swipe to right from left edge -> pull open sidebar
+      if (isEdgeSwipe && deltaX > 50 && deltaY < 80) {
+        setIsMobileSidebarOpen(true);
+      }
+      // Horizontal swipe to left while sidebar is open -> pull close sidebar
+      else if (isMobileSidebarOpen && deltaX < -50 && deltaY < 80) {
+        setIsMobileSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isMobileSidebarOpen]);
 
   // Press Escape to exit Zen focus mode
   useEffect(() => {
@@ -228,7 +286,7 @@ export default function Home() {
   return (
     <AudioProvider>
       <div
-        className={`app-root ${theme} ${isZenMode ? 'zen-mode-root' : ''}`}
+        className={`app-root ${theme} ${isZenMode ? 'zen-mode-root' : ''} ${isMobileViewport ? 'is-mobile-screen' : ''}`}
         style={
           {
             '--base-font-size': `${fontSizePx}px`,
@@ -268,6 +326,7 @@ export default function Home() {
           error={error}
           isZenMode={isZenMode}
           setIsZenMode={setIsZenMode}
+          isMobileViewport={isMobileViewport}
         />
 
         {/* Settings Modal Panel */}

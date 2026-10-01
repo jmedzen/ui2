@@ -1363,7 +1363,7 @@ html, body {
   transition: flex-basis 0.05s ease;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 960px), screen and (max-device-width: 960px) {
   .split-view-container {
     flex-direction: column !important;
     gap: 16px;
@@ -1381,6 +1381,7 @@ html, body {
     min-width: 0;
   }
 }
+
 
 .compact-list .episode-item {
   padding: 8px 12px;
@@ -2586,7 +2587,7 @@ html, body {
 }
 
 /* Mobile Viewport & Pixel Optimization Overrides */
-@media (max-width: 900px) {
+@media (max-width: 960px), screen and (max-device-width: 960px) {
   .layout-wrapper {
     flex-direction: column;
     height: calc(100vh - 56px);
@@ -2600,11 +2601,12 @@ html, body {
   }
 
   .mobile-navbar {
-    display: flex;
+    display: flex !important;
     position: sticky;
     top: 0;
     z-index: 100;
     height: 56px;
+    flex-shrink: 0;
   }
 
   .mobile-settings-btn {
@@ -2619,12 +2621,15 @@ html, body {
     bottom: 0;
     width: 85vw;
     max-width: 340px;
+    min-width: 0 !important;
     transform: translateX(-100%);
     box-shadow: 4px 0 25px rgba(0, 0, 0, 0.6);
+    z-index: 1000 !important;
+    will-change: transform;
   }
 
   .sidebar-wrapper.mobile-open {
-    transform: translateX(0);
+    transform: translateX(0) !important;
   }
 
   .mobile-backdrop {
@@ -2636,8 +2641,9 @@ html, body {
     background: rgba(0, 0, 0, 0.65);
     -webkit-backdrop-filter: blur(2px);
     backdrop-filter: blur(2px);
-    z-index: 40;
+    z-index: 990 !important;
   }
+
 
   .course-detail-pane {
     padding: 12px;
@@ -2745,6 +2751,68 @@ html, body {
   .theme-options-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* Direct class-based overrides when is-mobile-screen is active (Firefox Mobile & touch devices fallback) */
+.app-root.is-mobile-screen .layout-wrapper {
+  flex-direction: column;
+  height: calc(100vh - 56px);
+  height: calc(100dvh - 56px);
+}
+
+.app-root.is-mobile-screen .layout-wrapper.player-expanded {
+  padding-bottom: 140px;
+}
+
+.app-root.is-mobile-screen .mobile-navbar {
+  display: flex !important;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 56px;
+  flex-shrink: 0;
+}
+
+.app-root.is-mobile-screen .sidebar-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 85vw;
+  max-width: 340px;
+  min-width: 0 !important;
+  transform: translateX(-100%);
+  box-shadow: 4px 0 25px rgba(0, 0, 0, 0.6);
+  z-index: 1000 !important;
+  will-change: transform;
+}
+
+.app-root.is-mobile-screen .sidebar-wrapper.mobile-open {
+  transform: translateX(0) !important;
+}
+
+.app-root.is-mobile-screen .mobile-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  z-index: 990 !important;
+}
+
+.app-root.is-mobile-screen .course-detail-pane {
+  padding: 12px;
+  gap: 14px;
+}
+
+.app-root.is-mobile-screen .tab-navigation {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
 }
 
 .route-badge-tag {
