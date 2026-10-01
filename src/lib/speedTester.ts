@@ -15,15 +15,17 @@ const CACHE_TTL_MS = 10 * 60 * 1000; // 10 Minutes client route preference memor
  */
 export function cleanMediaPath(pathOrUrl: string): string {
   if (!pathOrUrl) return '';
-  if (pathOrUrl.includes('/api/proxy?path=')) {
-    const raw = pathOrUrl.split('/api/proxy?path=')[1];
-    return decodeURIComponent(raw.split('&')[0]);
+  let result = pathOrUrl;
+  while (result.includes('/api/proxy?path=') || result.includes('/api/proxy?url=')) {
+    if (result.includes('/api/proxy?path=')) {
+      const raw = result.split('/api/proxy?path=')[1];
+      result = decodeURIComponent(raw.split('&')[0]);
+    } else if (result.includes('/api/proxy?url=')) {
+      const raw = result.split('/api/proxy?url=')[1];
+      result = decodeURIComponent(raw.split('&')[0]);
+    }
   }
-  if (pathOrUrl.includes('/api/proxy?url=')) {
-    const raw = pathOrUrl.split('/api/proxy?url=')[1];
-    return decodeURIComponent(raw.split('&')[0]);
-  }
-  return pathOrUrl;
+  return result;
 }
 
 /**

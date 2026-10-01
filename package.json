@@ -1,13 +1,15 @@
 {
   "name": "fyweb",
-  "version": "2.6.8",
+  "version": "2.6.9",
   "private": true,
   "scripts": {
     "dev": "next dev -p 8410",
     "dev:https": "next dev -p 8410 --experimental-https",
     "build": "next build",
     "start": "next start -p 8410",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "tsx --test tests/**/*.test.ts",
+    "verify": "tsx tests/full-site-verification.ts"
   },
   "dependencies": {
     "next": "16.2.12",
@@ -20,6 +22,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }
