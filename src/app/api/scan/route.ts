@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { getCacheStats } from '@/lib/serverMediaCache';
 
 function getScannerLogPath(): string {
   const dataLogsDir = path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'logs');
@@ -37,12 +38,15 @@ export async function GET() {
       } catch {}
     }
 
+    const cacheStats = getCacheStats();
+
     return NextResponse.json({
       status: 'active',
       schedule: 'Web Trigger / Manual',
       lastScan: dbInfo.generated_at,
       totalCourses: dbInfo.total_courses,
-      recentLogs: logContent
+      recentLogs: logContent,
+      cacheStats
     });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

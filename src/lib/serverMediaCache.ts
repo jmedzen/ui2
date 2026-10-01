@@ -21,8 +21,36 @@ export function ensureCacheDir(): string {
   return cacheDir;
 }
 
-const MAX_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_MAX_BYTES || '', 10) || 2 * 1024 * 1024 * 1024; // 2 GB
-const TARGET_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_TARGET_BYTES || '', 10) || Math.floor(MAX_CACHE_SIZE_BYTES * 0.8); // 1.6 GB High-water mark after eviction
+const MAX_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_MAX_BYTES || '', 10) || 20 * 1024 * 1024 * 1024; // 20 GB default limit
+const TARGET_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_TARGET_BYTES || '', 10) || Math.floor(MAX_CACHE_SIZE_BYTES * 0.85); // 17 GB High-water mark after eviction (85%)
+
+export function getCacheStats(): { currentBytes: number; maxBytes: number; fileCount: number; maxGb: number } {
+  const cacheDir = getCacheDir();
+  let currentBytes = 0;
+  let fileCount = 0;
+  try {
+    if (fs.existsSync(cacheDir)) {
+      const files = fs.readdirSync(cacheDir);
+      for (const file of files) {
+        if (!file.endsWith('.tmp')) {
+          try {
+            const stat = fs.statSync(path.join(cacheDir, file));
+            if (stat.isFile()) {
+              currentBytes += stat.size;
+              fileCount++;
+            }
+          } catch {}
+        }
+      }
+    }
+  } catch {}
+  return {
+    currentBytes,
+    maxBytes: MAX_CACHE_SIZE_BYTES,
+    maxGb: Math.round(MAX_CACHE_SIZE_BYTES / (1024 * 1024 * 1024)),
+    fileCount
+  };
+}
 
 export function getCacheKey(targetUrlOrPath: string): string {
   return crypto.createHash('md5').update(targetUrlOrPath).digest('hex');

@@ -27,6 +27,7 @@ export default function SettingsModal({
   const [logs, setLogs] = useState<string>('讀取日誌中...');
   const [lastScan, setLastScan] = useState<string>('未知');
   const [totalCourses, setTotalCourses] = useState<number>(0);
+  const [cacheStats, setCacheStats] = useState<{ currentBytes: number; maxBytes: number; fileCount: number; maxGb: number } | null>(null);
   const [isFetchingLogs, setIsFetchingLogs] = useState<boolean>(false);
   const [isTriggeringScan, setIsTriggeringScan] = useState<boolean>(false);
   const [isTriggeringHeal, setIsTriggeringHeal] = useState<boolean>(false);
@@ -80,6 +81,9 @@ export default function SettingsModal({
         setLogs(data.recentLogs || '無系統紀錄');
         setLastScan(data.lastScan || '未知');
         setTotalCourses(data.totalCourses || 0);
+        if (data.cacheStats) {
+          setCacheStats(data.cacheStats);
+        }
       } else {
         setLogs(`⚠️ 無法讀取媒體同步日誌檔 (${data.error || 'HTTP Error'})`);
       }
@@ -413,6 +417,12 @@ export default function SettingsModal({
                     </span>
                   </div>
                   <div className="copyright-line">
+                    <span className="c-tag">主機快取容量</span>
+                    <span className="c-content">
+                      <strong>20 GB</strong> 高速磁碟快取（已啟用 LRU 自動輪替與背景預載，支援 0ms 本地極速串流）
+                    </span>
+                  </div>
+                  <div className="copyright-line">
                     <span className="c-tag">著作權歸屬</span>
                     <span className="c-content">
                       全站所有經論講記錄音、影音、文字講義及 PDF 筆記，其智慧財產權與著作權<strong>全權屬於 法雲資訊網 (<a href="https://www.fayun.org" target="_blank" rel="noopener noreferrer" className="copyright-link">fayun.org</a>) 及相關著作權人</strong>。
@@ -445,6 +455,12 @@ export default function SettingsModal({
                 <div className="stat-card">
                   <span className="stat-label">📚 收錄課程總數</span>
                   <span className="stat-value">{totalCourses ? `${totalCourses} 門` : '---'}</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-label">💾 媒體快取容量</span>
+                  <span className="stat-value">
+                    {cacheStats ? `${cacheStats.maxGb} GB` : '20 GB'}
+                  </span>
                 </div>
                 <div className="stat-card">
                   <span className="stat-label">⚡ 自動巡檢狀態</span>

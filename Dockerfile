@@ -20,6 +20,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=8410
 ENV HOSTNAME="0.0.0.0"
+ENV MEDIA_CACHE_MAX_BYTES=21474836480
 
 # Install Python3 for media scanning and self-healing scripts
 RUN apk add --no-cache python3

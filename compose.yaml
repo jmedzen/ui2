@@ -14,6 +14,7 @@ services:
       - NODE_ENV=production
       - PORT=8410
       - HOSTNAME=0.0.0.0
+      - MEDIA_CACHE_MAX_BYTES=21474836480 # 20 GB Disk Cache Limit
     volumes:
       - ./data:/app/data
     healthcheck:
