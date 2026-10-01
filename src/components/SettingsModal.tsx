@@ -56,17 +56,31 @@ export default function SettingsModal({
     }
   }, []);
 
+  const safeFetchJson = async (url: string, options?: RequestInit) => {
+    try {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      try {
+        const json = JSON.parse(text);
+        return { ok: res.ok, status: res.status, data: json };
+      } catch {
+        return { ok: false, status: res.status, data: { error: text ? text.slice(0, 200) : '伺服器未傳回 JSON 格式' } };
+      }
+    } catch (err: any) {
+      return { ok: false, status: 0, data: { error: err.message || '網路連線失敗' } };
+    }
+  };
+
   const fetchLogs = useCallback(async () => {
     try {
       setIsFetchingLogs(true);
-      const res = await fetch('/api/scan');
-      if (res.ok) {
-        const data = await res.json();
+      const { ok, data } = await safeFetchJson('/api/scan');
+      if (ok) {
         setLogs(data.recentLogs || '無系統紀錄');
         setLastScan(data.lastScan || '未知');
         setTotalCourses(data.totalCourses || 0);
       } else {
-        setLogs('⚠️ 無法讀取媒體同步日誌檔 (HTTP Error)');
+        setLogs(`⚠️ 無法讀取媒體同步日誌檔 (${data.error || 'HTTP Error'})`);
       }
     } catch (e: any) {
       setLogs(`⚠️ 讀取日誌失敗: ${e.message}`);
@@ -89,23 +103,37 @@ export default function SettingsModal({
     }
   }, [logs, activeTab, scrollToBottom]);
 
+  // Poll logs periodically while a background task is triggering
+  useEffect(() => {
+    if (!isTriggeringScan && !isTriggeringHeal) return;
+
+    const interval = setInterval(() => {
+      fetchLogs();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [isTriggeringScan, isTriggeringHeal, fetchLogs]);
+
   const handleTriggerScan = async () => {
     try {
       setIsTriggeringScan(true);
+      setActiveTab('logs');
       const timestamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
       const promptMsg = `[${timestamp}] ⏳ [系統操作] 使用者觸發：連線 fayun.org 執行媒體同步與掃描中...`;
       setLogs((prev) => (prev ? `${prev}\n${promptMsg}` : promptMsg));
 
-      const res = await fetch('/api/scan', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        if (data.recentLogs) {
-          setLogs(data.recentLogs);
-        } else {
+      const { ok, data } = await safeFetchJson('/api/scan', { method: 'POST' });
+      if (ok) {
+        if (data.recentLogs) setLogs(data.recentLogs);
+        if (data.lastScan) setLastScan(data.lastScan);
+        if (data.totalCourses) setTotalCourses(data.totalCourses);
+
+        // Poll logs for 15 seconds to stream background progress
+        for (let i = 0; i < 6; i++) {
+          await new Promise((r) => setTimeout(r, 2500));
           await fetchLogs();
         }
-        setLastScan(data.lastScan || new Date().toLocaleString());
-        if (data.totalCourses) setTotalCourses(data.totalCourses);
+
         if (onRefreshCourses) {
           await onRefreshCourses();
         }
@@ -124,18 +152,21 @@ export default function SettingsModal({
   const handleTriggerAutoHeal = async () => {
     try {
       setIsTriggeringHeal(true);
+      setActiveTab('logs');
       const timestamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
       const promptMsg = `[${timestamp}] ⏳ [系統操作] 使用者觸發：全站 414 門課程巡檢與自我修復中...`;
       setLogs((prev) => (prev ? `${prev}\n${promptMsg}` : promptMsg));
 
-      const res = await fetch('/api/health-check', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        if (data.recentLogs) {
-          setLogs(data.recentLogs);
-        } else {
+      const { ok, data } = await safeFetchJson('/api/health-check', { method: 'POST' });
+      if (ok) {
+        if (data.recentLogs) setLogs(data.recentLogs);
+
+        // Poll logs for 20 seconds to stream background healing progress
+        for (let i = 0; i < 8; i++) {
+          await new Promise((r) => setTimeout(r, 2500));
           await fetchLogs();
         }
+
         if (onRefreshCourses) {
           await onRefreshCourses();
         }

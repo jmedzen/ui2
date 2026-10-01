@@ -28,13 +28,15 @@ export async function GET() {
     const dbPath = fs.existsSync(dataDbPath) ? dataDbPath : srcDbPath;
     let dbInfo = { generated_at: 'Unknown', last_auto_healed_at: 'Never', total_courses: 0, total_repaired: 0 };
     if (fs.existsSync(dbPath)) {
-      const data = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
-      dbInfo = {
-        generated_at: data.generated_at || 'Unknown',
-        last_auto_healed_at: data.last_auto_healed_at || 'Never',
-        total_courses: data.total_courses || 0,
-        total_repaired: data.total_repaired_courses || 0
-      };
+      try {
+        const data = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
+        dbInfo = {
+          generated_at: data.generated_at || 'Unknown',
+          last_auto_healed_at: data.last_auto_healed_at || 'Never',
+          total_courses: data.total_courses || 0,
+          total_repaired: data.total_repaired_courses || 0
+        };
+      } catch {}
     }
 
     return NextResponse.json({
@@ -51,31 +53,34 @@ export async function GET() {
 
 export async function POST(): Promise<NextResponse> {
   try {
-    console.log('[API/Health-Check] Executing self-healing script: auto_heal_catalog.py...');
+    console.log('[API/Health-Check] Triggering self-healing script: auto_heal_catalog.py in background...');
     const scriptPath = path.join(process.cwd(), 'scripts', 'auto_heal_catalog.py');
-    return new Promise<NextResponse>((resolve) => {
-      exec(`python3 "${scriptPath}"`, (error, stdout, stderr) => {
-        if (stdout) console.log(stdout);
-        if (stderr) console.error(stderr);
+    const logPath = getAutoHealLogPath();
 
-        const logPath = getAutoHealLogPath();
-        let logContent = stdout;
-        if (fs.existsSync(logPath)) {
-          const fullLog = fs.readFileSync(logPath, 'utf-8');
-          const lines = fullLog.trim().split('\n');
-          logContent = lines.slice(-500).join('\n');
-        }
+    // Trigger non-blocking background execution
+    exec(`python3 "${scriptPath}"`, (error, stdout, stderr) => {
+      if (stdout) console.log('[AutoHeal]', stdout);
+      if (stderr) console.error('[AutoHeal Stderr]', stderr);
+      if (error) console.error('[AutoHeal Error]', error);
+    });
 
-        if (error) {
-          resolve(NextResponse.json({ error: error.message, stderr, recentLogs: logContent }, { status: 500 }));
-        } else {
-          resolve(NextResponse.json({
-            message: 'Catalog audit & self-healing complete',
-            output: stdout,
-            recentLogs: logContent
-          }));
-        }
-      });
+    const timestamp = new Date().toLocaleString('zh-TW', { hour12: false });
+    const startMsg = `[${timestamp}] 🚑 === 全站自我巡檢與目錄自動修復已於背景啟動 ===`;
+    try {
+      fs.appendFileSync(logPath, `\n${startMsg}\n`, 'utf-8');
+    } catch {}
+
+    let logContent = startMsg;
+    if (fs.existsSync(logPath)) {
+      const fullLog = fs.readFileSync(logPath, 'utf-8');
+      const lines = fullLog.trim().split('\n');
+      logContent = lines.slice(-500).join('\n');
+    }
+
+    return NextResponse.json({
+      message: 'Catalog audit & self-healing launched in background',
+      status: 'started',
+      recentLogs: logContent
     });
   } catch (error: any) {
     console.error('[API/Health-Check] Error in POST handler:', error);
