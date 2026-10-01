@@ -73,7 +73,7 @@ export default function SettingsModal({
     }
   };
 
-  const fetchLogs = useCallback(async () => {
+  const fetchLogs = useCallback(async (): Promise<string | null> => {
     try {
       setIsFetchingLogs(true);
       const { ok, data } = await safeFetchJson('/api/scan');
@@ -84,11 +84,14 @@ export default function SettingsModal({
         if (data.cacheStats) {
           setCacheStats(data.cacheStats);
         }
+        return data.recentLogs || '';
       } else {
         setLogs(`⚠️ 無法讀取媒體同步日誌檔 (${data.error || 'HTTP Error'})`);
+        return null;
       }
     } catch (e: any) {
       setLogs(`⚠️ 讀取日誌失敗: ${e.message}`);
+      return null;
     } finally {
       setIsFetchingLogs(false);
     }
@@ -133,10 +136,13 @@ export default function SettingsModal({
         if (data.lastScan) setLastScan(data.lastScan);
         if (data.totalCourses) setTotalCourses(data.totalCourses);
 
-        // Poll logs for 15 seconds to stream background progress
-        for (let i = 0; i < 6; i++) {
+        // Poll logs for up to 30 seconds to stream background progress and detect completion
+        for (let i = 0; i < 12; i++) {
           await new Promise((r) => setTimeout(r, 2500));
-          await fetchLogs();
+          const latestLogs = await fetchLogs();
+          if (latestLogs && (latestLogs.includes('Scan finished') || latestLogs.includes('Error scanning'))) {
+            break;
+          }
         }
 
         if (onRefreshCourses) {
@@ -159,17 +165,21 @@ export default function SettingsModal({
       setIsTriggeringHeal(true);
       setActiveTab('logs');
       const timestamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-      const promptMsg = `[${timestamp}] ⏳ [系統操作] 使用者觸發：全站 414 門課程巡檢與自我修復中...`;
+      const countLabel = totalCourses || 684;
+      const promptMsg = `[${timestamp}] ⏳ [系統操作] 使用者觸發：全站 ${countLabel} 門課程巡檢與自我修復中...`;
       setLogs((prev) => (prev ? `${prev}\n${promptMsg}` : promptMsg));
 
       const { ok, data } = await safeFetchJson('/api/health-check', { method: 'POST' });
       if (ok) {
         if (data.recentLogs) setLogs(data.recentLogs);
 
-        // Poll logs for 20 seconds to stream background healing progress
-        for (let i = 0; i < 8; i++) {
+        // Poll logs for up to 35 seconds to stream background healing progress and detect completion
+        for (let i = 0; i < 14; i++) {
           await new Promise((r) => setTimeout(r, 2500));
-          await fetchLogs();
+          const latestLogs = await fetchLogs();
+          if (latestLogs && (latestLogs.includes('自我巡檢與修復完成') || latestLogs.includes('Scan finished') || latestLogs.includes('Inspection finished'))) {
+            break;
+          }
         }
 
         if (onRefreshCourses) {
@@ -481,12 +491,12 @@ export default function SettingsModal({
                   </button>
                 </div>
 
-                <div className="tooltip-action-wrapper" data-tooltip="自動檢測全站 414 門課程之音訊、影音與 PDF 講義鏈結，發現無效網址自動校正修復">
+                <div className="tooltip-action-wrapper" data-tooltip="自動檢測全站所有課程之音訊、影音與 PDF 講義鏈結，發現無效網址自動校正修復">
                   <button
                     className="log-heal-btn"
                     onClick={handleTriggerAutoHeal}
                     disabled={isTriggeringHeal || isTriggeringScan || isFetchingLogs}
-                    title="自動檢測全站 414 門課程之音訊、影音與 PDF 講義鏈結，發現無效網址自動校正修復"
+                    title="自動檢測全站所有課程之音訊、影音與 PDF 講義鏈結，發現無效網址自動校正修復"
                   >
                     {isTriggeringHeal ? '🚑 正在巡檢修復中...' : '🚑 自我巡檢自動修復'}
                   </button>

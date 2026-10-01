@@ -10,7 +10,7 @@ test('API Courses & Scan Endpoints Suite', async (t) => {
 
     assert.strictEqual(res.status, 200, 'Must return 200 OK');
     assert.ok(res.headers.get('ETag'), 'Must include ETag header');
-    assert.ok(res.headers.get('Cache-Control')?.includes('stale-while-revalidate'), 'Must include Cache-Control header');
+    assert.ok(res.headers.get('Cache-Control')?.includes('must-revalidate'), 'Must include Cache-Control header');
 
     const data = await res.json();
     assert.ok(Array.isArray(data.courses), 'Must return courses array');

@@ -253,7 +253,9 @@ export default function Home() {
 
   const fetchCourses = useCallback(async () => {
     try {
-      const res = await fetch('/api/courses');
+      const res = await fetch(`/api/courses?t=${Date.now()}`, {
+        cache: 'no-store'
+      });
       if (!res.ok) {
         throw new Error(`HTTP error ${res.status}`);
       }

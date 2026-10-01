@@ -157,6 +157,10 @@ export default function TreeNav({
     return rootNodes;
   }, [courses, deferredSearchQuery, mediaFilter]);
 
+  const filteredCount = useMemo(() => {
+    return treeData.reduce((acc, node) => acc + (node.count || 0), 0);
+  }, [treeData]);
+
   const toggleNode = (id: string) => {
     setExpandedNodes((prev) => ({ ...prev, [id]: !prev[id] }));
   };
@@ -377,7 +381,11 @@ export default function TreeNav({
           <button onClick={collapseAll} className="action-btn">
             全部折疊
           </button>
-          <span className="total-badge">{courses.length} 門課程</span>
+          <span className="total-badge">
+            {mediaFilter !== 'all' || deferredSearchQuery.trim()
+              ? `${filteredCount} / ${courses.length} 門課程`
+              : `${courses.length} 門課程`}
+          </span>
         </div>
       </div>
 

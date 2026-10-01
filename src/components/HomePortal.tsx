@@ -147,7 +147,7 @@ export default function HomePortal({
               onClick={onOpenMobileMenu}
               title="展開目錄檢視所有經論課程"
             >
-              ☰ 展開 415 門全站目錄
+              ☰ 展開 {totalCourses || 684} 門全站目錄
             </button>
           )}
         </div>
