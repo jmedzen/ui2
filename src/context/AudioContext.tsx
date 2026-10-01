@@ -224,7 +224,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       if (audioRef.current) {
         audioRef.current.src = routeRes.activeUrl;
         audioRef.current.playbackRate = playbackRate;
-        audioRef.current.volume = isMuted ? 0 : volume;
+        try {
+          audioRef.current.volume = isMuted ? 0 : volume;
+        } catch {}
         audioRef.current.load();
 
         audioRef.current
@@ -273,6 +275,52 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentTrack, playlist, playTrack]);
 
+  // MediaSession API Integration for Lock Screen & Native Notification Controls (Chrome, Safari, Firefox)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('mediaSession' in navigator)) return;
+
+    if (currentTrack) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: currentTrack.filename.replace(/\.[^/.]+$/, ''),
+          artist: '玅境長老',
+          album: currentTrack.courseTitle
+        });
+        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+      } catch {}
+    }
+  }, [currentTrack, isPlaying]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('mediaSession' in navigator)) return;
+
+    try {
+      navigator.mediaSession.setActionHandler('play', () => {
+        if (audioRef.current) {
+          audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+        }
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          setIsPlaying(false);
+        }
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        playPrev();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        playNext();
+      });
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime !== undefined && audioRef.current) {
+          audioRef.current.currentTime = details.seekTime;
+          setCurrentTime(details.seekTime);
+        }
+      });
+    } catch {}
+  }, [playNext, playPrev]);
+
   const seekTo = useCallback((time: number) => {
     if (audioRef.current) {
       audioRef.current.currentTime = time;
@@ -299,7 +347,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setVolume(vol);
     setIsMuted(vol === 0);
     if (audioRef.current) {
-      audioRef.current.volume = vol;
+      try {
+        audioRef.current.volume = vol;
+      } catch {}
     }
   }, []);
 
