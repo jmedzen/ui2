@@ -25,6 +25,8 @@ interface MainLayoutProps {
   setIsSettingsOpen: (open: boolean) => void;
   isLoading: boolean;
   error: string | null;
+  isZenMode: boolean;
+  setIsZenMode: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 function MainLayout({
@@ -38,13 +40,15 @@ function MainLayout({
   handleSelectTheme,
   setIsSettingsOpen,
   isLoading,
-  error
+  error,
+  isZenMode,
+  setIsZenMode
 }: MainLayoutProps) {
   const { currentTrack, isExpanded } = useAudio();
   const hasExpandedPlayer = Boolean(currentTrack && isExpanded);
 
   return (
-    <div className={`layout-wrapper ${hasExpandedPlayer ? 'player-expanded' : 'player-collapsed'}`}>
+    <div className={`layout-wrapper ${hasExpandedPlayer ? 'player-expanded' : 'player-collapsed'} ${isZenMode ? 'zen-focus-mode' : ''}`}>
       {/* Left Sidebar Tree Navigation */}
       <div className={`sidebar-wrapper ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
         <TreeNav
@@ -79,7 +83,11 @@ function MainLayout({
             <p>{error}</p>
           </div>
         ) : selectedCourse ? (
-          <CourseDetail course={selectedCourse} />
+          <CourseDetail
+            course={selectedCourse}
+            isZenMode={isZenMode}
+            onToggleZenMode={() => setIsZenMode((prev) => !prev)}
+          />
         ) : (
           <div className="global-empty">請點選左側目錄選擇課程</div>
         )}
@@ -103,6 +111,18 @@ export default function Home() {
   const [fontSizePx, setFontSizePx] = useState<number>(16);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  const [isZenMode, setIsZenMode] = useState<boolean>(false);
+
+  // Press Escape to exit Zen focus mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isZenMode) {
+        setIsZenMode(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isZenMode]);
 
   // Restore saved theme, font size & last selected/played course from localStorage on mount
   useEffect(() => {
@@ -208,7 +228,7 @@ export default function Home() {
   return (
     <AudioProvider>
       <div
-        className={`app-root ${theme}`}
+        className={`app-root ${theme} ${isZenMode ? 'zen-mode-root' : ''}`}
         style={
           {
             '--base-font-size': `${fontSizePx}px`,
@@ -246,6 +266,8 @@ export default function Home() {
           setIsSettingsOpen={setIsSettingsOpen}
           isLoading={isLoading}
           error={error}
+          isZenMode={isZenMode}
+          setIsZenMode={setIsZenMode}
         />
 
         {/* Settings Modal Panel */}

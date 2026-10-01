@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useDeferredValue } from 'react';
+import React, { useState, useMemo, useDeferredValue, useEffect } from 'react';
 import { CourseItem, TreeNode, ThemeType } from '@/types/course';
 import { useAudio } from '@/context/AudioContext';
 
@@ -34,6 +34,40 @@ export default function TreeNav({
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [isHealing, setIsHealing] = useState<boolean>(false);
   const [scanMessage, setScanMessage] = useState<string | null>(null);
+
+  // Recently Visited Courses History
+  const [recentCourseIds, setRecentCourseIds] = useState<number[]>([]);
+  const [isRecentOpen, setIsRecentOpen] = useState<boolean>(true);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('fayun_recent_course_ids');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setRecentCourseIds(parsed);
+        }
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCourse) return;
+    setRecentCourseIds((prev) => {
+      const filtered = prev.filter((id) => id !== selectedCourse.id);
+      const updated = [selectedCourse.id, ...filtered].slice(0, 4);
+      try {
+        localStorage.setItem('fayun_recent_course_ids', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  }, [selectedCourse?.id]);
+
+  const recentList = useMemo(() => {
+    return recentCourseIds
+      .map((id) => courses.find((c) => c.id === id))
+      .filter((c): c is CourseItem => Boolean(c));
+  }, [recentCourseIds, courses]);
 
   // Build hierarchical tree: Main Menu -> Sub Menu -> Topic -> Courses with O(N) Map Indexing
   const treeData = useMemo(() => {
@@ -213,6 +247,9 @@ export default function TreeNav({
               {node.course?.total_episodes ? (
                 <span className="badge-episodes">{node.course.total_episodes}集</span>
               ) : null}
+              {node.course?.pdfs && node.course.pdfs.length > 0 && (
+                <span className="badge-pdf" title={`包含 ${node.course.pdfs.length} 份 PDF 講義筆記`}>📄 講義</span>
+              )}
             </button>
           </li>
         );
@@ -321,6 +358,37 @@ export default function TreeNav({
           <span className="total-badge">{courses.length} 門課程</span>
         </div>
       </div>
+
+      {/* Recently Visited Courses Shortcut */}
+      {recentList.length > 0 && !deferredSearchQuery.trim() && (
+        <div className="recent-study-section">
+          <div
+            className="recent-study-header"
+            onClick={() => setIsRecentOpen(!isRecentOpen)}
+            title="點擊展開/收合最近研讀課程"
+          >
+            <span className="recent-study-title">⭐ 最近研讀 ({recentList.length})</span>
+            <span className={`recent-arrow ${isRecentOpen ? 'open' : ''}`}>
+              {isRecentOpen ? '▼' : '▶'}
+            </span>
+          </div>
+          {isRecentOpen && (
+            <div className="recent-study-chips">
+              {recentList.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => onSelectCourse(c)}
+                  className={`recent-chip ${selectedCourse?.id === c.id ? 'active' : ''}`}
+                  title={`重返研讀：${c.name}`}
+                >
+                  <span className="recent-chip-icon">📖</span>
+                  <span className="recent-chip-name">{c.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <nav className="tree-container">
         {treeData.length > 0 ? (

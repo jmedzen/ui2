@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAudio } from '@/context/AudioContext';
 
 export default function GlobalAudioPlayer() {
@@ -24,6 +24,17 @@ export default function GlobalAudioPlayer() {
     toggleMute,
     toggleExpanded
   } = useAudio();
+
+  const [hoverTime, setHoverTime] = useState<number | null>(null);
+  const [hoverPos, setHoverPos] = useState<number>(0);
+
+  const handleSliderMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    setHoverTime(percent * duration);
+    setHoverPos(percent * 100);
+  };
 
   // Keyboard Shortcuts (Space: play/pause, Left/Right: seek -5s/+5s, M: mute)
   useEffect(() => {
@@ -70,8 +81,13 @@ export default function GlobalAudioPlayer() {
           onClick={toggleExpanded}
           title={`展開音訊播放器：${currentTrack.filename}`}
         >
-          <span className="fab-icon">{isPlaying ? '🎵' : '⏸️'}</span>
-          {isPlaying && <span className="pulse-dot active" />}
+          <span className="fab-icon">
+            <span className={`soundwave-bars mini ${isPlaying ? 'playing' : ''}`}>
+              <span className="bar bar-1" />
+              <span className="bar bar-2" />
+              <span className="bar bar-3" />
+            </span>
+          </span>
           <span className="fab-label">{isPlaying ? '播放中' : '播放器'}</span>
           <span className="fab-arrow">▲</span>
         </button>
@@ -94,7 +110,12 @@ export default function GlobalAudioPlayer() {
           {/* Course & Track Info */}
           <div className="global-player-info">
             <div className="status-indicator">
-              <span className={`pulse-dot ${isPlaying ? 'active' : ''}`}></span>
+              <div className={`soundwave-bars ${isPlaying ? 'playing' : ''}`} title={isPlaying ? '正在播放' : '已暫停'}>
+                <span className="bar bar-1" />
+                <span className="bar bar-2" />
+                <span className="bar bar-3" />
+                <span className="bar bar-4" />
+              </div>
               <span className="status-text">{isPlaying ? '播放中' : '已暫停'}</span>
             </div>
             <div className="title-block">
@@ -164,14 +185,28 @@ export default function GlobalAudioPlayer() {
 
             <div className="progress-row">
               <span className="time-text">{formatTime(currentTime)}</span>
-              <input
-                type="range"
-                min={0}
-                max={duration || 100}
-                value={currentTime}
-                onChange={(e) => seekTo(parseFloat(e.target.value))}
-                className="progress-slider"
-              />
+              <div
+                className="slider-wrapper"
+                onMouseMove={handleSliderMouseMove}
+                onMouseLeave={() => setHoverTime(null)}
+              >
+                {hoverTime !== null && (
+                  <div
+                    className="slider-hover-bubble"
+                    style={{ left: `${hoverPos}%` }}
+                  >
+                    {formatTime(hoverTime)}
+                  </div>
+                )}
+                <input
+                  type="range"
+                  min={0}
+                  max={duration || 100}
+                  value={currentTime}
+                  onChange={(e) => seekTo(parseFloat(e.target.value))}
+                  className="progress-slider"
+                />
+              </div>
               <span className="time-text">{formatTime(duration)}</span>
             </div>
           </div>

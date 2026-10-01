@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CourseItem, PdfItem } from '@/types/course';
 import { useAudio } from '@/context/AudioContext';
 import VideoPlayer, { VideoTrackInfo } from './VideoPlayer';
@@ -8,6 +8,8 @@ import PdfViewer from './PdfViewer';
 
 interface CourseDetailProps {
   course: CourseItem;
+  isZenMode?: boolean;
+  onToggleZenMode?: () => void;
 }
 
 const AUDIO_EXTS = ['.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac', '.mp4', '.m4v', '.webm', '.mov'];
@@ -19,7 +21,7 @@ const extractFilename = (item: any): string => {
   return String(item || '');
 };
 
-export default function CourseDetail({ course }: CourseDetailProps) {
+export default function CourseDetail({ course, isZenMode, onToggleZenMode }: CourseDetailProps) {
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
 
   const [activeTab, setActiveTab] = useState<'audio' | 'video' | 'pdf' | 'info' | 'split'>('audio');
@@ -31,6 +33,43 @@ export default function CourseDetail({ course }: CourseDetailProps) {
   const [isLoadingVideo, setIsLoadingVideo] = useState<boolean>(false);
   const [isLoadingPdf, setIsLoadingPdf] = useState<boolean>(false);
   const [episodeSearch, setEpisodeSearch] = useState<string>('');
+
+  // Draggable Split-Screen Ratio
+  const [splitRatio, setSplitRatio] = useState<number>(50);
+  const splitContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    try {
+      const savedRatio = localStorage.getItem('fayun_split_ratio');
+      if (savedRatio) {
+        const val = parseFloat(savedRatio);
+        if (!isNaN(val) && val >= 25 && val <= 75) setSplitRatio(val);
+      }
+    } catch {}
+  }, []);
+
+  const handleSplitMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const container = splitContainerRef.current;
+    if (!container) return;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      const newRatio = Math.max(25, Math.min(75, ((moveEvent.clientX - rect.left) / rect.width) * 100));
+      setSplitRatio(newRatio);
+      try {
+        localStorage.setItem('fayun_split_ratio', String(newRatio.toFixed(1)));
+      } catch {}
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -391,14 +430,26 @@ export default function CourseDetail({ course }: CourseDetailProps) {
     <div className="course-detail-pane">
       {/* Course Top Title & Information Card */}
       <div className="shadow-card">
-        <div className="breadcrumb">
-          <span>法雲資訊網</span>
-          <span>/</span>
-          <span>{course.main_menu_title}</span>
-          <span>/</span>
-          <span>{course.sub_menu_title}</span>
-          <span>/</span>
-          <span className="current">{course.name}</span>
+        <div className="course-header-top-row">
+          <div className="breadcrumb">
+            <span>法雲資訊網</span>
+            <span>/</span>
+            <span>{course.main_menu_title}</span>
+            <span>/</span>
+            <span>{course.sub_menu_title}</span>
+            <span>/</span>
+            <span className="current">{course.name}</span>
+          </div>
+
+          {onToggleZenMode && (
+            <button
+              className={`zen-focus-toggle-btn ${isZenMode ? 'active' : ''}`}
+              onClick={onToggleZenMode}
+              title={isZenMode ? '退出禪境專注模式 (Esc)' : '一鍵開啟禪境專注模式 (全螢幕研經聽法)'}
+            >
+              {isZenMode ? '✕ 退出專注 (Esc)' : '⛶ 禪境專注'}
+            </button>
+          )}
         </div>
 
         <h1 className="course-title">{course.name}</h1>
@@ -559,10 +610,10 @@ export default function CourseDetail({ course }: CourseDetailProps) {
             </div>
           )}
 
-          {/* 4. Split View: Video + PDF Side-by-Side */}
+          {/* 4. Split View: Video + PDF Side-by-Side with Draggable Resizer */}
           {activeTab === 'split' && (
-            <div className="split-view-container">
-              <div className="split-left-pane">
+            <div className="split-view-container" ref={splitContainerRef}>
+              <div className="split-left-pane" style={{ flex: `0 0 ${splitRatio}%` }}>
                 <h3 className="split-pane-title">🎬 影音講記</h3>
                 <VideoPlayer
                   tracks={videoTracks}
@@ -571,7 +622,14 @@ export default function CourseDetail({ course }: CourseDetailProps) {
                   courseTitle={course.name}
                 />
               </div>
-              <div className="split-right-pane">
+              <div
+                className="split-resizer"
+                onMouseDown={handleSplitMouseDown}
+                title="↔️ 左右拖曳調整雙欄比例"
+              >
+                <span className="split-resizer-knob" />
+              </div>
+              <div className="split-right-pane" style={{ flex: 1 }}>
                 <h3 className="split-pane-title">📄 講義筆記對照</h3>
                 <PdfViewer pdfs={pdfTracks} courseTitle={course.name} />
               </div>
