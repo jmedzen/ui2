@@ -16,11 +16,11 @@ test('Database Integrity Suite - courses_db.json validation', async (t) => {
 
     assert.ok(Array.isArray(dataDb.courses), 'dataDb.courses must be an array');
     assert.ok(Array.isArray(srcDb.courses), 'srcDb.courses must be an array');
-    assert.strictEqual(dataDb.courses.length, 415, 'Total courses in data/courses_db.json must be 415');
-    assert.strictEqual(srcDb.courses.length, 415, 'Total courses in src/data/courses_db.json must be 415');
+    assert.strictEqual(dataDb.courses.length, 684, 'Total courses in data/courses_db.json must be 684');
+    assert.strictEqual(srcDb.courses.length, 684, 'Total courses in src/data/courses_db.json must be 684');
   });
 
-  await t.test('all 415 courses have valid IDs, names, and menu hierarchies', () => {
+  await t.test('all 684 courses have valid IDs, names, and menu hierarchies', () => {
     const db = JSON.parse(fs.readFileSync(srcDbPath, 'utf-8'));
     const idSet = new Set<number>();
 
@@ -34,14 +34,14 @@ test('Database Integrity Suite - courses_db.json validation', async (t) => {
       assert.ok(typeof course.sub_menu_title === 'string' && course.sub_menu_title.length > 0, `Missing sub_menu_title (id=${course.id})`);
     }
 
-    assert.strictEqual(idSet.size, 415, 'Unique course count must be exactly 415');
+    assert.strictEqual(idSet.size, 684, 'Unique course count must be exactly 684');
   });
 
   await t.test('video courses count and path formatting', () => {
     const db = JSON.parse(fs.readFileSync(srcDbPath, 'utf-8'));
     const videoCourses = db.courses.filter((c: any) => c.video_path && c.video_path.trim() !== '');
 
-    assert.strictEqual(videoCourses.length, 268, 'Must have exactly 268 courses with video_path');
+    assert.strictEqual(videoCourses.length, 478, 'Must have exactly 478 courses with video_path');
 
     for (const course of videoCourses) {
       assert.ok(

@@ -527,6 +527,17 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
                       pdfFilenames.push({ name: fname, folder: `${dirPath}/${key}` });
                     }
                   });
+                } else if (val && typeof val === 'object') {
+                  Object.entries(val).forEach(([subKey, subVal]) => {
+                    if (Array.isArray(subVal)) {
+                      subVal.forEach((item: any) => {
+                        const fname = extractFilename(item);
+                        if (fname.toLowerCase().endsWith('.pdf')) {
+                          pdfFilenames.push({ name: fname, folder: `${dirPath}/${key}/${subKey}` });
+                        }
+                      });
+                    }
+                  });
                 }
               });
             }

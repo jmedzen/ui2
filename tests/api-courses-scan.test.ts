@@ -4,7 +4,7 @@ import { GET as getCourses } from '@/app/api/courses/route';
 import { GET as getScan } from '@/app/api/scan/route';
 
 test('API Courses & Scan Endpoints Suite', async (t) => {
-  await t.test('/api/courses returns 415 courses and valid caching headers', async () => {
+  await t.test('/api/courses returns 684 courses and valid caching headers', async () => {
     const req = new Request('http://localhost:8410/api/courses');
     const res = await getCourses(req);
 
@@ -14,8 +14,8 @@ test('API Courses & Scan Endpoints Suite', async (t) => {
 
     const data = await res.json();
     assert.ok(Array.isArray(data.courses), 'Must return courses array');
-    assert.strictEqual(data.courses.length, 415, 'Must contain exactly 415 courses');
-    assert.strictEqual(data.total_courses, 415, 'total_courses field must be 415');
+    assert.strictEqual(data.courses.length, 684, 'Must contain exactly 684 courses');
+    assert.strictEqual(data.total_courses, 684, 'total_courses field must be 684');
 
     // Test 304 Not Modified conditional revalidation
     const etag = res.headers.get('ETag');
@@ -33,7 +33,7 @@ test('API Courses & Scan Endpoints Suite', async (t) => {
     const data = await res.json();
     assert.strictEqual(data.status, 'active', 'Scanner status must be active');
     assert.strictEqual(typeof data.recentLogs, 'string', 'recentLogs must be string');
-    assert.strictEqual(data.totalCourses, 415, 'Scanner totalCourses must be 415');
+    assert.strictEqual(data.totalCourses, 684, 'Scanner totalCourses must be 684');
 
     assert.ok(data.cacheStats, 'Must return cacheStats object');
     assert.strictEqual(data.cacheStats.maxGb, 20, 'cacheStats.maxGb must be exactly 20');

@@ -50,10 +50,10 @@ async function runFullSiteVerification() {
 
     results.push({
       name: '課程數據庫結構完整性 (Catalog DB)',
-      passed: isMatch && totalCourses === 415 && videoCount === 268,
+      passed: isMatch && totalCourses === 684 && videoCount === 478,
       details: `收錄 ${totalCourses} 門課程 | 影音講記 ${videoCount} 門 | 講義講述 ${pdfCount} 門 | 雙庫同動: ${isMatch ? '一致' : '不一致'}`
     });
-    console.log(`✅ 數據庫檢驗通過: 415 門課程，268 門影音，雙庫同步一致\n`);
+    console.log(`✅ 數據庫檢驗通過: 684 門課程，478 門影音，雙庫同步一致\n`);
   } catch (err: any) {
     results.push({
       name: '課程數據庫結構完整性 (Catalog DB)',

@@ -122,12 +122,12 @@ test('Tree Navigation Hierarchy & Filtering Suite', async (t) => {
   const db = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
   const courses: CourseItem[] = db.courses;
 
-  await t.test('builds accurate 4-level hierarchy for all 415 courses', () => {
+  await t.test('builds accurate 4-level hierarchy for all 684 courses', () => {
     const tree = buildTreeData(courses, 'all', '');
     assert.ok(tree.length > 0, 'Tree must contain root categories');
 
     const totalCount = tree.reduce((acc, node) => acc + (node.count || 0), 0);
-    assert.strictEqual(totalCount, 415, 'Total leaf courses across all root nodes must equal 415');
+    assert.strictEqual(totalCount, 684, 'Total leaf courses across all root nodes must equal 684');
 
     // Check depth
     for (const root of tree) {
@@ -151,11 +151,11 @@ test('Tree Navigation Hierarchy & Filtering Suite', async (t) => {
   await t.test('media filters correctly partition courses', () => {
     const videoTree = buildTreeData(courses, 'video', '');
     const videoCount = videoTree.reduce((acc, node) => acc + (node.count || 0), 0);
-    assert.strictEqual(videoCount, 268, 'Video filter must return exactly 268 courses');
+    assert.strictEqual(videoCount, 478, 'Video filter must return exactly 478 courses');
 
     const pdfTree = buildTreeData(courses, 'pdf', '');
     const pdfCount = pdfTree.reduce((acc, node) => acc + (node.count || 0), 0);
-    assert.ok(pdfCount > 0 && pdfCount <= 415, 'PDF filter must return non-zero subset of courses');
+    assert.ok(pdfCount > 0 && pdfCount <= 684, 'PDF filter must return non-zero subset of courses');
 
     const audioTree = buildTreeData(courses, 'audio', '');
     const audioCount = audioTree.reduce((acc, node) => acc + (node.count || 0), 0);

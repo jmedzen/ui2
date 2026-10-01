@@ -158,7 +158,7 @@ export default function HomePortal({
         <div className="home-stat-card">
           <span className="stat-icon">📚</span>
           <div className="stat-data">
-            <span className="stat-number">{totalCourses || 415}</span>
+            <span className="stat-number">{totalCourses || 684}</span>
             <span className="stat-label">門完整講記課程</span>
           </div>
         </div>
@@ -174,7 +174,7 @@ export default function HomePortal({
         <div className="home-stat-card">
           <span className="stat-icon">🎥</span>
           <div className="stat-data">
-            <span className="stat-number">{totalVideoCourses || 268}</span>
+            <span className="stat-number">{totalVideoCourses || 478}</span>
             <span className="stat-label">部隨身影音開示</span>
           </div>
         </div>
@@ -182,7 +182,7 @@ export default function HomePortal({
         <div className="home-stat-card">
           <span className="stat-icon">📄</span>
           <div className="stat-data">
-            <span className="stat-number">{totalPdfCourses || 300}+</span>
+            <span className="stat-number">{totalPdfCourses || 413}+</span>
             <span className="stat-label">部手稿筆記與講義</span>
           </div>
         </div>

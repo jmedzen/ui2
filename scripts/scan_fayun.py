@@ -50,9 +50,12 @@ DB_ACCESS_URL = "https://www.fayun.org/public/php/dbaccess.php"
 MENU_TARGETS = [
     ("dharma", "jing"),
     ("dharma", "lun"),
+    ("dharma", "yoga"),
     ("zen", "zhiguan"),
     ("teaching", "kaishi"),
-    ("teaching", "story")
+    ("teaching", "story"),
+    ("teaching", "fayuzhuji"),
+    ("teaching", "shengjing")
 ]
 
 MENU_MAP = {
@@ -60,7 +63,8 @@ MENU_MAP = {
         "title": "佛法經論",
         "subs": {
             "jing": "解經（經藏）",
-            "lun": "釋論（論藏）"
+            "lun": "釋論（論藏）",
+            "yoga": "瑜伽師地論（本地分）"
         }
     },
     "zen": {
@@ -73,7 +77,9 @@ MENU_MAP = {
         "title": "開示與法語",
         "subs": {
             "kaishi": "專題講座與開示",
-            "story": "佛典故事"
+            "story": "佛典故事",
+            "fayuzhuji": "法語珠璣",
+            "shengjing": "玅演勝境"
         }
     }
 }
@@ -81,10 +87,12 @@ MENU_MAP = {
 TOPIC_MAP = {
     "ahanjing": "阿含經",
     "bashiguijusong": "八識規矩頌",
+    "bendifen": "瑜伽師地論 本地分",
     "borejing": "般若經藏",
     "chan": "禪修止觀",
     "dabei": "大悲心陀羅尼",
     "daniepanjing": "大般涅槃經",
+    "experience": "玅演勝境",
     "fahuajing": "法華經",
     "fajujing": "法句經",
     "foyijiaojing": "佛遺教經",
@@ -96,6 +104,7 @@ TOPIC_MAP = {
     "kaishi_jielv": "戒律與修持專題",
     "kaishi_jingtu": "淨土思想專題",
     "kaishi_others": "法會與專題開示",
+    "motto": "法語珠璣",
     "others": "其他開示資料",
     "qa": "佛學問答",
     "ruzhonglun": "入中論",
@@ -145,6 +154,14 @@ PATH_OVERRIDES = {
         "video_path": "/media/釋論/瑜伽師地論・本地分"
     }
 }
+
+def normalize_media_path(p):
+    if not p:
+        return None
+    p = str(p).strip()
+    if p and not p.startswith('/'):
+        p = '/' + p
+    return p
 
 def run_scan():
     log_message("🔄 === 開始連線 fayun.org 執行媒體同步與掃描 ===")
@@ -203,6 +220,10 @@ def run_scan():
                         total_episodes = item.get("total", 0) or 0
                 else:
                     total_episodes = item.get("total", 0) or 0
+
+                audio_p = normalize_media_path(audio_p)
+                video_p = normalize_media_path(video_p)
+                lecture_p = normalize_media_path(lecture_p)
 
                 course_obj = {
                     "id": c_id,
