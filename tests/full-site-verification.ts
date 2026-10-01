@@ -20,7 +20,7 @@ async function runFullSiteVerification() {
   // 1. Run Unit & Functional Test Suites
   try {
     console.log('⏳ [1/5] 執行 TypeScript 單元與端點測試套件 (node:test + tsx)...');
-    const testOutput = execSync('npx tsx --test tests', { encoding: 'utf-8' });
+    const testOutput = execSync('npx tsx --test tests/*.test.ts', { encoding: 'utf-8' });
     const passCount = (testOutput.match(/✔/g) || []).length;
     results.push({
       name: '自動化測試套件 (Automated Test Suites)',
