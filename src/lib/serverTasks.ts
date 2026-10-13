@@ -92,6 +92,60 @@ export function appendLog(line: string): void {
  * is required; otherwise only same-origin browser requests are accepted (a
  * cross-site form/fetch cannot forge these headers from a foreign origin).
  */
+/** Normalises an authority into a comparable "host:port" pair. */
+function normalizeAuthority(hostname: string, protocol: string, port: string): string {
+  const effectivePort = port || (protocol === 'https:' ? '443' : '80');
+  return `${hostname.toLowerCase()}:${effectivePort}`;
+}
+
+/**
+ * Collects the authorities this request could legitimately have been made to.
+ *
+ * `request.url` is NOT reliable for this: behind a reverse proxy (e.g. Caddy
+ * terminating TLS in front of `fyweb:8410`) it reports the *internal* address
+ * while the browser's Origin reports the public one. Trusting it rejected every
+ * legitimate same-origin trigger. The Host / X-Forwarded-Host headers carry the
+ * authority the client actually used, so they are checked first.
+ */
+function allowedAuthorities(request: Request): Set<string> {
+  const hostnames = new Set<string>();
+
+  const addAuthority = (value: string | null) => {
+    if (!value) return;
+    // X-Forwarded-Host may be a comma-separated chain; the first entry is the
+    // one the client addressed.
+    const first = value.split(',')[0].trim();
+    if (!first) return;
+    try {
+      // Parsed with a scheme so a bare "host:port" is accepted.
+      const parsed = new URL(`http://${first}`);
+      // An explicit port is authoritative. Without one we cannot know whether
+      // the edge terminated on 80 or 443, so both defaults are permitted.
+      if (parsed.port) {
+        hostnames.add(`${parsed.hostname.toLowerCase()}:${parsed.port}`);
+      } else {
+        const name = parsed.hostname.toLowerCase();
+        hostnames.add(`${name}:80`);
+        hostnames.add(`${name}:443`);
+      }
+    } catch {
+      /* ignore malformed authority */
+    }
+  };
+
+  addAuthority(request.headers.get('x-forwarded-host'));
+  addAuthority(request.headers.get('host'));
+
+  try {
+    const self = new URL(request.url);
+    hostnames.add(normalizeAuthority(self.hostname, self.protocol, self.port));
+  } catch {
+    /* ignore unparseable request URL */
+  }
+
+  return hostnames;
+}
+
 export function authorizeTaskRequest(request: Request): { ok: true } | { ok: false; status: number; message: string } {
   const expected = process.env.TASK_API_TOKEN;
   if (expected) {
@@ -109,16 +163,24 @@ export function authorizeTaskRequest(request: Request): { ok: true } | { ok: fal
     return { ok: true };
   }
 
+  // Fetch Metadata is set by the browser and cannot be forged from JS. A
+  // same-origin (or user-initiated) request is exactly what we want to allow.
   const fetchSite = (request.headers.get('sec-fetch-site') || '').toLowerCase();
-  if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') {
+  if (fetchSite === 'same-origin' || fetchSite === 'none') {
+    return { ok: true };
+  }
+  if (fetchSite) {
     return { ok: false, status: 403, message: 'Cross-site task trigger rejected' };
   }
 
+  // No Fetch Metadata (older browser or non-browser client): fall back to
+  // comparing Origin against the authorities the client could have used.
   const origin = request.headers.get('origin');
   if (origin) {
     try {
-      const requestHost = new URL(request.url).host;
-      if (new URL(origin).host !== requestHost) {
+      const parsedOrigin = new URL(origin);
+      const originAuthority = normalizeAuthority(parsedOrigin.hostname, parsedOrigin.protocol, parsedOrigin.port);
+      if (!allowedAuthorities(request).has(originAuthority)) {
         return { ok: false, status: 403, message: 'Cross-origin task trigger rejected' };
       }
     } catch {
