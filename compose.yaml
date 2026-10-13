@@ -33,7 +33,11 @@ services:
       - SETUID # su-exec: drop to "node"
       - SETGID # su-exec: adopt the "node" group
     ports:
-      - "8410:8410"
+      # Bind to loopback only. Publishing 0.0.0.0:8410 let clients reach the
+      # app directly and bypass Caddy, which is what made X-Forwarded-For
+      # spoofable and the preload rate limit escapable. Caddy reaches the
+      # service over the compose network and does not need a published port.
+      - "127.0.0.1:8410:8410"
     environment:
       - NODE_ENV=production
       - PORT=8410
@@ -41,6 +45,11 @@ services:
       - MEDIA_CACHE_MAX_BYTES=21474836480 # 20 GB Disk Cache Limit
       - MEDIA_CACHE_MAX_CONCURRENCY=3 # Cap simultaneous background downloads
       - PROXY_PRELOAD_MAX_PER_MINUTE=20 # Per-client preload budget
+      # Trust X-Forwarded-For for rate-limit bucketing. Enable ONLY when every
+      # path into this container passes through a proxy that overwrites the
+      # header (the Caddyfile below does). While unset, all callers share a
+      # single preload budget.
+      # - TRUST_PROXY=1
       # Set TASK_API_TOKEN to require a bearer token for scan/heal triggers.
       # When unset, only same-origin browser requests are accepted.
       # - TASK_API_TOKEN=change-me

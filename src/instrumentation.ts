@@ -40,4 +40,22 @@ export async function register(): Promise<void> {
         `(started ${reclaimed.startedAt}); no task is running.`
     );
   }
+
+  // Start the periodic cache sweep, and run one immediately.
+  //
+  // Eviction used to be reachable only after a download completed successfully.
+  // Once the volume filled, writes failed, so no download completed, so no
+  // eviction ever ran — the cache stayed pinned over budget with no way out.
+  // A boot pass plus a timer breaks that cycle, and also clears `.tmp` files
+  // orphaned by a restart without waiting for the same media to be requested.
+  const { startCacheMaintenance, enforceLRULimit, cleanAllTempFiles } = await import('@/lib/serverMediaCache');
+
+  // At startup no download can be in flight, so every .tmp is an orphan; the
+  // age-based sweeper would skip all of them for 3 minutes.
+  await cleanAllTempFiles();
+
+  startCacheMaintenance();
+  void enforceLRULimit().catch((e: unknown) => {
+    console.warn('[Boot] Initial cache maintenance pass failed:', e);
+  });
 }

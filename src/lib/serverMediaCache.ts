@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { Readable } from 'stream';
+import { Readable, Transform } from 'stream';
 
 export function getCacheDir(): string {
   const envDir = process.env.MEDIA_CACHE_DIR;
@@ -24,7 +24,85 @@ export function ensureCacheDir(): string {
 const MAX_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_MAX_BYTES || '', 10) || 20 * 1024 * 1024 * 1024; // 20 GB default limit
 const TARGET_CACHE_SIZE_BYTES = parseInt(process.env.MEDIA_CACHE_TARGET_BYTES || '', 10) || Math.floor(MAX_CACHE_SIZE_BYTES * 0.85); // 17 GB High-water mark after eviction (85%)
 
-export function getCacheStats(): { currentBytes: number; maxBytes: number; fileCount: number; maxGb: number } {
+export interface CacheStats {
+  currentBytes: number;
+  maxBytes: number;
+  fileCount: number;
+  maxGb: number;
+}
+
+/**
+ * Memoized cache stats.
+ *
+ * Measuring the cache means stat()ing every file, and the media cache can hold
+ * tens of thousands of entries. The scan route polls this while a maintenance
+ * job runs, so an unmemoized scan blocked the event loop for hundreds of
+ * milliseconds per poll. A few seconds of staleness is irrelevant for a disk
+ * usage figure.
+ */
+const STATS_TTL_MS = 5000;
+let statsMemo: { at: number; value: CacheStats } | null = null;
+
+/** Invalidates the memo after an operation that changes the cache contents. */export function invalidateCacheStats(): void {
+  statsMemo = null;
+}
+
+/**
+ * Computes cache usage without blocking the event loop.
+ *
+ * Uses async I/O so a large directory scan interleaves with request handling
+ * instead of stalling the server.
+ */
+export async function getCacheStatsAsync(): Promise<CacheStats> {
+  const now = Date.now();
+  if (statsMemo && now - statsMemo.at < STATS_TTL_MS) return statsMemo.value;
+
+  const cacheDir = getCacheDir();
+  let currentBytes = 0;
+  let fileCount = 0;
+  try {
+    const files = await fs.promises.readdir(cacheDir);
+    // Stat in bounded batches so a huge cache does not open thousands of
+    // descriptors or starve the event loop.
+    const BATCH = 64;
+    for (let i = 0; i < files.length; i += BATCH) {
+      await Promise.all(
+        files.slice(i, i + BATCH).map(async (file) => {
+          if (file.endsWith('.tmp')) return;
+          try {
+            const stat = await fs.promises.stat(path.join(cacheDir, file));
+            if (stat.isFile()) {
+              currentBytes += stat.size;
+              fileCount++;
+            }
+          } catch {}
+        })
+      );
+    }
+  } catch {
+    // A missing/unreadable directory reports as empty rather than throwing.
+  }
+
+  const value: CacheStats = {
+    currentBytes,
+    maxBytes: MAX_CACHE_SIZE_BYTES,
+    maxGb: Math.round(MAX_CACHE_SIZE_BYTES / (1024 * 1024 * 1024)),
+    fileCount
+  };
+  statsMemo = { at: now, value };
+  return value;
+}
+
+/**
+ * Synchronous variant, retained for tests and non-hot paths.
+ *
+ * Returns the memoized value when fresh; otherwise performs a blocking scan.
+ * Hot paths should prefer `getCacheStatsAsync`.
+ */
+export function getCacheStats(): CacheStats {
+  const now = Date.now();
+  if (statsMemo && now - statsMemo.at < STATS_TTL_MS) return statsMemo.value;
+
   const cacheDir = getCacheDir();
   let currentBytes = 0;
   let fileCount = 0;
@@ -44,12 +122,14 @@ export function getCacheStats(): { currentBytes: number; maxBytes: number; fileC
       }
     }
   } catch {}
-  return {
+  const value: CacheStats = {
     currentBytes,
     maxBytes: MAX_CACHE_SIZE_BYTES,
     maxGb: Math.round(MAX_CACHE_SIZE_BYTES / (1024 * 1024 * 1024)),
     fileCount
   };
+  statsMemo = { at: now, value };
+  return value;
 }
 
 export function getCacheKey(targetUrlOrPath: string): string {
@@ -95,6 +175,39 @@ export function updateAccessTime(filePath: string): void {
 
 /** Temp paths with a download currently in flight; never reclaimed as "stale". */
 const activeTempPaths = new Set<string>();
+
+/**
+ * Removes every temporary (.tmp) file, unconditionally.
+ *
+ * Safe only during process startup: at that moment no download can be in
+ * flight, so every `.tmp` file is by definition an orphan from a previous
+ * process. `cleanStaleTempFiles` cannot serve this purpose because it
+ * deliberately skips files younger than 3 minutes — which, right after a
+ * restart, is all of them.
+ */
+export async function cleanAllTempFiles(): Promise<number> {
+  const cacheDir = getCacheDir();
+  let removed = 0;
+  try {
+    const files = await fs.promises.readdir(cacheDir);
+    for (const filename of files) {
+      if (!filename.endsWith('.tmp')) continue;
+      const fullPath = path.join(cacheDir, filename);
+      if (activeTempPaths.has(fullPath)) continue;
+      try {
+        await fs.promises.unlink(fullPath);
+        removed++;
+      } catch {}
+    }
+    if (removed > 0) {
+      console.log(`[Media Cache] Cleared ${removed} orphaned temp file(s) at startup.`);
+      invalidateCacheStats();
+    }
+  } catch {
+    // A missing or unreadable cache directory is not an error here.
+  }
+  return removed;
+}
 
 /**
  * Removes any stale temporary (.tmp) files left behind by interrupted downloads.
@@ -223,6 +336,34 @@ export function scheduleLRUEnforcement(): void {
   }
 }
 
+/**
+ * Periodic maintenance: temp cleanup plus LRU enforcement.
+ *
+ * Eviction was previously reachable *only* from `scheduleLRUEnforcement`, which
+ * runs after a download completes successfully. That is circular when the disk
+ * is the problem: once the volume fills, writes start failing, so no download
+ * ever completes, so no eviction pass ever runs and the cache stays pinned over
+ * budget. A timer breaks that cycle, and also clears `.tmp` orphans left by a
+ * restart without waiting for someone to request the same media again.
+ */
+const MAINTENANCE_INTERVAL_MS = Math.max(
+  30_000,
+  parseInt(process.env.MEDIA_CACHE_MAINTENANCE_INTERVAL_MS || '', 10) || 10 * 60 * 1000
+);
+
+let maintenanceTimer: NodeJS.Timeout | null = null;
+
+export function startCacheMaintenance(): void {
+  if (maintenanceTimer) return;
+  maintenanceTimer = setInterval(() => {
+    void enforceLRULimit();
+  }, MAINTENANCE_INTERVAL_MS);
+  if (typeof maintenanceTimer.unref === 'function') {
+    maintenanceTimer.unref();
+  }
+  console.log(`[Media Cache] Maintenance sweep every ${Math.round(MAINTENANCE_INTERVAL_MS / 1000)}s.`);
+}
+
 // Map to prevent duplicate concurrent background downloads for the same target file
 const activeDownloads = new Map<string, Promise<void>>();
 
@@ -251,8 +392,23 @@ const MAX_CONCURRENT_DOWNLOADS = Math.max(
   parseInt(process.env.MEDIA_CACHE_MAX_CONCURRENCY || '', 10) || 3
 );
 
-/** Upper bound for a cacheable asset (0 disables the check). Defaults to 4 GB. */
-const MAX_CACHEABLE_BYTES = parseInt(process.env.MEDIA_CACHE_MAX_FILE_BYTES || '', 10) || 4 * 1024 * 1024 * 1024;
+/**
+ * Upper bound for a cacheable asset (0 disables the check). Defaults to 4 GB.
+ *
+ * Read lazily on each use so tests (and a restarted process with different
+ * configuration) observe the current value rather than an import-time snapshot.
+ */
+let maxCacheableBytesOverride: number | null = null;
+
+function getMaxCacheableBytes(): number {
+  if (maxCacheableBytesOverride !== null) return maxCacheableBytesOverride;
+  return parseInt(process.env.MEDIA_CACHE_MAX_FILE_BYTES || '', 10) || 4 * 1024 * 1024 * 1024;
+}
+
+/** Test hook: pins the per-file ceiling without re-importing the module. */
+export function setMaxCacheableBytesForTest(bytes: number | null): void {
+  maxCacheableBytesOverride = bytes;
+}
 
 /** Acquires a download slot, awaiting a free one when the budget is full. */
 async function acquireDownloadSlot(): Promise<void> {
@@ -302,7 +458,7 @@ export async function fileLooksLikeHtml(filePath: string): Promise<boolean> {
 /**
  * Downloads remote media file to server cache disk in background and renames it to a formal file upon completion
  */
-export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string, _reqHeaders?: HeadersInit): Promise<void> {
+export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string): Promise<void> {
   const tempPath = `${cacheFilePath}.tmp`;
 
   if (isCached(cacheFilePath)) {
@@ -315,15 +471,18 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string,
     return inFlight;
   }
 
-  // If tempPath exists, check if it's active (< 5 minutes old)
+  // A leftover .tmp is only evidence of an active download when *this* process
+  // is actually transferring into it. The previous implementation trusted a
+  // fresh mtime, so a .tmp orphaned by a restart (or a crash) made every
+  // subsequent request return early for up to 5 minutes: nothing downloaded,
+  // nothing was cached, and playback kept hitting the origin.
   if (fs.existsSync(tempPath)) {
+    if (activeTempPaths.has(tempPath)) {
+      return; // A download owned by this process is genuinely in flight.
+    }
     try {
-      const stat = fs.statSync(tempPath);
-      if (Date.now() - stat.mtimeMs < 5 * 60 * 1000) {
-        return; // Download actively progressing
-      } else {
-        fs.unlinkSync(tempPath); // Remove stale temp file
-      }
+      fs.unlinkSync(tempPath); // Orphan from a previous process: reclaim it.
+      console.warn(`[Media Cache] Removed orphaned temp file: ${path.basename(tempPath)}`);
     } catch {}
   }
 
@@ -333,6 +492,23 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string,
     // stampeding the origin when the budget is exhausted.
     await acquireDownloadSlot();
     activeTempPaths.add(tempPath);
+
+    /**
+     * Releases the upstream body.
+     *
+     * Every early return below used to abandon `res.body` without consuming or
+     * cancelling it, leaving the underlying socket and its buffers alive until
+     * GC happened to run. Repeated rejections pinned connections and memory.
+     */
+    let upstream: ReadableStream<Uint8Array> | null = null;
+    const discardUpstream = async () => {
+      if (!upstream) return;
+      try {
+        await upstream.cancel();
+      } catch {}
+      upstream = null;
+    };
+
     try {
       console.log(`[Media Cache] Starting full background download for formal file: ${path.basename(cacheFilePath)}`);
 
@@ -349,33 +525,99 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string,
 
       if (!res.ok || !res.body) {
         console.warn(`[Media Cache] Failed to fetch remote file ${targetUrl}: HTTP ${res.status}`);
+        await discardUpstream();
         return;
       }
+      upstream = res.body;
 
       // Reject HTML/SPA error pages served with a 200 status before writing anything.
       if (looksLikeHtmlContentType(res.headers.get('content-type'))) {
         console.warn(`[Media Cache] Refusing to cache HTML document for ${targetUrl} (content-type: ${res.headers.get('content-type')})`);
+        await discardUpstream();
         return;
       }
 
       const contentLengthStr = res.headers.get('content-length');
       const expectedSize = contentLengthStr ? parseInt(contentLengthStr, 10) : 0;
 
-      if (MAX_CACHEABLE_BYTES > 0 && expectedSize > MAX_CACHEABLE_BYTES) {
+      const maxCacheable = getMaxCacheableBytes();
+      if (maxCacheable > 0 && expectedSize > maxCacheable) {
         console.warn(`[Media Cache] Skipping oversized asset (${expectedSize} bytes) for ${targetUrl}`);
+        await discardUpstream();
         return;
       }
 
       const fileStream = fs.createWriteStream(tempPath);
       const nodeStream = Readable.fromWeb(res.body as any);
 
-      nodeStream.pipe(fileStream);
-
-      await new Promise<void>((resolve, reject) => {
-        fileStream.on('finish', () => resolve());
-        fileStream.on('error', (err) => reject(err));
-        nodeStream.on('error', (err) => reject(err));
+      /**
+       * Enforces the size ceiling while streaming.
+       *
+       * The header check above is skipped entirely when the origin omits
+       * `Content-Length`, which meant a chunked (or hostile) response of any
+       * size was written to disk until it finished. This caps the bytes
+       * actually persisted.
+       */
+      let written = 0;
+      let tooLarge = false;
+      const limiter = new Transform({
+        transform(chunk: Buffer, _enc, cb) {
+          written += chunk.length;
+          if (maxCacheable > 0 && written > maxCacheable) {
+            tooLarge = true;
+            cb(new Error(`exceeds per-file cache ceiling (${maxCacheable})`));
+            return;
+          }
+          cb(null, chunk);
+        }
       });
+
+      let streamError: Error | null = null;
+
+      /**
+       * Waits for the write stream to *close*, not merely to error.
+       *
+       * `createWriteStream` opens its descriptor asynchronously. Resolving as
+       * soon as an error arrived meant cleanup could unlink the temp path
+       * before the stream had opened it — and the pending open then recreated
+       * the file, leaving residue that no later sweep would attribute to a
+       * failed download. Waiting for 'close' guarantees the descriptor is
+       * released and no further writes can land.
+       */
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const settle = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+
+        const fail = (err: Error) => {
+          streamError = streamError || err;
+          // Tear the pipeline down so 'close' fires promptly. Without this the
+          // file stream would keep waiting for data that will never arrive.
+          nodeStream.destroy();
+          limiter.destroy();
+          fileStream.destroy();
+        };
+
+        nodeStream.on('error', fail);
+        limiter.on('error', fail);
+        fileStream.on('error', fail);
+        fileStream.on('close', settle);
+
+        nodeStream.pipe(limiter).pipe(fileStream);
+      });
+
+      if (tooLarge) {
+        console.warn(`[Media Cache] Aborted oversized stream for ${targetUrl} after ${written} bytes`);
+        return;
+      }
+      if (streamError) {
+        const msg = (streamError as Error).message;
+        console.warn(`[Media Cache] Stream failed for ${path.basename(cacheFilePath)}: ${msg}`);
+        return;
+      }
 
       if (isCached(cacheFilePath)) {
         return;
@@ -383,7 +625,10 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string,
 
       if (fs.existsSync(tempPath)) {
         const stat = await fs.promises.stat(tempPath);
-        if (stat.size > 0 && (expectedSize === 0 || stat.size >= expectedSize)) {
+        // When the origin declares a length, require the whole body. Without
+        // one, the only available signal is that the stream ended cleanly.
+        const sizeOk = stat.size > 0 && (expectedSize === 0 || stat.size >= expectedSize);
+        if (sizeOk) {
           // Second line of defence: the origin may omit or lie about content-type.
           if (await fileLooksLikeHtml(tempPath)) {
             console.warn(`[Media Cache] Discarding HTML-shaped payload for ${path.basename(cacheFilePath)}`);
@@ -391,6 +636,7 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string,
           }
           await fs.promises.rename(tempPath, cacheFilePath);
           updateAccessTime(cacheFilePath);
+          invalidateCacheStats();
           console.log(`[Media Cache] Successfully cached formal file: ${path.basename(cacheFilePath)} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
           scheduleLRUEnforcement();
         } else {
@@ -401,6 +647,7 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string,
     } catch (e: unknown) {
       console.warn(`[Media Cache] Download error for ${path.basename(cacheFilePath)}:`, (e as Error)?.message || e);
     } finally {
+      await discardUpstream();
       activeTempPaths.delete(tempPath);
       activeDownloads.delete(cacheFilePath);
       releaseDownloadSlot();

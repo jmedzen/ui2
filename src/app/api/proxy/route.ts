@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import { Readable } from 'stream';
-import { getCacheFilePath, isCached, updateAccessTime, cacheRemoteMedia, fileLooksLikeHtml } from '@/lib/serverMediaCache';
+import { getCacheFilePath, isCached, updateAccessTime, cacheRemoteMedia, fileLooksLikeHtml, invalidateCacheStats } from '@/lib/serverMediaCache';
 import { authorizeTaskRequest } from '@/lib/serverTasks';
 
 const ALLOWED_HOSTS = ['www.fayun.org', 'fayun.org'];
@@ -24,12 +24,73 @@ const PRELOAD_MAX_PER_WINDOW = Math.max(
 
 const preloadBuckets = new Map<string, { count: number; resetAt: number }>();
 
-/** Bounds the rate-limit map so it cannot itself become a memory leak. */
+/** Upper bound on distinct tracked clients. */
+const MAX_PRELOAD_BUCKETS = 5000;
+
+/**
+ * Bounds the rate-limit map so it cannot itself become a memory leak.
+ *
+ * The previous version only pruned *expired* buckets and only once the map had
+ * already reached 5000 entries. Within a single 60-second window every bucket is
+ * still live, so nothing was evictable and the map grew without limit — an
+ * unauthenticated caller could force one allocation per request simply by
+ * rotating `X-Forwarded-For`.
+ *
+ * Expired entries are dropped first; if the map is still full, the entries
+ * closest to expiry go too. Shedding load takes precedence over precise
+ * accounting, since an attacker rotating keys would otherwise bypass the limit
+ * entirely.
+ */
 function prunePreloadBuckets(now: number) {
-  if (preloadBuckets.size < 5000) return;
+  if (preloadBuckets.size < MAX_PRELOAD_BUCKETS) {
+    // Opportunistic cheap cleanup while under pressure.
+    if (preloadBuckets.size > MAX_PRELOAD_BUCKETS / 2) {
+      for (const [key, bucket] of preloadBuckets.entries()) {
+        if (now >= bucket.resetAt) preloadBuckets.delete(key);
+      }
+    }
+    return;
+  }
+
   for (const [key, bucket] of preloadBuckets.entries()) {
     if (now >= bucket.resetAt) preloadBuckets.delete(key);
   }
+  if (preloadBuckets.size < MAX_PRELOAD_BUCKETS) return;
+
+  // Still full: evict soonest-to-expire entries until we are back under the cap.
+  const byExpiry = [...preloadBuckets.entries()].sort((a, b) => a[1].resetAt - b[1].resetAt);
+  for (const [key] of byExpiry) {
+    if (preloadBuckets.size < MAX_PRELOAD_BUCKETS) break;
+    preloadBuckets.delete(key);
+  }
+}
+
+/**
+ * Whether `X-Forwarded-For` may be believed.
+ *
+ * The header is client-controlled unless a reverse proxy overwrites it. Caddy
+ * does overwrite it by default, but the app is also published directly on
+ * :8410 by compose, so a request reaching that port can name any client it
+ * likes and mint a fresh rate-limit bucket per call.
+ *
+ * Trust is therefore opt-in and explicit: set TRUST_PROXY=1 only when every
+ * path into this process passes through a proxy that rewrites the header.
+ * The default is off, so an unconfigured deployment fails safe: all callers
+ * share one budget rather than each being able to mint their own.
+ */
+const TRUST_PROXY = process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true';
+
+function clientKeyFor(request: NextRequest): string {
+  if (TRUST_PROXY) {
+    const forwarded = request.headers.get('x-forwarded-for');
+    const first = (forwarded ? forwarded.split(',')[0].trim() : '');
+    if (first) return first;
+  }
+  // No trustworthy peer identifier is exposed by NextRequest, so fall back to a
+  // single shared bucket. This is deliberately conservative: it degrades the
+  // limit to "20 preloads per minute for the whole instance" instead of letting
+  // a caller escape the limit by inventing a new client address per request.
+  return 'local';
 }
 
 /**
@@ -40,8 +101,7 @@ function prunePreloadBuckets(now: number) {
  * authorization decision — authorization is handled separately.
  */
 function checkPreloadRateLimit(request: NextRequest): boolean {
-  const forwarded = request.headers.get('x-forwarded-for');
-  const clientKey = (forwarded ? forwarded.split(',')[0].trim() : '') || 'local';
+  const clientKey = clientKeyFor(request);
   const now = Date.now();
 
   prunePreloadBuckets(now);
@@ -323,7 +383,7 @@ export async function GET(request: NextRequest) {
         );
       }
       if (!isCached(cacheFilePath)) {
-        void cacheRemoteMedia(targetUrl, cacheFilePath, reqHeaders);
+        void cacheRemoteMedia(targetUrl, cacheFilePath);
       }
       return NextResponse.json({ status: 'preloading' }, {
         headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' }
@@ -363,10 +423,18 @@ export async function GET(request: NextRequest) {
       const parsed = parseSingleRange(rangeHeader, fileSize);
 
       // Corrupt entry: evict and fall through to the live proxy path.
-      if (stat.size > 0 && stat.size < 512 && (await fileLooksLikeHtml(cacheFilePath))) {
+      //
+      // The size guard that used to wrap this (`stat.size < 512`) meant only
+      // tiny error pages were detected. An HTML document larger than 512 bytes
+      // was served as a HIT forever, while `action=status` — which has no size
+      // guard — reported the same file as *not* cached. That disagreement left
+      // clients unable to recover. `fileLooksLikeHtml` reads only the first
+      // 512 bytes regardless, so the guard bought nothing.
+      if (await fileLooksLikeHtml(cacheFilePath)) {
         console.warn(`[Proxy] Discarding HTML-shaped cache entry: ${cacheFilePath}`);
         try {
           await fs.promises.unlink(cacheFilePath);
+          invalidateCacheStats();
         } catch {}
       } else {
         const resHeaders = new Headers();

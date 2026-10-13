@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getCacheStats } from '@/lib/serverMediaCache';
+import { getCacheStatsAsync } from '@/lib/serverMediaCache';
 import {
   SCAN_TASK,
   authorizeTaskRequest,
@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const dbInfo = readDbInfo();
-    const cacheStats = getCacheStats();
+    const cacheStats = await getCacheStatsAsync();
 
     return NextResponse.json({
       status: 'active',

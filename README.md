@@ -155,14 +155,18 @@ docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name fyweb fyweb:latest
 | `MEDIA_CACHE_MAX_FILE_BYTES` | `4294967296`（4 GB） | 單一媒體檔案的快取上限，超過則不快取。 |
 | `MEDIA_CACHE_MAX_CONCURRENCY` | `3` | 同時進行的背景下載數量上限，避免被抓取大量檔案耗盡頻寬與 I/O。 |
 | `PROXY_PRELOAD_MAX_PER_MINUTE` | `20` | 每個來源 IP 每分鐘可觸發 `action=preload` 的次數上限。 |
+| `TRUST_PROXY` | （未設定） | 設為 `1` 時才信任 `X-Forwarded-For` 作為速率限制的來源 IP。**僅在容器只經由會覆寫該標頭的代理（如 Caddy）連線時才可開啟**；未設定時所有來源共用同一額度（保守但無法被偽造繞過）。 |
+| `MEDIA_CACHE_MAINTENANCE_INTERVAL_MS` | `600000`（10 分鐘） | 定期清理 `.tmp` 孤兒檔並執行 LRU 淘汰的間隔（下限 30 秒）。 |
 | `MEDIA_CACHE_DIR` | `<cwd>/data/media_cache` | 自訂快取目錄。**注意**：路徑必須包含 `data` 字串才會生效。 |
 
 ### 安全機制
 
 - **`action=preload` 需授權**：此動作會讓伺服器下載並寫入檔案，因此需同源請求或 `TASK_API_TOKEN`，並受速率限制（超過回 `429`）。
+- **速率限制不可用 `X-Forwarded-For` 偽造繞過**：來源鍵預設不信任該標頭（見 `TRUST_PROXY`），且 bucket 數量有上限，避免以輪換來源 IP 撐爆記憶體。
 - **上游白名單同時鎖定協定與埠號**：僅允許 `https://www.fayun.org` 與 `https://fayun.org` 的 **443** 埠，避免代理被用來探測其他服務。
 - **回應強化**：所有代理回應均帶 `X-Content-Type-Options: nosniff`、`Content-Security-Policy: default-src 'none'; sandbox` 與 `Cross-Origin-Resource-Policy: same-origin`；`text/html`、SVG、XML 等可執行文件類型一律拒絕，非影音內容強制以 `Content-Disposition: attachment` 下載。
-- **容器非特權執行**：映像以 `node` 使用者執行，並於 compose 設定 `no-new-privileges` 與 `cap_drop: [ALL]`。
+- **容器非特權執行**：應用程式以 `node` 使用者執行，並於 compose 設定 `no-new-privileges`；容器僅保留 `CHOWN`/`DAC_OVERRIDE`/`SETUID`/`SETGID` 用於啟動時修正 `./data` 權限，隨後即降權。
+- **連接埠僅綁定 loopback**：compose 將 `8410` 綁在 `127.0.0.1`，外部流量一律須經 Caddy。這可同時避免有人直連繞過代理，以及讓 `X-Forwarded-For` 失去可信度。
 
 ---
 
