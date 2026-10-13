@@ -51,6 +51,37 @@ const extractFilename = (item: any): string => {
   return String(item || '');
 };
 
+/**
+ * Builds a canonical identity for a discovered PDF.
+ *
+ * The same physical file can be surfaced through more than one probed
+ * directory, so a naive `folder/name` comparison sees `.../bilu/1.pdf` from
+ * `.../bilu` and from `.../bilu/bilu/1.pdf` as two different documents. This
+ * collapses repeated trailing directory segments and normalises the filename
+ * so the app lists each lecture note exactly once.
+ */
+const canonicalPdfPath = (folder: string, name: string): string => {
+  const decode = (v: string) => {
+    try {
+      return decodeURIComponent(v);
+    } catch {
+      return v;
+    }
+  };
+  const decodedName = decode(String(name || '')).trim().replace(/\s+/g, ' ');
+
+  // Collapse consecutive duplicate path segments: /a/bilu/bilu -> /a/bilu
+  const segments: string[] = [];
+  for (const raw of decode(String(folder || '')).split('/')) {
+    const seg = raw.trim();
+    if (!seg) continue;
+    if (segments.length > 0 && segments[segments.length - 1] === seg) continue;
+    segments.push(seg);
+  }
+
+  return `${segments.join('/')}::${decodedName}`;
+};
+
 export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoHome }: CourseDetailProps) {
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
 
@@ -506,6 +537,9 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
 
       const uniquePaths = Array.from(new Set(potentialPaths)).filter((p) => p !== '/media');
       const discoveredPdfs: PdfItem[] = [];
+      // One physical file can be discovered through several probed directories,
+      // so dedupe on the file identity rather than the full URL.
+      const seenPdfKeys = new Set<string>();
 
       try {
         const results = await Promise.allSettled(
@@ -529,11 +563,30 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
                 }
               });
             } else if (listData && typeof listData === 'object') {
-              // Case 1: Multi-volume structure
-              const volKeys = sortVolumes(Object.keys(listData));
-              volKeys.forEach((vol) => {
+              // The upstream returns a single-folder object whose keys are the
+              // sub-directories, e.g. { video: [...], bilu: [...] }. Some
+              // responses instead use volume names as keys, each holding its own
+              // { video, bilu } object.
+              //
+              // `bilu` / `pdf` / `beizhu` must NOT be treated as volume names:
+              // doing so matched the same files twice (once as "volume" `bilu`,
+              // once as the media key) and produced duplicate dropdown entries
+              // with different URLs for one file.
+              const MEDIA_KEYS = ['bilu', 'pdf', 'beizhu'];
+              const isMediaKeyObject = (v: unknown): boolean =>
+                !!v && typeof v === 'object' && !Array.isArray(v) &&
+                Object.keys(v as Record<string, unknown>).length > 0 &&
+                Object.keys(v as Record<string, unknown>).every((k) => MEDIA_KEYS.includes(k));
+
+              const allKeys = Object.keys(listData);
+              const mediaKeyNames = allKeys.filter((k) => MEDIA_KEYS.includes(k));
+              const volumeKeys = allKeys.filter((k) => !MEDIA_KEYS.includes(k));
+
+              // Case 1: multi-volume structure. Only treat a key as a volume
+              // when it looks like one (an object that is not a media-key bag).
+              sortVolumes(volumeKeys).forEach((vol) => {
                 const val = listData[vol];
-                if (val && typeof val === 'object') {
+                if (val && typeof val === 'object' && !isMediaKeyObject(val)) {
                   const pdfList = Array.isArray(val)
                     ? val
                     : (Array.isArray(val.bilu) ? val.bilu : (Array.isArray(val.pdf) ? val.pdf : []));
@@ -550,29 +603,32 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
                 }
               });
 
-              // Case 2: Single folder object with bilu/pdf/beizhu keys
-              ['bilu', 'pdf', 'beizhu'].forEach((key) => {
-                const val = listData[key];
-                if (Array.isArray(val)) {
-                  val.forEach((item: any) => {
-                    const fname = extractFilename(item);
-                    if (fname.toLowerCase().endsWith('.pdf')) {
-                      pdfFilenames.push({ name: fname, folder: `${dirPath}/${key}` });
-                    }
-                  });
-                } else if (val && typeof val === 'object') {
-                  Object.entries(val).forEach(([subKey, subVal]) => {
-                    if (Array.isArray(subVal)) {
-                      subVal.forEach((item: any) => {
-                        const fname = extractFilename(item);
-                        if (fname.toLowerCase().endsWith('.pdf')) {
-                          pdfFilenames.push({ name: fname, folder: `${dirPath}/${key}/${subKey}` });
-                        }
-                      });
-                    }
-                  });
-                }
-              });
+              // Case 2: media keys of this folder. Only when the response is not
+              // a volume-keyed object, so the two cases never both fire.
+              if (mediaKeyNames.length > 0 && volumeKeys.every((k) => !isMediaKeyObject(listData[k]))) {
+                mediaKeyNames.forEach((key) => {
+                  const val = listData[key];
+                  if (Array.isArray(val)) {
+                    val.forEach((item: any) => {
+                      const fname = extractFilename(item);
+                      if (fname.toLowerCase().endsWith('.pdf')) {
+                        pdfFilenames.push({ name: fname, folder: `${dirPath}/${key}` });
+                      }
+                    });
+                  } else if (val && typeof val === 'object') {
+                    Object.entries(val).forEach(([subKey, subVal]) => {
+                      if (Array.isArray(subVal)) {
+                        subVal.forEach((item: any) => {
+                          const fname = extractFilename(item);
+                          if (fname.toLowerCase().endsWith('.pdf')) {
+                            pdfFilenames.push({ name: fname, folder: `${dirPath}/${key}/${subKey}` });
+                          }
+                        });
+                      }
+                    });
+                  }
+                });
+              }
             }
             return pdfFilenames;
           })
@@ -582,13 +638,19 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
           if (res.status === 'fulfilled' && Array.isArray(res.value)) {
             res.value.forEach((pf) => {
               const pdfUrl = `https://www.fayun.org/ftpadmin${pf.folder}/${pf.name}`;
-              if (!discoveredPdfs.some((p) => p.url === pdfUrl)) {
-                discoveredPdfs.push({
-                  num: discoveredPdfs.length + 1,
-                  filename: pf.displayName || pf.name,
-                  url: pdfUrl
-                });
-              }
+              // Dedupe on the canonical file identity, not the full URL. The
+              // same lecture notes can be reached through several probed
+              // directories (e.g. ".../bilu" and its parent, or a volume key that
+              // was mistaken for a folder), which yields different URLs for one
+              // physical file and previously produced duplicate entries.
+              const dedupeKey = canonicalPdfPath(pf.folder, pf.name);
+              if (seenPdfKeys.has(dedupeKey)) return;
+              seenPdfKeys.add(dedupeKey);
+              discoveredPdfs.push({
+                num: discoveredPdfs.length + 1,
+                filename: pf.displayName || pf.name,
+                url: pdfUrl
+              });
             });
           }
         });

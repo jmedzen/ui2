@@ -77,19 +77,42 @@ function isActiveDocumentType(contentType: string): boolean {
 }
 
 /**
+ * Content types the app renders inline (audio/video players, PDF iframe).
+ * Everything else is forced to download rather than render in our origin.
+ */
+const INLINE_MEDIA_TYPES = ['audio/', 'video/', 'application/pdf', 'application/octet-stream'];
+
+function isInlineMediaType(contentType: string): boolean {
+  const ct = contentType.toLowerCase();
+  return INLINE_MEDIA_TYPES.some((prefix) => ct.startsWith(prefix));
+}
+
+/**
  * Applies defence-in-depth headers to every proxied response.
  *
  * - `X-Content-Type-Options: nosniff` stops MIME confusion.
- * - A locked-down CSP neutralises any active content that slips through.
- * - Media is forced to download rather than render in this origin.
+ * - Media the app legitimately displays (audio/video/PDF) is served inline so
+ *   the players and the PDF iframe keep working. Everything else is forced to
+ *   download and gets a locked-down CSP, so it can never render as a document
+ *   in this origin.
+ * - A CSP `sandbox` is deliberately NOT applied to inline PDFs: it creates a
+ *   sandboxed origin that stops the browser's built-in PDF viewer from loading,
+ *   which made lecture notes download instead of displaying.
  */
-function applySecurityHeaders(headers: Headers, contentType: string, asAttachment = false) {
+function applySecurityHeaders(headers: Headers, contentType: string, harden = false) {
   headers.set('X-Content-Type-Options', 'nosniff');
-  headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
   headers.set('Referrer-Policy', 'no-referrer');
   headers.set('Cross-Origin-Resource-Policy', 'same-origin');
-  if (asAttachment && contentType && !contentType.startsWith('audio/') && !contentType.startsWith('video/')) {
-    headers.set('Content-Disposition', 'attachment');
+
+  const inline = !contentType || isInlineMediaType(contentType);
+
+  if (inline) {
+    headers.set('Content-Disposition', 'inline');
+  } else {
+    // Active content (SVG/XML/HTML lookalikes) never reaches here — those are
+    // rejected upstream — but this is the belt-and-braces layer.
+    headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
+    if (harden) headers.set('Content-Disposition', 'attachment');
   }
 }
 

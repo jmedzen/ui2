@@ -156,12 +156,15 @@ test('S3 — proxied responses are hardened', async (t) => {
     }
   });
 
-  await t.test('cache HIT carries nosniff and a locked-down CSP', async () => {
+  await t.test('cache HIT carries nosniff and inline disposition', async () => {
     const res = await GET(new NextRequest(`${HOST}/api/proxy?path=${encodeURIComponent(remotePath)}`));
     assert.strictEqual(res.status, 200);
     assert.strictEqual(res.headers.get('x-content-type-options'), 'nosniff');
-    assert.match(res.headers.get('content-security-policy') || '', /default-src 'none'/);
     assert.strictEqual(res.headers.get('cross-origin-resource-policy'), 'same-origin');
+    // Audio must stay inline: the players rely on it, and a sandboxed CSP would
+    // stop the browser rendering the media.
+    assert.strictEqual(res.headers.get('content-disposition'), 'inline');
+    assert.strictEqual(res.headers.get('content-security-policy'), null);
     // Drain the stream: the fixture is unlinked in t.after and an unread
     // file stream would raise ENOENT after the test has already finished.
     assert.strictEqual((await res.arrayBuffer()).byteLength, 2048);
@@ -174,7 +177,7 @@ test('S3 — proxied responses are hardened', async (t) => {
     const res = await GET(req);
     assert.strictEqual(res.status, 206);
     assert.strictEqual(res.headers.get('x-content-type-options'), 'nosniff');
-    assert.match(res.headers.get('content-security-policy') || '', /default-src 'none'/);
+    assert.strictEqual(res.headers.get('content-disposition'), 'inline');
     assert.strictEqual((await res.arrayBuffer()).byteLength, 100);
   });
 
@@ -209,7 +212,9 @@ test('S3 — proxied responses are hardened', async (t) => {
     }
   });
 
-  await t.test('non-media payloads are forced to download', async () => {
+  await t.test('PDFs are served inline so the viewer renders them', async () => {
+    // Regression: PDFs were forced to `attachment`, which made lecture notes
+    // download instead of displaying in the in-page iframe.
     const restore = stubFetch(
       () =>
         new Response('%PDF-1.4', {
@@ -219,7 +224,28 @@ test('S3 — proxied responses are hardened', async (t) => {
     );
     try {
       const res = await GET(new NextRequest(`${HOST}/api/proxy?path=${encodeURIComponent('/media/__s3_fixture__/doc.pdf')}`));
+      assert.strictEqual(res.headers.get('content-disposition'), 'inline');
+      // A CSP `sandbox` would stop the built-in PDF viewer from loading.
+      assert.strictEqual(res.headers.get('content-security-policy'), null);
+      await res.arrayBuffer();
+      await settle();
+    } finally {
+      restore();
+    }
+  });
+
+  await t.test('genuinely non-media payloads are still forced to download', async () => {
+    const restore = stubFetch(
+      () =>
+        new Response('binary', {
+          status: 200,
+          headers: { 'content-type': 'application/zip' }
+        })
+    );
+    try {
+      const res = await GET(new NextRequest(`${HOST}/api/proxy?path=${encodeURIComponent('/media/__s3_fixture__/bundle.zip')}`));
       assert.strictEqual(res.headers.get('content-disposition'), 'attachment');
+      assert.match(res.headers.get('content-security-policy') || '', /default-src 'none'/);
       await res.arrayBuffer();
       await settle();
     } finally {
