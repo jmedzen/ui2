@@ -46,7 +46,8 @@
 
 ## 🛠️ 技術棧 (Tech Stack)
 
-- **前端與框架**：Next.js 14+ / 15 (App Router), React 19, TypeScript
+- **前端與框架**：Next.js 16 (App Router), React 19, TypeScript
+- **執行環境**：**Node.js 24**（`.nvmrc` / `package.json` `engines` / Dockerfile 三處一致鎖定）
 - **狀態管理**：React Context API (`AudioContext`) + LocalStorage
 - **視覺與設計**：Vanilla CSS Custom Design System (Modern Zen Aesthetics Theme)
 - **後端 API Services**：Next.js Node.js Route Handlers (`/api/courses`, `/api/list-files`, `/api/proxy`, `/api/scan`)
@@ -96,7 +97,9 @@ fyweb/
 
 ### 1. 安裝依賴
 ```bash
-npm install
+# 需要 Node.js 24（專案已鎖定；nvm 使用者可直接執行 nvm use）
+node -v   # 應顯示 v24.x
+npm ci
 ```
 
 ### 2. 啟動開發伺服器 (Development Server)
