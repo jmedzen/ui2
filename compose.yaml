@@ -8,14 +8,30 @@ services:
     image: ghcr.io/jmedzen/ui2:latest
     container_name: ui2
     restart: always
-    # The image already runs as the unprivileged "node" user; keep it that way.
-    user: "node"
-    # Least privilege: no new privileges can be gained and all capabilities are
-    # dropped. The app only needs to read its bundle and write ./data.
+    # NOTE: no `user:` here on purpose.
+    #
+    # ./data is a bind mount, so its ownership comes from the host and is not
+    # something the image can fix at build time. The container previously forced
+    # `user: "node"` (uid 1000); when the host directory was owned by a different
+    # uid, the app could not create data/logs/scan.lock and every maintenance
+    # trigger failed with "A scan or repair task is already running".
+    #
+    # The entrypoint now starts as root, aligns ownership of the data directory,
+    # and immediately re-execs the app as "node" via su-exec. The application
+    # process itself never has root, and drops all capabilities on setuid.
+    #
+    # Least privilege: no new privileges can be gained. Capabilities are dropped
+    # wholesale and only the four the ownership fix-up genuinely needs are
+    # restored; none of them survive the drop to the unprivileged user.
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN # reassign ./data to the app uid
+      - DAC_OVERRIDE # create data/logs inside a mount owned by another uid
+      - SETUID # su-exec: drop to "node"
+      - SETGID # su-exec: adopt the "node" group
     ports:
       - "8410:8410"
     environment:

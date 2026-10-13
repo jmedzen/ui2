@@ -5,6 +5,7 @@ import {
   authorizeTaskRequest,
   acquireScanLock,
   isScanLocked,
+  getScanLockInfo,
   appendLog,
   readRecentLogs,
   readDbInfo,
@@ -22,6 +23,7 @@ export async function GET() {
       status: 'active',
       schedule: 'Web Trigger / Manual',
       isRunning: isScanLocked(),
+      lockHolder: getScanLockInfo(),
       lastScan: dbInfo.generated_at,
       totalCourses: dbInfo.total_courses,
       recentLogs: readRecentLogs(),
@@ -40,9 +42,28 @@ export async function POST(request: Request): Promise<NextResponse> {
       return NextResponse.json({ error: auth.message }, { status: auth.status });
     }
 
-    if (!acquireScanLock()) {
+    const lock = acquireScanLock();
+    if (!lock.ok) {
+      // Distinguish "someone else is working" from "this container cannot write
+      // its data volume". The old code collapsed both into a 409 that read
+      // "already running", which sent the user chasing a phantom task.
+      if (lock.reason === 'unavailable') {
+        return NextResponse.json(
+          {
+            error: `無法寫入任務鎖定檔，資料目錄可能不可寫（${lock.error}）`,
+            status: 'unavailable',
+            detail: lock.error
+          },
+          { status: 503 }
+        );
+      }
+      const who = lock.holder ? `（程序 ${lock.holder.pid}，已執行 ${lock.holder.age}）` : '';
       return NextResponse.json(
-        { error: 'A scan or repair task is already running', status: 'busy' },
+        {
+          error: `已有掃描或修復任務正在執行中${who}`,
+          status: 'busy',
+          lockHolder: lock.holder
+        },
         { status: 409 }
       );
     }

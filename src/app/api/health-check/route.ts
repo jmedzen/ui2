@@ -4,6 +4,7 @@ import {
   authorizeTaskRequest,
   acquireScanLock,
   isScanLocked,
+  getScanLockInfo,
   appendLog,
   readRecentLogs,
   readDbInfo,
@@ -19,6 +20,7 @@ export async function GET() {
     return NextResponse.json({
       status: 'active',
       isRunning: isScanLocked(),
+      lockHolder: getScanLockInfo(),
       lastAutoHeal: dbInfo.last_auto_healed_at,
       totalCourses: dbInfo.total_courses,
       totalRepaired: dbInfo.total_repaired,
@@ -37,9 +39,26 @@ export async function POST(request: Request): Promise<NextResponse> {
       return NextResponse.json({ error: auth.message }, { status: auth.status });
     }
 
-    if (!acquireScanLock()) {
+    const lock = acquireScanLock();
+    if (!lock.ok) {
+      // See /api/scan: an unwritable data volume is a 503, not a 409.
+      if (lock.reason === 'unavailable') {
+        return NextResponse.json(
+          {
+            error: `無法寫入任務鎖定檔，資料目錄可能不可寫（${lock.error}）`,
+            status: 'unavailable',
+            detail: lock.error
+          },
+          { status: 503 }
+        );
+      }
+      const who = lock.holder ? `（程序 ${lock.holder.pid}，已執行 ${lock.holder.age}）` : '';
       return NextResponse.json(
-        { error: 'A scan or repair task is already running', status: 'busy' },
+        {
+          error: `已有掃描或修復任務正在執行中${who}`,
+          status: 'busy',
+          lockHolder: lock.holder
+        },
         { status: 409 }
       );
     }

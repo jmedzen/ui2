@@ -140,6 +140,10 @@ docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name fyweb fyweb:latest
 
 > **📌 持久化說明**：掛載 `./data` 目錄可確保資料庫 `data/courses_db.json`（包含所有路徑修正與掃描同步）、`data/media_cache/`（網頁主機媒體快取存檔）以及 `data/logs/` 在更新 Docker 映像時**永久保存**，不被容器刪除。
 
+> **🔧 權限自動修正**：容器啟動時會以 root 短暫執行 `docker-entrypoint.sh`，將 `./data` 的擁有者調整為應用程式使用者（uid 1000 `node`），隨即透過 `su-exec` 降權執行應用程式。因此**不需要**在主機手動 `chown`。若仍看到「資料目錄無法寫入」的錯誤，請確認 `./data/logs` 可寫，且未以 `--user` 指定了無法寫入該目錄的 uid。
+
+> **🩺 任務鎖定（Task Lock）**：`data/logs/scan.lock` 記錄持有任務的 PID。伺服器啟動時會自動清除前一次執行遺留的鎖定，且鎖定僅在持有程序仍存活時才生效，因此 `docker compose restart` 不會再造成「已有任務正在執行中」的永久誤判。
+
 ---
 
 ## 🔐 環境變數與安全設定 (Environment Variables)

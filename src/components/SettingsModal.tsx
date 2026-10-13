@@ -150,7 +150,17 @@ export default function SettingsModal({
           await onRefreshCourses();
         }
       } else {
-        const errorMsg = `[${timestamp}] ❌ [系統錯誤] 媒體同步失敗: ${data.error || '未知錯誤'}`;
+        // Surface an actionable cause. The server distinguishes genuine
+        // contention (409) from an unusable data directory (503); the latter
+        // used to be reported as "already running", which sent users looking
+        // for a task that did not exist.
+        const hint =
+          data.status === 'unavailable'
+            ? '（資料目錄無法寫入，請確認 ./data 掛載權限）'
+            : data.status === 'busy'
+              ? '（請稍候，或檢查是否有殘留的掃描程序）'
+              : '';
+        const errorMsg = `[${timestamp}] ❌ [系統錯誤] 媒體同步失敗: ${data.error || '未知錯誤'}${hint}`;
         setLogs((prev) => `${prev}\n${errorMsg}`);
       }
     } catch (e: any) {
@@ -188,7 +198,13 @@ export default function SettingsModal({
           await onRefreshCourses();
         }
       } else {
-        const errorMsg = `[${timestamp}] ❌ [系統錯誤] 巡檢修復失敗: ${data.error || '未知錯誤'}`;
+        const hint =
+          data.status === 'unavailable'
+            ? '（資料目錄無法寫入，請確認 ./data 掛載權限）'
+            : data.status === 'busy'
+              ? '（請稍候，或檢查是否有殘留的掃描程序）'
+              : '';
+        const errorMsg = `[${timestamp}] ❌ [系統錯誤] 巡檢修復失敗: ${data.error || '未知錯誤'}${hint}`;
         setLogs((prev) => `${prev}\n${errorMsg}`);
       }
     } catch (e: any) {

@@ -43,7 +43,8 @@ ENV PROXY_PRELOAD_MAX_PER_MINUTE=20
 
 # Python3 runs the media scanning / self-healing scripts. tini gives the
 # container a real PID 1 so signals and child reaping behave correctly.
-RUN apk add --no-cache python3 tini
+# su-exec lets the entrypoint drop from root to "node" after fixing ownership.
+RUN apk add --no-cache python3 tini su-exec
 
 # Copy application files. node_modules comes from the production-only stage.
 COPY --from=builder /app/package.json ./package.json
@@ -52,20 +53,24 @@ COPY --from=builder /app/.next ./.next
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/src/data ./src/data
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # The app writes its cache, logs and catalog database under ./data, which is a
-# mounted volume. Create it up-front and hand ownership to the unprivileged user
-# so the process never needs root.
+# mounted volume.
 RUN mkdir -p /app/data/media_cache /app/data/logs \
-    && chown -R node:node /app/data /app/.next /app/src/data
+    && chown -R node:node /app/data /app/.next /app/src/data \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8410
-
-# Run as the built-in unprivileged "node" user instead of root.
-USER node
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD wget --spider -q http://localhost:8410/api/courses || exit 1
 
-ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["npm", "run", "start"]
+# NOTE: the image intentionally does NOT set `USER node` here. The entrypoint
+# starts as root only to align the ownership of the bind-mounted ./data volume
+# (which the container does not control at build time) and then immediately
+# re-execs this same command as "node" via su-exec. The application process
+# itself is never privileged. Starting the container with `--user` skips that
+# fix-up entirely and runs unprivileged from the first instruction.
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["/sbin/tini", "--", "npm", "run", "start"]

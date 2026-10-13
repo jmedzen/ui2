@@ -1,15 +1,34 @@
 import { spawn, type ChildProcess } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 /** Name reported in logs/UI for the scanner task. */
 export const SCAN_TASK = 'scan';
 export const HEAL_TASK = 'heal';
 
-const LOG_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'logs');
-const SCANNER_LOG = path.join(LOG_DIR, 'scanner.log');
-const LOCK_FILE = path.join(LOG_DIR, 'scan.lock');
+const DEFAULT_LOG_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'logs');
+
+/**
+ * Resolved lazily so tests can redirect it.
+ *
+ * This used to be a module-level constant baked at import time, which forced
+ * every test suite to write its lock and log into the *real* `data/logs`. That
+ * made it possible for a test to plant a lock the running dev server then
+ * honoured. TASK_LOG_DIR now lets the harness point somewhere disposable.
+ */
+function logDir(): string {
+  return process.env.TASK_LOG_DIR || DEFAULT_LOG_DIR;
+}
+
+function scannerLogPath(): string {
+  return path.join(logDir(), 'scanner.log');
+}
+
+function lockFilePath(): string {
+  return path.join(logDir(), 'scan.lock');
+}
 
 /** Maximum number of trailing log lines returned to the client. */
 const LOG_TAIL_LINES = 500;
@@ -19,17 +38,18 @@ const LOG_READ_MAX_BYTES = 2 * 1024 * 1024;
 const LOCK_STALE_MS = 30 * 60 * 1000;
 
 export function ensureLogDir(): string {
-  if (!fs.existsSync(LOG_DIR)) {
+  const dir = logDir();
+  if (!fs.existsSync(dir)) {
     try {
-      fs.mkdirSync(LOG_DIR, { recursive: true });
+      fs.mkdirSync(dir, { recursive: true });
     } catch {}
   }
-  return LOG_DIR;
+  return dir;
 }
 
 export function getScannerLogPath(): string {
   ensureLogDir();
-  return SCANNER_LOG;
+  return scannerLogPath();
 }
 
 /**
@@ -191,44 +211,226 @@ export function authorizeTaskRequest(request: Request): { ok: true } | { ok: fal
   return { ok: true };
 }
 
-/** Attempts to take the single-writer lock. Returns false when already held. */
-export function acquireScanLock(): boolean {
-  ensureLogDir();
+/** Metadata describing who currently holds the maintenance lock. */
+export interface LockInfo {
+  pid: number;
+  hostname: string;
+  startedAt: string;
+  /** Human-readable age, e.g. "3m 20s". */
+  age: string;
+}
+
+/**
+ * Outcome of trying to take the lock.
+ *
+ * This is deliberately not a boolean. The old signature returned `false` for
+ * every non-EEXIST failure, so an unwritable `data/logs` (a root-owned volume on
+ * a non-root container) was reported to the user as "a task is already running"
+ * — a permission problem disguised as a concurrency conflict, with no way to
+ * tell them apart from the UI.
+ */
+export type LockResult =
+  | { ok: true }
+  | { ok: false; reason: 'busy'; holder: LockInfo | null }
+  | { ok: false; reason: 'unavailable'; error: string };
+
+function formatAge(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+/** Reads and parses the lock file, tolerating the legacy bare-pid format. */
+function readLockInfo(): LockInfo | null {
   try {
-    if (fs.existsSync(LOCK_FILE)) {
-      const stat = fs.statSync(LOCK_FILE);
-      if (Date.now() - stat.mtimeMs < LOCK_STALE_MS) {
-        return false;
-      }
-      // Stale lock from a crashed run; reclaim it.
-      fs.unlinkSync(LOCK_FILE);
+    const raw = fs.readFileSync(lockFilePath(), 'utf-8').trim();
+    if (!raw) return null;
+    // Current format is JSON; the original was "<pid>@<iso timestamp>".
+    if (raw.startsWith('{')) {
+      const parsed = JSON.parse(raw) as Partial<LockInfo>;
+      if (typeof parsed.pid !== 'number') return null;
+      return {
+        pid: parsed.pid,
+        hostname: parsed.hostname || 'unknown',
+        startedAt: parsed.startedAt || 'unknown',
+        age: parsed.age || 'unknown'
+      };
     }
-    fs.writeFileSync(LOCK_FILE, `${process.pid}@${new Date().toISOString()}\n`, { flag: 'wx' });
+    const [pidPart, startedAt] = raw.split('@');
+    const pid = Number.parseInt(pidPart, 10);
+    if (!Number.isFinite(pid)) return null;
+    return { pid, hostname: 'unknown', startedAt: startedAt || 'unknown', age: 'unknown' };
+  } catch {
+    return null;
+  }
+}
+
+/** True when `pid` is a live process we can see. */
+function isProcessAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    // Signal 0 performs error checking without delivering a signal.
+    process.kill(pid, 0);
     return true;
   } catch (e: unknown) {
-    if ((e as NodeJS.ErrnoException)?.code === 'EEXIST') return false;
-    console.warn('[Lock] Failed to acquire scan lock:', e);
+    const code = (e as NodeJS.ErrnoException)?.code;
+    // EPERM means the process exists but belongs to another user.
+    return code === 'EPERM';
+  }
+}
+
+/**
+ * Whether an existing lock is still owned by a live task.
+ *
+ * The previous implementation trusted mtime alone, so any lock file younger
+ * than 30 minutes blocked new runs even when the process that created it had
+ * exited — which is exactly what a `docker compose restart` leaves behind.
+ * A long scan therefore became permanently un-triggerable.
+ */
+function lockIsLive(stat: fs.Stats): boolean {
+  if (Date.now() - stat.mtimeMs >= LOCK_STALE_MS) return false;
+
+  const info = readLockInfo();
+  if (!info) {
+    // Unparseable: fall back to age so we never wedge forever.
+    return Date.now() - stat.mtimeMs < LOCK_STALE_MS;
+  }
+
+  // A pid is only meaningful for a process on this same machine; in a container
+  // the lock's pid namespace is our own, so this check is valid there too.
+  const sameHost = info.hostname === os.hostname() || info.hostname === 'unknown';
+  if (sameHost && !isProcessAlive(info.pid)) {
+    console.warn(`[Lock] Reclaiming lock from dead pid ${info.pid} (started ${info.startedAt}).`);
     return false;
+  }
+  return true;
+}
+
+function tryUnlinkLock(): void {
+  try {
+    if (fs.existsSync(lockFilePath())) fs.unlinkSync(lockFilePath());
+  } catch {}
+}
+
+/** Attempts to take the single-writer lock. */
+export function acquireScanLock(): LockResult {
+  const dir = ensureLogDir();
+  const lockPath = lockFilePath();
+
+  try {
+    if (fs.existsSync(lockPath)) {
+      const stat = fs.statSync(lockPath);
+      if (lockIsLive(stat)) {
+        const info = readLockInfo();
+        return {
+          ok: false,
+          reason: 'busy',
+          holder: info ? { ...info, age: formatAge(Date.now() - stat.mtimeMs) } : null
+        };
+      }
+      // Stale or orphaned lock; reclaim it.
+      tryUnlinkLock();
+    }
+
+    fs.writeFileSync(
+      lockPath,
+      JSON.stringify({ pid: process.pid, hostname: os.hostname(), startedAt: new Date().toISOString() }),
+      { flag: 'wx' }
+    );
+    return { ok: true };
+  } catch (e: unknown) {
+    const err = e as NodeJS.ErrnoException;
+    if (err?.code === 'EEXIST') {
+      const stat = fs.existsSync(lockPath) ? fs.statSync(lockPath) : null;
+      const info = readLockInfo();
+      return {
+        ok: false,
+        reason: 'busy',
+        holder: info && stat ? { ...info, age: formatAge(Date.now() - stat.mtimeMs) } : info
+      };
+    }
+    // EACCES/EROFS/ENOSPC and friends: the lock cannot be written at all. This
+    // is an environment problem, not a concurrency one, and must be reported
+    // as such instead of masquerading as "already running".
+    const detail = `${err?.code || 'UNKNOWN'}: ${err?.message || String(e)}`;
+    console.error(`[Lock] Cannot write lock file at ${lockPath} (dir=${dir}): ${detail}`);
+    return { ok: false, reason: 'unavailable', error: detail };
   }
 }
 
 export function releaseScanLock(): void {
-  try {
-    if (fs.existsSync(LOCK_FILE)) fs.unlinkSync(LOCK_FILE);
-  } catch {}
+  tryUnlinkLock();
 }
 
+/** Whether a maintenance task currently holds the lock. */
 export function isScanLocked(): boolean {
   try {
-    if (!fs.existsSync(LOCK_FILE)) return false;
-    const stat = fs.statSync(LOCK_FILE);
-    if (Date.now() - stat.mtimeMs >= LOCK_STALE_MS) {
-      fs.unlinkSync(LOCK_FILE);
+    if (!fs.existsSync(lockFilePath())) return false;
+    const stat = fs.statSync(lockFilePath());
+    if (!lockIsLive(stat)) {
+      tryUnlinkLock();
       return false;
     }
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Details of the current lock holder, or null when unlocked. */
+export function getScanLockInfo(): LockInfo | null {
+  try {
+    if (!fs.existsSync(lockFilePath())) return null;
+    const stat = fs.statSync(lockFilePath());
+    if (!lockIsLive(stat)) return null;
+    const info = readLockInfo();
+    return info ? { ...info, age: formatAge(Date.now() - stat.mtimeMs) } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Probes whether the log directory can actually be written.
+ *
+ * Called once at boot so a misconfigured volume is reported in the logs
+ * immediately, rather than surfacing as a confusing error the first time a user
+ * presses a maintenance button.
+ */
+export function checkLogDirWritable(): { writable: boolean; dir: string; error?: string } {
+  const dir = ensureLogDir();
+  const probe = path.join(dir, `.write-probe-${process.pid}`);
+  try {
+    fs.writeFileSync(probe, 'ok');
+    fs.unlinkSync(probe);
+    return { writable: true, dir };
+  } catch (e: unknown) {
+    const err = e as NodeJS.ErrnoException;
+    return { writable: false, dir, error: `${err?.code || 'UNKNOWN'}: ${err?.message || String(e)}` };
+  }
+}
+
+/**
+ * Clears a lock left behind by a previous, now-dead process.
+ *
+ * Runs once at server start. Without this, restarting the container during a
+ * scan left a lock that blocked every subsequent trigger for 30 minutes.
+ */
+export function reclaimOrphanedLock(): LockInfo | null {
+  try {
+    const lockPath = lockFilePath();
+    if (!fs.existsSync(lockPath)) return null;
+    const stat = fs.statSync(lockPath);
+    if (lockIsLive(stat)) return null;
+    const info = readLockInfo();
+    tryUnlinkLock();
+    return info;
+  } catch {
+    return null;
   }
 }
 

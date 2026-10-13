@@ -60,6 +60,27 @@ test('UI, Mobile Configuration & Theme Integrity Suite', async (t) => {
     assert.ok(dockerfileContent.includes('ENV MEDIA_CACHE_MAX_BYTES=21474836480'), 'Dockerfile must specify 20GB limit');
   });
 
+  // The container must not run the application as root, but it does need to be
+  // able to align the ownership of the bind-mounted ./data volume. The
+  // entrypoint is what reconciles those: root only for the chown, then su-exec
+  // down to "node". These assertions lock in that the app process stays
+  // unprivileged even though the image no longer declares `USER node`.
+  await t.test('Docker entrypoint drops privileges to the node user', () => {
+    const dockerfile = fs.readFileSync(path.join(process.cwd(), 'Dockerfile'), 'utf-8');
+    assert.match(dockerfile, /ENTRYPOINT \["\/usr\/local\/bin\/docker-entrypoint\.sh"\]/);
+
+    const entrypoint = fs.readFileSync(path.join(process.cwd(), 'docker-entrypoint.sh'), 'utf-8');
+    assert.ok(entrypoint.includes('su-exec'), 'entrypoint must drop privileges via su-exec');
+    assert.ok(entrypoint.includes('id -u node'), 'entrypoint must resolve the node uid');
+    assert.ok(entrypoint.includes('exec su-exec "$APP_UID:$APP_GID" "$@"'), 'entrypoint must exec the app as node');
+
+    // The container may only keep the capabilities the ownership fix-up needs.
+    const compose = fs.readFileSync(path.join(process.cwd(), 'compose.yaml'), 'utf-8');
+    assert.ok(compose.includes('no-new-privileges:true'), 'no-new-privileges must stay enabled');
+    assert.ok(compose.includes('cap_drop:'), 'capabilities must still be dropped wholesale');
+    assert.ok(!/^\s*user:\s/m.test(compose), 'compose must not force a uid that cannot write the bind mount');
+  });
+
   await t.test('brand header in TreeNav and mobile navbar are interactive with return-to-home support', () => {
     const treeNavPath = path.join(process.cwd(), 'src', 'components', 'TreeNav.tsx');
     const treeNavContent = fs.readFileSync(treeNavPath, 'utf-8');
