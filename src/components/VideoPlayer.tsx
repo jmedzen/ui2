@@ -90,17 +90,43 @@ export default function VideoPlayer({
     if (!currentTrack || isServerCached) return;
 
     let isMounted = true;
-    const interval = setInterval(async () => {
-      const isCached = await fetchCacheStatus(currentTrack.proxyUrl);
+    let interval: ReturnType<typeof setInterval> | null = null;
+    const proxyUrl = currentTrack.proxyUrl;
+
+    const stopPolling = () => {
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const check = async () => {
+      const isCached = await fetchCacheStatus(proxyUrl);
       if (isCached && isMounted) {
         setIsServerCached(true);
-        clearInterval(interval);
+        stopPolling();
       }
-    }, 3000);
+    };
+
+    const startPolling = () => {
+      if (interval !== null) return;
+      interval = setInterval(check, 3000);
+    };
+
+    // Pause polling while the tab is hidden to avoid background request churn.
+    const handleVisibility = () => {
+      if (document.hidden) stopPolling();
+      else startPolling();
+    };
+
+    check();
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [currentTrack?.proxyUrl, isServerCached]);
 

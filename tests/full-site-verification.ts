@@ -88,14 +88,19 @@ async function runFullSiteVerification() {
     const layoutContent = fs.readFileSync(path.join(process.cwd(), 'src', 'app', 'layout.tsx'), 'utf-8');
     const cssContent = fs.readFileSync(path.join(process.cwd(), 'src', 'app', 'globals.css'), 'utf-8');
 
-    const hasExplicitHead = layoutContent.includes('<head>') && layoutContent.includes('<meta name="viewport"');
+    // Next.js manages <head> via the `viewport` export; a hand-written
+    // <meta name="viewport"> would be duplicated in the rendered document.
+    const hasViewportExport =
+      layoutContent.includes('export const viewport') &&
+      layoutContent.includes("width: 'device-width'");
+    const hasNoDuplicateMeta = !layoutContent.includes('<meta name="viewport"');
     const hasMobileQuery = cssContent.includes('@media (max-width: 960px)');
     const hasClassOverride = cssContent.includes('.app-root.is-mobile-screen');
 
     results.push({
       name: '行動版瀏覽器與 Firefox 相容性 (Mobile Viewport)',
-      passed: hasExplicitHead && hasMobileQuery && hasClassOverride,
-      details: `原生 <head> Viewport: ${hasExplicitHead ? '已配置' : '缺失'} | 960px 響應式斷點: ${hasMobileQuery ? '已配置' : '缺失'} | JS 動態類別保底: ${hasClassOverride ? '已配置' : '缺失'}`
+      passed: hasViewportExport && hasNoDuplicateMeta && hasMobileQuery && hasClassOverride,
+      details: `Next.js viewport export: ${hasViewportExport ? '已配置' : '缺失'} | 無重複 meta viewport: ${hasNoDuplicateMeta ? '是' : '否'} | 960px 響應式斷點: ${hasMobileQuery ? '已配置' : '缺失'} | JS 動態類別保底: ${hasClassOverride ? '已配置' : '缺失'}`
     });
     console.log(`✅ 行動相容檢驗通過: 包含原生 Head Viewport 與雙重判定保底\n`);
   } catch (err: any) {

@@ -33,6 +33,15 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/src/data ./src/data
 
+# The app writes its cache, logs and catalog database under ./data, which is a
+# mounted volume. Create it up-front and hand ownership to the unprivileged user
+# so the process never needs root.
+RUN mkdir -p /app/data/media_cache /app/data/logs \
+    && chown -R node:node /app/data /app/.next /app/src/data
+
 EXPOSE 8410
+
+# Run as the built-in unprivileged "node" user instead of root.
+USER node
 
 CMD ["npm", "run", "start"]

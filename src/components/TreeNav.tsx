@@ -33,9 +33,6 @@ export default function TreeNav({
 
   const [mediaFilter, setMediaFilter] = useState<MediaFilterType>('all');
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
-  const [isScanning, setIsScanning] = useState<boolean>(false);
-  const [isHealing, setIsHealing] = useState<boolean>(false);
-  const [scanMessage, setScanMessage] = useState<string | null>(null);
 
   // Recently Visited Courses History
   const [recentCourseIds, setRecentCourseIds] = useState<number[]>([]);
@@ -66,8 +63,12 @@ export default function TreeNav({
   }, [selectedCourse?.id]);
 
   const recentList = useMemo(() => {
+    // Index the catalog once so the "recently studied" lookup stays O(n) overall
+    // instead of running a linear scan per recent id.
+    const byId = new Map<number, CourseItem>();
+    for (const c of courses) byId.set(c.id, c);
     return recentCourseIds
-      .map((id) => courses.find((c) => c.id === id))
+      .map((id) => byId.get(id))
       .filter((c): c is CourseItem => Boolean(c));
   }, [recentCourseIds, courses]);
 
@@ -88,9 +89,9 @@ export default function TreeNav({
 
       // 2. Filter by search query
       if (q) {
-        const matchName = course.name.toLowerCase().includes(q);
-        const matchLoc = course.location.toLowerCase().includes(q);
-        const matchYear = course.time.toLowerCase().includes(q);
+        const matchName = (course.name || '').toLowerCase().includes(q);
+        const matchLoc = (course.location || '').toLowerCase().includes(q);
+        const matchYear = (course.time || '').toLowerCase().includes(q);
         const matchTopic = (course.topic_title || '').toLowerCase().includes(q);
         if (!matchName && !matchLoc && !matchYear && !matchTopic) {
           return;
@@ -181,44 +182,6 @@ export default function TreeNav({
 
   const collapseAll = () => {
     setExpandedNodes({});
-  };
-
-  const handleWebScanTrigger = async () => {
-    try {
-      setIsScanning(true);
-      setScanMessage('正在連線 fayun.org 掃描媒體庫...');
-      const res = await fetch('/api/scan', { method: 'POST' });
-      if (res.ok) {
-        setScanMessage('✅ 媒體庫掃描與同步完成！');
-        await onRefreshCourses();
-      } else {
-        setScanMessage('❌ 掃描失敗');
-      }
-    } catch (e: any) {
-      setScanMessage(`❌ 錯誤: ${e.message}`);
-    } finally {
-      setIsScanning(false);
-      setTimeout(() => setScanMessage(null), 4000);
-    }
-  };
-
-  const handleAutoHealTrigger = async () => {
-    try {
-      setIsHealing(true);
-      setScanMessage('🚑 正在自動巡檢並自我修復全站媒體/PDF鏈結...');
-      const res = await fetch('/api/health-check', { method: 'POST' });
-      if (res.ok) {
-        setScanMessage('✅ 巡檢與自我修復完成！已更新所有正確鏈結！');
-        await onRefreshCourses();
-      } else {
-        setScanMessage('❌ 巡檢修復失敗');
-      }
-    } catch (e: any) {
-      setScanMessage(`❌ 錯誤: ${e.message}`);
-    } finally {
-      setIsHealing(false);
-      setTimeout(() => setScanMessage(null), 5000);
-    }
   };
 
   const renderTreeNodes = (nodes: TreeNode[], depth = 0) => {

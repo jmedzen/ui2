@@ -27,6 +27,19 @@ export interface CourseItem {
   pdfs: PdfItem[];
 }
 
+/**
+ * Fields that are present in the shipped catalog but were previously accessed
+ * without being declared, which made the optional-chaining in TreeNav look
+ * redundant to the type checker and hid genuine null risks.
+ */
+export interface CourseDatabase {
+  generated_at?: string;
+  total_courses?: number;
+  last_auto_healed_at?: string;
+  total_repaired_courses?: number;
+  courses: CourseItem[];
+}
+
 export interface RemoteFile {
   name: string;
   type: string; // 'file' | 'dir'

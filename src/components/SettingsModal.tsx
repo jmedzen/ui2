@@ -138,14 +138,15 @@ export default function SettingsModal({
 
         // Poll logs for up to 30 seconds to stream background progress and detect completion
         for (let i = 0; i < 12; i++) {
-          await new Promise((r) => setTimeout(r, 2500));
+          if (!(await interruptibleSleep(2500))) return;
           const latestLogs = await fetchLogs();
+          if (!isMountedRef.current) return;
           if (latestLogs && (latestLogs.includes('Scan finished') || latestLogs.includes('Error scanning'))) {
             break;
           }
         }
 
-        if (onRefreshCourses) {
+        if (onRefreshCourses && isMountedRef.current) {
           await onRefreshCourses();
         }
       } else {
@@ -156,7 +157,7 @@ export default function SettingsModal({
       const errorMsg = `[${new Date().toLocaleTimeString('zh-TW', { hour12: false })}] ❌ [系統錯誤] 執行同步出錯: ${e.message}`;
       setLogs((prev) => `${prev}\n${errorMsg}`);
     } finally {
-      setIsTriggeringScan(false);
+      if (isMountedRef.current) setIsTriggeringScan(false);
     }
   };
 
@@ -175,14 +176,15 @@ export default function SettingsModal({
 
         // Poll logs for up to 35 seconds to stream background healing progress and detect completion
         for (let i = 0; i < 14; i++) {
-          await new Promise((r) => setTimeout(r, 2500));
+          if (!(await interruptibleSleep(2500))) return;
           const latestLogs = await fetchLogs();
+          if (!isMountedRef.current) return;
           if (latestLogs && (latestLogs.includes('自我巡檢與修復完成') || latestLogs.includes('Scan finished') || latestLogs.includes('Inspection finished'))) {
             break;
           }
         }
 
-        if (onRefreshCourses) {
+        if (onRefreshCourses && isMountedRef.current) {
           await onRefreshCourses();
         }
       } else {
@@ -193,7 +195,7 @@ export default function SettingsModal({
       const errorMsg = `[${new Date().toLocaleTimeString('zh-TW', { hour12: false })}] ❌ [系統錯誤] 執行巡檢修復出錯: ${e.message}`;
       setLogs((prev) => `${prev}\n${errorMsg}`);
     } finally {
-      setIsTriggeringHeal(false);
+      if (isMountedRef.current) setIsTriggeringHeal(false);
     }
   };
 
@@ -206,6 +208,29 @@ export default function SettingsModal({
   };
 
   const justResizedRef = useRef<boolean>(false);
+
+  // Tracks whether the modal is still mounted; the long-running scan/heal
+  // polling loops below must not keep fetching and calling setState after the
+  // user closes the dialog.
+  const isMountedRef = useRef<boolean>(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  /** Sleeps in short slices so an unmount can interrupt a long poll loop. */
+  const interruptibleSleep = useCallback(async (ms: number) => {
+    const step = 250;
+    let elapsed = 0;
+    while (elapsed < ms) {
+      if (!isMountedRef.current) return false;
+      await new Promise((r) => setTimeout(r, Math.min(step, ms - elapsed)));
+      elapsed += step;
+    }
+    return isMountedRef.current;
+  }, []);
 
   // Mouse Drag Resizing for Window Width
   const handleMouseDownResize = (e: React.MouseEvent) => {

@@ -8,6 +8,14 @@ services:
     image: ghcr.io/jmedzen/ui2:latest
     container_name: ui2
     restart: always
+    # The image already runs as the unprivileged "node" user; keep it that way.
+    user: "node"
+    # Least privilege: no new privileges can be gained and all capabilities are
+    # dropped. The app only needs to read its bundle and write ./data.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     ports:
       - "8410:8410"
     environment:
@@ -15,6 +23,11 @@ services:
       - PORT=8410
       - HOSTNAME=0.0.0.0
       - MEDIA_CACHE_MAX_BYTES=21474836480 # 20 GB Disk Cache Limit
+      - MEDIA_CACHE_MAX_CONCURRENCY=3 # Cap simultaneous background downloads
+      - PROXY_PRELOAD_MAX_PER_MINUTE=20 # Per-client preload budget
+      # Set TASK_API_TOKEN to require a bearer token for scan/heal triggers.
+      # When unset, only same-origin browser requests are accepted.
+      # - TASK_API_TOKEN=change-me
     volumes:
       - ./data:/app/data
     healthcheck:

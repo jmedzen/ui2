@@ -9,6 +9,39 @@ export interface SpeedTestResult {
 
 const speedCache = new Map<string, { route: 'direct' | 'proxy'; timestamp: number }>();
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 Minutes client route preference memory
+const MAX_SPEED_CACHE_ENTRIES = 500; // Bound the route-preference memory
+
+/** Probe budget: never buffer more than this many bytes while measuring speed. */
+const PROBE_MAX_BYTES = 32 * 1024;
+const PROBE_TIMEOUT_MS = 2000;
+
+/**
+ * Evicts expired entries, then trims the oldest insertions if still oversized.
+ * The previous implementation only checked TTL on read and never removed
+ * anything, so the map grew for the whole lifetime of the tab.
+ */
+function pruneSpeedCache(now: number) {
+  for (const [key, entry] of speedCache.entries()) {
+    if (now - entry.timestamp >= CACHE_TTL_MS) {
+      speedCache.delete(key);
+    }
+  }
+  while (speedCache.size > MAX_SPEED_CACHE_ENTRIES) {
+    const oldest = speedCache.keys().next().value;
+    if (oldest === undefined) break;
+    speedCache.delete(oldest);
+  }
+}
+
+function rememberRoute(path: string, route: 'direct' | 'proxy') {
+  const now = Date.now();
+  // Refresh insertion order so the trim below behaves as LRU.
+  speedCache.delete(path);
+  speedCache.set(path, { route, timestamp: now });
+  if (speedCache.size > MAX_SPEED_CACHE_ENTRIES) {
+    pruneSpeedCache(now);
+  }
+}
 
 /**
  * Sanitizes path or URL to prevent double-encoding of /api/proxy
@@ -19,10 +52,20 @@ export function cleanMediaPath(pathOrUrl: string): string {
   while (result.includes('/api/proxy?path=') || result.includes('/api/proxy?url=')) {
     if (result.includes('/api/proxy?path=')) {
       const raw = result.split('/api/proxy?path=')[1];
-      result = decodeURIComponent(raw.split('&')[0]);
+      const val = raw.split('&')[0];
+      try {
+        result = decodeURIComponent(val);
+      } catch {
+        result = val;
+      }
     } else if (result.includes('/api/proxy?url=')) {
       const raw = result.split('/api/proxy?url=')[1];
-      result = decodeURIComponent(raw.split('&')[0]);
+      const val = raw.split('&')[0];
+      try {
+        result = decodeURIComponent(val);
+      } catch {
+        result = val;
+      }
     }
   }
   return result;
@@ -70,35 +113,56 @@ export function triggerBackgroundServerCache(pathOrUrl: string): void {
 }
 
 /**
- * Measures download speed chunk (32KB lightweight probe) for a target URL
+ * Measures download speed of a bounded probe chunk (~32KB).
+ *
+ * The body is read through a stream reader that is cancelled as soon as
+ * PROBE_MAX_BYTES have arrived. Previously this used `res.blob()`, which
+ * buffers the *entire* response: when an origin ignores the Range header and
+ * answers 200 with a full video, the browser would pull the whole file into
+ * memory. The abort timer is also kept armed until the read finishes, so a
+ * stalled transfer cannot hang the probe forever.
  */
 async function measureChunkSpeed(targetUrl: string): Promise<number> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   const startTime = performance.now();
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 sec timeout for probe
 
+  try {
     const res = await fetch(targetUrl, {
       method: 'GET',
-      headers: { Range: 'bytes=0-32767' }, // 32 KB lightweight probe chunk
+      headers: { Range: `bytes=0-${PROBE_MAX_BYTES - 1}` },
       signal: controller.signal,
       cache: 'no-store'
     });
-
-    clearTimeout(timeoutId);
 
     if (!res.ok && res.status !== 206) {
       return 0;
     }
 
-    const blob = await res.blob();
-    const durationSec = (performance.now() - startTime) / 1000;
+    let received = 0;
+    const reader = res.body?.getReader();
+    if (!reader) {
+      return 0;
+    }
+    try {
+      while (received < PROBE_MAX_BYTES) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) received += value.byteLength;
+      }
+    } finally {
+      // Release the connection instead of draining the remaining bytes.
+      await reader.cancel().catch(() => {});
+    }
 
+    const durationSec = (performance.now() - startTime) / 1000;
     if (durationSec <= 0) return 1000;
-    const speedKbps = (blob.size / 1024) / durationSec;
+    const speedKbps = (received / 1024) / durationSec;
     return speedKbps;
   } catch {
     return 0;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -121,7 +185,7 @@ export async function getOptimalMediaRoute(
   try {
     const isCachedOnDisk = await fetchCacheStatus(path);
     if (isCachedOnDisk) {
-      speedCache.set(path, { route: 'proxy', timestamp: Date.now() });
+      rememberRoute(path, 'proxy');
       return {
         route: 'proxy',
         directSpeedKbps: 0,
@@ -132,8 +196,12 @@ export async function getOptimalMediaRoute(
   } catch {}
 
   // 3. Check client memory cache if recently evaluated
+  const now = Date.now();
   const cachedRoute = speedCache.get(path);
-  if (cachedRoute && Date.now() - cachedRoute.timestamp < CACHE_TTL_MS) {
+  if (cachedRoute && now - cachedRoute.timestamp < CACHE_TTL_MS) {
+    // Promote to most-recently-used position
+    speedCache.delete(path);
+    speedCache.set(path, cachedRoute);
     return {
       route: cachedRoute.route,
       directSpeedKbps: 0,
@@ -149,11 +217,21 @@ export async function getOptimalMediaRoute(
       measureChunkSpeed(proxyUrl)
     ]);
 
-    // If proxy speed is faster or equal, or direct failed, choose proxy
-    const winningRoute: 'direct' | 'proxy' =
-      proxySpeed >= directSpeed || directSpeed === 0 ? 'proxy' : 'direct';
+    // Prefer the proxy only when it is genuinely faster, or when the direct
+    // origin is unreachable. A tie now favours direct, which keeps the web
+    // server out of the data path when both paths perform equally.
+    let winningRoute: 'direct' | 'proxy';
+    if (directSpeed === 0 && proxySpeed === 0) {
+      winningRoute = 'proxy';
+    } else if (directSpeed === 0) {
+      winningRoute = 'proxy';
+    } else if (proxySpeed > directSpeed) {
+      winningRoute = 'proxy';
+    } else {
+      winningRoute = 'direct';
+    }
 
-    speedCache.set(path, { route: winningRoute, timestamp: Date.now() });
+    rememberRoute(path, winningRoute);
 
     return {
       route: winningRoute,

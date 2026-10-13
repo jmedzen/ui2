@@ -57,4 +57,45 @@ test('API Proxy Security & Routing Suite', async (t) => {
     const data = await res.json();
     assert.strictEqual(data.status, 'preloading', 'Preload status must be preloading');
   });
+
+  await t.test('does not crash on malformed percent-encoding (URI malformed)', async () => {
+    // Real fayun.org filenames contain a bare "%" (e.g. "100%講記").
+    // decodeURIComponent would throw URIError and previously surfaced as HTTP 500.
+    const encoded = encodeURIComponent('/media/100%講記/a.mp3');
+    const req = new NextRequest(`http://localhost:8410/api/proxy?path=${encoded}&action=status`);
+    const res = await GET(req);
+    assert.strictEqual(res.status, 200, 'Malformed percent sequence must not produce a 500');
+  });
+
+  await t.test('preserves ampersands inside media paths instead of truncating', async () => {
+    // "Master's Teaching & Glossary" is a real directory name in the catalog.
+    const encoded = encodeURIComponent('/media/english/A&B/audio/talk.mp3');
+    const req = new NextRequest(`http://localhost:8410/api/proxy?path=${encoded}&action=status`);
+    const res = await GET(req);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.ok(
+      data.targetUrl.includes('A&B'),
+      `Ampersand must survive path parsing, got: ${data.targetUrl}`
+    );
+  });
+
+  await t.test('rejects cross-site task triggers on the maintenance APIs', async () => {
+    const { POST: scanPost } = await import('@/app/api/scan/route');
+    const { POST: healPost } = await import('@/app/api/health-check/route');
+
+    const crossSiteReq = new Request('http://localhost:8410/api/scan', {
+      method: 'POST',
+      headers: { 'sec-fetch-site': 'cross-site' }
+    });
+    const scanRes = await scanPost(crossSiteReq);
+    assert.strictEqual(scanRes.status, 403, 'Cross-site scan trigger must be rejected');
+
+    const healReq = new Request('http://localhost:8410/api/health-check', {
+      method: 'POST',
+      headers: { origin: 'https://evil.example.com' }
+    });
+    const healRes = await healPost(healReq);
+    assert.strictEqual(healRes.status, 403, 'Cross-origin heal trigger must be rejected');
+  });
 });

@@ -139,6 +139,26 @@ docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name fyweb fyweb:latest
 
 ---
 
+## 🔐 環境變數與安全設定 (Environment Variables)
+
+| 變數 | 預設值 | 說明 |
+| --- | --- | --- |
+| `TASK_API_TOKEN` | （未設定） | 設定後，`/api/scan` 與 `/api/health-check` 的 POST 觸發需帶 `x-task-token` 或 `Authorization: Bearer`。未設定時僅接受同源（same-origin）請求。 |
+| `MEDIA_CACHE_MAX_BYTES` | `21474836480`（20 GB） | 媒體快取目錄的磁碟上限，超過即依 LRU 淘汰。 |
+| `MEDIA_CACHE_MAX_FILE_BYTES` | `4294967296`（4 GB） | 單一媒體檔案的快取上限，超過則不快取。 |
+| `MEDIA_CACHE_MAX_CONCURRENCY` | `3` | 同時進行的背景下載數量上限，避免被抓取大量檔案耗盡頻寬與 I/O。 |
+| `PROXY_PRELOAD_MAX_PER_MINUTE` | `20` | 每個來源 IP 每分鐘可觸發 `action=preload` 的次數上限。 |
+| `MEDIA_CACHE_DIR` | `<cwd>/data/media_cache` | 自訂快取目錄。**注意**：路徑必須包含 `data` 字串才會生效。 |
+
+### 安全機制
+
+- **`action=preload` 需授權**：此動作會讓伺服器下載並寫入檔案，因此需同源請求或 `TASK_API_TOKEN`，並受速率限制（超過回 `429`）。
+- **上游白名單同時鎖定協定與埠號**：僅允許 `https://www.fayun.org` 與 `https://fayun.org` 的 **443** 埠，避免代理被用來探測其他服務。
+- **回應強化**：所有代理回應均帶 `X-Content-Type-Options: nosniff`、`Content-Security-Policy: default-src 'none'; sandbox` 與 `Cross-Origin-Resource-Policy: same-origin`；`text/html`、SVG、XML 等可執行文件類型一律拒絕，非影音內容強制以 `Content-Disposition: attachment` 下載。
+- **容器非特權執行**：映像以 `node` 使用者執行，並於 compose 設定 `no-new-privileges` 與 `cap_drop: [ALL]`。
+
+---
+
 ## 📄 授權說明 (License)
 
 影音與講義內容版權均屬 [fayun.org (美國法雲寺 / 法雲資訊網)](https://www.fayun.org) 所有。本 Web 平台僅供佛法講記典藏學習與研讀交流使用。

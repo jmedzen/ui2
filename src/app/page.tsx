@@ -113,6 +113,9 @@ export default function Home() {
 
   const [courses, setCourses] = useState<CourseItem[]>(initialCourses);
   const [selectedCourse, setSelectedCourse] = useState<CourseItem | null>(null);
+  // The bundled catalog is available synchronously, so the view starts loaded.
+  // Keep the loading flag meaningful for the refresh path instead of hardcoding
+  // `false` at the end of fetchCourses (which made the loading UI unreachable).
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -253,6 +256,8 @@ export default function Home() {
 
   const fetchCourses = useCallback(async () => {
     try {
+      setIsLoading(true);
+      setError(null);
       const res = await fetch(`/api/courses?t=${Date.now()}`, {
         cache: 'no-store'
       });
@@ -270,13 +275,22 @@ export default function Home() {
           }
           return null;
         });
+        setError(null);
+      } else {
+        setError('伺服器回傳的課程清單為空');
       }
     } catch (err: any) {
+      // Fall back to the bundled catalog, but surface the failure so the user
+      // is not silently shown stale data. The initial state already holds the
+      // bundled DB, so the UI remains usable.
       console.warn('Failed to refresh courses from API, using bundled DB:', err);
+      if (courses.length === 0) {
+        setError(err?.message || '無法載入課程資料庫');
+      }
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [courses.length]);
 
   useEffect(() => {
     fetchCourses();

@@ -34,6 +34,9 @@ os.makedirs(LOG_DIR, exist_ok=True)
 
 LOG_PATH = os.path.join(LOG_DIR, "scanner.log")
 
+LOG_MAX_BYTES = 5 * 1024 * 1024
+LOG_BACKUPS = 3
+
 # Merge legacy auto_heal.log entries into scanner.log if present
 for old_heal in [os.path.join(LOG_DIR, "auto_heal.log"), os.path.join(PROJECT_DIR, "auto_heal.log")]:
     if os.path.exists(old_heal):
@@ -47,11 +50,41 @@ for old_heal in [os.path.join(LOG_DIR, "auto_heal.log"), os.path.join(PROJECT_DI
         except:
             pass
 
+def write_json_atomic(target_path, payload):
+    """Temp file + os.replace so an interrupted run cannot truncate the catalog."""
+    tmp_path = f"{target_path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, target_path)
+
+
+def rotate_log_if_needed():
+    """Keeps scanner.log bounded by rolling it into numbered backups."""
+    try:
+        if not os.path.exists(LOG_PATH):
+            return
+        if os.path.getsize(LOG_PATH) < LOG_MAX_BYTES:
+            return
+        for i in range(LOG_BACKUPS - 1, 0, -1):
+            older = f"{LOG_PATH}.{i}"
+            if os.path.exists(older):
+                if i + 1 >= LOG_BACKUPS:
+                    os.remove(older)
+                else:
+                    os.replace(older, f"{LOG_PATH}.{i + 1}")
+        os.replace(LOG_PATH, f"{LOG_PATH}.1")
+    except Exception as e:
+        print(f"Log rotation skipped: {e}", flush=True)
+
+
 def log(msg):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {msg}"
     print(line, flush=True)
     try:
+        rotate_log_if_needed()
         with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception as e:
@@ -335,13 +368,11 @@ def run_auto_heal():
     db["last_auto_healed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db["total_repaired_courses"] = total_repaired
 
-    with open(DB_PATH, "w", encoding="utf-8") as f:
-        json.dump(db, f, ensure_ascii=False, indent=2)
+    write_json_atomic(DB_PATH, db)
 
     if os.path.exists(SRC_DB_PATH):
         try:
-            with open(SRC_DB_PATH, "w", encoding="utf-8") as f:
-                json.dump(db, f, ensure_ascii=False, indent=2)
+            write_json_atomic(SRC_DB_PATH, db)
         except Exception as e:
             log(f"Notice: Could not sync to {SRC_DB_PATH}: {e}")
 

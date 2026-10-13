@@ -80,25 +80,58 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
     } catch {}
   }, []);
 
+  // Drag listeners are registered on window; keep handles so an unmount in the
+  // middle of a drag (e.g. switching course) cannot leave them attached.
+  const splitDragCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      splitDragCleanupRef.current?.();
+      splitDragCleanupRef.current = null;
+    };
+  }, []);
+
   const handleSplitMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     const container = splitContainerRef.current;
     if (!container) return;
 
+    // Replace any previous drag session instead of stacking listeners.
+    splitDragCleanupRef.current?.();
+
+    let frame = 0;
+    let pendingRatio = splitRatio;
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const rect = container.getBoundingClientRect();
-      const newRatio = Math.max(25, Math.min(75, ((moveEvent.clientX - rect.left) / rect.width) * 100));
-      setSplitRatio(newRatio);
-      try {
-        localStorage.setItem('fayun_split_ratio', String(newRatio.toFixed(1)));
-      } catch {}
+      if (rect.width === 0) return;
+      pendingRatio = Math.max(25, Math.min(75, ((moveEvent.clientX - rect.left) / rect.width) * 100));
+      // Coalesce mousemove into one state update per animation frame.
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        setSplitRatio(pendingRatio);
+      });
     };
 
     const handleMouseUp = () => {
+      splitDragCleanupRef.current?.();
+      splitDragCleanupRef.current = null;
+      try {
+        localStorage.setItem('fayun_split_ratio', String(pendingRatio.toFixed(1)));
+      } catch {}
+    };
+
+    const cleanup = () => {
+      if (frame) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+      }
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
 
+    splitDragCleanupRef.current = cleanup;
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
   };

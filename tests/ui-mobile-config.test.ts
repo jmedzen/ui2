@@ -4,14 +4,19 @@ import fs from 'fs';
 import path from 'path';
 
 test('UI, Mobile Configuration & Theme Integrity Suite', async (t) => {
-  await t.test('layout.tsx has explicit head with viewport meta tag for mobile Firefox', () => {
+  await t.test('layout.tsx declares viewport via the Next.js export for mobile Firefox', () => {
     const layoutPath = path.join(process.cwd(), 'src', 'app', 'layout.tsx');
     const content = fs.readFileSync(layoutPath, 'utf-8');
 
-    assert.ok(content.includes('<meta name="viewport"'), 'layout.tsx must contain explicit <meta name="viewport" tag');
-    assert.ok(content.includes('width=device-width'), 'viewport must declare width=device-width');
-    assert.ok(content.includes('viewport-fit=cover'), 'viewport must declare viewport-fit=cover');
-    assert.ok(content.includes('<head>'), 'layout.tsx must have an explicit <head> element');
+    // Next.js owns <head>; the `viewport` export is the supported way to emit
+    // the meta tag. Hand-writing <meta name="viewport"> would duplicate it.
+    assert.ok(content.includes('export const viewport'), 'layout.tsx must export a viewport configuration');
+    assert.ok(content.includes("'device-width'"), 'viewport must declare width=device-width');
+    assert.ok(content.includes('viewportFit'), 'viewport must declare viewportFit');
+    assert.ok(
+      !content.includes('<meta name="viewport"'),
+      'layout.tsx must not hand-write a duplicate viewport meta tag'
+    );
   });
 
   await t.test('globals.css defines Zen Modern serif fonts and all 6 themes', () => {

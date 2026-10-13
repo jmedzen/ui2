@@ -25,11 +25,16 @@ if not os.path.exists(DB_PATH) and os.path.exists(SRC_DB_PATH):
         shutil.copyfile(SRC_DB_PATH, DB_PATH)
     except Exception as e:
         print(f"Warning: Could not initialize {DB_PATH}: {e}")
-        print(f"Warning: Could not initialize {DB_PATH}: {e}")
 
 LOG_DIR = os.path.join(PROJECT_DIR, "data", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 LOG_PATH = os.path.join(LOG_DIR, "scanner.log")
+
+# Rotate the log once it grows past this size. The log is append-only and was
+# never rotated, so it could grow without bound and every /api/scan read had to
+# page through an ever-larger file.
+LOG_MAX_BYTES = 5 * 1024 * 1024
+LOG_BACKUPS = 3
 
 legacy_logs = [
     os.path.join(PROJECT_DIR, "logs", "scanner.log"),
@@ -115,11 +120,46 @@ TOPIC_MAP = {
     "yoga": "瑜伽師地論"
 }
 
+def write_json_atomic(target_path, payload):
+    """
+    Writes JSON via a temp file + os.replace so a crash or SIGTERM mid-write can
+    never leave a truncated database behind. The previous open("w") + json.dump
+    truncated the file first, so an interrupted scan destroyed the catalog.
+    """
+    tmp_path = f"{target_path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, target_path)
+
+
+def rotate_log_if_needed():
+    """Keeps scanner.log bounded by rolling it into numbered backups."""
+    try:
+        if not os.path.exists(LOG_PATH):
+            return
+        if os.path.getsize(LOG_PATH) < LOG_MAX_BYTES:
+            return
+        for i in range(LOG_BACKUPS - 1, 0, -1):
+            older = f"{LOG_PATH}.{i}"
+            newer = f"{LOG_PATH}.{i + 1}"
+            if os.path.exists(older):
+                if i + 1 >= LOG_BACKUPS:
+                    os.remove(older)
+                else:
+                    os.replace(older, newer)
+        os.replace(LOG_PATH, f"{LOG_PATH}.1")
+    except Exception as e:
+        print(f"Log rotation skipped: {e}", flush=True)
+
+
 def log_message(msg):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{timestamp}] {msg}"
     print(line, flush=True)
     try:
+        rotate_log_if_needed()
         with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception as e:
@@ -277,13 +317,11 @@ def run_scan():
         if "total_repaired_courses" in existing_db:
             new_db["total_repaired_courses"] = existing_db["total_repaired_courses"]
 
-    with open(DB_PATH, "w", encoding="utf-8") as f:
-        json.dump(new_db, f, ensure_ascii=False, indent=2)
+    write_json_atomic(DB_PATH, new_db)
 
     if os.path.exists(SRC_DB_PATH):
         try:
-            with open(SRC_DB_PATH, "w", encoding="utf-8") as f:
-                json.dump(new_db, f, ensure_ascii=False, indent=2)
+            write_json_atomic(SRC_DB_PATH, new_db)
         except Exception as e:
             log_message(f"Notice: Could not sync to {SRC_DB_PATH}: {e}")
 

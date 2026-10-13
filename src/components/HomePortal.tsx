@@ -106,14 +106,31 @@ export default function HomePortal({
     return list;
   }, [yogaCourse, diamondCourse, prajnaCourse, ahanCourse, sastraCourse, samathaCourse]);
 
-  // Total statistics
+  // Total statistics. The bundled catalog is always present at first paint, so
+  // these are real counts; the previous hardcoded fallbacks (684/478/413) would
+  // have masked a genuinely empty database.
   const totalCourses = courses.length;
   const totalVideoCourses = useMemo(() => courses.filter((c) => Boolean(c.video_path)).length, [courses]);
   const totalPdfCourses = useMemo(() => courses.filter((c) => c.pdfs && c.pdfs.length > 0).length, [courses]);
+  const hasCatalog = totalCourses > 0;
 
   return (
     <div className="home-portal-pane">
+      {!hasCatalog && (
+        <section className="home-hero-card">
+          <div className="home-hero-badge">
+            <span className="home-hero-flower">🌸</span>
+            <span className="home-hero-tag">法雲資訊網 · 典藏總覽</span>
+          </div>
+          <h1 className="home-hero-title">課程資料庫尚未載入</h1>
+          <p className="home-hero-intro">
+            目前無法取得課程目錄。請於「⚙️ 設定 → 📜 媒體同步與掃描紀錄」執行同步，或稍後再試。
+          </p>
+        </section>
+      )}
+
       {/* Hero Welcome Banner */}
+      {hasCatalog && (
       <section className="home-hero-card">
         <div className="home-hero-badge">
           <span className="home-hero-flower">🌸</span>
@@ -147,18 +164,20 @@ export default function HomePortal({
               onClick={onOpenMobileMenu}
               title="展開目錄檢視所有經論課程"
             >
-              ☰ 展開 {totalCourses || 684} 門全站目錄
+              ☰ 展開 {totalCourses} 門全站目錄
             </button>
           )}
         </div>
       </section>
+      )}
 
       {/* Realtime Archive Stats Grid */}
+      {hasCatalog && (
       <section className="home-stats-grid">
         <div className="home-stat-card">
           <span className="stat-icon">📚</span>
           <div className="stat-data">
-            <span className="stat-number">{totalCourses || 684}</span>
+            <span className="stat-number">{totalCourses}</span>
             <span className="stat-label">門完整講記課程</span>
           </div>
         </div>
@@ -174,7 +193,7 @@ export default function HomePortal({
         <div className="home-stat-card">
           <span className="stat-icon">🎥</span>
           <div className="stat-data">
-            <span className="stat-number">{totalVideoCourses || 478}</span>
+            <span className="stat-number">{totalVideoCourses}</span>
             <span className="stat-label">部隨身影音開示</span>
           </div>
         </div>
@@ -182,13 +201,15 @@ export default function HomePortal({
         <div className="home-stat-card">
           <span className="stat-icon">📄</span>
           <div className="stat-data">
-            <span className="stat-number">{totalPdfCourses || 413}+</span>
+            <span className="stat-number">{totalPdfCourses}</span>
             <span className="stat-label">部手稿筆記與講義</span>
           </div>
         </div>
       </section>
+      )}
 
       {/* Four Dharma Divisions Banner */}
+      {hasCatalog && (
       <section className="home-divisions-section">
         <div className="section-header">
           <h2 className="section-title">🗂️ 四大經典法門導覽</h2>
@@ -285,8 +306,10 @@ export default function HomePortal({
           </div>
         </div>
       </section>
+      )}
 
       {/* Featured Scripture Cards */}
+      {hasCatalog && (
       <section className="home-featured-section">
         <div className="section-header">
           <h2 className="section-title">🌟 核心經典講記推薦</h2>
@@ -338,6 +361,7 @@ export default function HomePortal({
           ))}
         </div>
       </section>
+      )}
 
       {/* Zen Footer Copyright Disclaimer */}
       <footer className="home-footer-disclaimer">

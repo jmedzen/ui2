@@ -97,24 +97,49 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     if (!currentTrack || currentTrack.isServerCached) return;
 
     let isMounted = true;
-    const interval = setInterval(async () => {
-      const isCached = await fetchCacheStatus(currentTrack.proxyUrl);
-      if (isCached && isMounted) {
-        setCurrentTrack((prev) => (prev ? { ...prev, isServerCached: true } : null));
-        clearInterval(interval);
-      }
-    }, 3000);
+    let interval: ReturnType<typeof setInterval> | null = null;
 
-    fetchCacheStatus(currentTrack.proxyUrl).then((isCached) => {
-      if (isCached && isMounted) {
-        setCurrentTrack((prev) => (prev ? { ...prev, isServerCached: true } : null));
+    const stopPolling = () => {
+      if (interval !== null) {
         clearInterval(interval);
+        interval = null;
       }
-    });
+    };
+
+    const markCached = () => {
+      if (!isMounted) return;
+      setCurrentTrack((prev) => (prev ? { ...prev, isServerCached: true } : null));
+      stopPolling();
+    };
+
+    const check = async () => {
+      const isCached = await fetchCacheStatus(currentTrack.proxyUrl);
+      if (isCached) markCached();
+    };
+
+    const startPolling = () => {
+      if (interval !== null) return;
+      interval = setInterval(check, 3000);
+    };
+
+    // Suspend polling while the tab is hidden so a long lecture does not keep
+    // issuing requests in the background on battery-powered devices.
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else if (!currentTrack.isServerCached) {
+        startPolling();
+      }
+    };
+
+    check();
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [currentTrack?.proxyUrl, currentTrack?.isServerCached]);
 
@@ -180,7 +205,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       audio.removeEventListener('loadedmetadata', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
       audio.pause();
-      audio.src = '';
+      // Clearing src alone does not reliably abort the in-flight media request;
+      // removing the attribute and re-loading releases the network stream.
+      audio.removeAttribute('src');
+      try {
+        audio.load();
+      } catch {}
       audioRef.current = null;
     };
   }, []);
@@ -344,19 +374,26 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setVol = useCallback((vol: number) => {
-    setVolume(vol);
-    setIsMuted(vol === 0);
+    const clamped = Math.max(0, Math.min(1, vol));
+    setVolume(clamped);
+    // Dragging the slider to a non-zero value unmutes; and we must also clear
+    // the element's `muted` flag, otherwise the UI shows 🔊 while the audio
+    // element stays silent (muted was set by toggleMute and never reset).
+    const shouldMute = clamped === 0;
+    setIsMuted(shouldMute);
     if (audioRef.current) {
       try {
-        audioRef.current.volume = vol;
+        audioRef.current.muted = shouldMute;
+        audioRef.current.volume = clamped;
       } catch {}
     }
   }, []);
 
   const toggleMute = useCallback(() => {
     if (audioRef.current) {
-      audioRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
+      const nextMuted = !isMuted;
+      audioRef.current.muted = nextMuted;
+      setIsMuted(nextMuted);
     }
   }, [isMuted]);
 

@@ -1,89 +1,62 @@
 import { NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import path from 'path';
-import fs from 'fs';
+import {
+  HEAL_TASK,
+  authorizeTaskRequest,
+  acquireScanLock,
+  isScanLocked,
+  appendLog,
+  readRecentLogs,
+  readDbInfo,
+  runTaskScript
+} from '@/lib/serverTasks';
 
-function getAutoHealLogPath(): string {
-  const dataLogsDir = path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'logs');
-  if (!fs.existsSync(dataLogsDir)) {
-    try {
-      fs.mkdirSync(dataLogsDir, { recursive: true });
-    } catch {}
-  }
-  return path.join(dataLogsDir, 'scanner.log');
-}
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const logPath = getAutoHealLogPath();
-    let logContent = 'No audit logs available';
-    if (fs.existsSync(logPath)) {
-      const fullLog = fs.readFileSync(logPath, 'utf-8');
-      const lines = fullLog.trim().split('\n');
-      logContent = lines.slice(-500).join('\n');
-    }
-
-    const dataDbPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'courses_db.json');
-    const srcDbPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'src', 'data', 'courses_db.json');
-    const dbPath = fs.existsSync(dataDbPath) ? dataDbPath : srcDbPath;
-    let dbInfo = { generated_at: 'Unknown', last_auto_healed_at: 'Never', total_courses: 0, total_repaired: 0 };
-    if (fs.existsSync(dbPath)) {
-      try {
-        const data = JSON.parse(fs.readFileSync(dbPath, 'utf-8'));
-        dbInfo = {
-          generated_at: data.generated_at || 'Unknown',
-          last_auto_healed_at: data.last_auto_healed_at || 'Never',
-          total_courses: data.total_courses || 0,
-          total_repaired: data.total_repaired_courses || 0
-        };
-      } catch {}
-    }
+    const dbInfo = readDbInfo();
 
     return NextResponse.json({
       status: 'active',
+      isRunning: isScanLocked(),
       lastAutoHeal: dbInfo.last_auto_healed_at,
       totalCourses: dbInfo.total_courses,
       totalRepaired: dbInfo.total_repaired,
-      recentLogs: logContent
+      recentLogs: readRecentLogs()
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('[API/Health-Check] Error in GET handler:', error);
+    return NextResponse.json({ error: 'Failed to read audit status' }, { status: 500 });
   }
 }
 
-export async function POST(): Promise<NextResponse> {
+export async function POST(request: Request): Promise<NextResponse> {
   try {
-    console.log('[API/Health-Check] Triggering self-healing script: auto_heal_catalog.py in background...');
-    const scriptPath = path.join(process.cwd(), 'scripts', 'auto_heal_catalog.py');
-    const logPath = getAutoHealLogPath();
-
-    // Trigger non-blocking background execution
-    exec(`python3 "${scriptPath}"`, (error, stdout, stderr) => {
-      if (stdout) console.log('[AutoHeal]', stdout);
-      if (stderr) console.error('[AutoHeal Stderr]', stderr);
-      if (error) console.error('[AutoHeal Error]', error);
-    });
-
-    const timestamp = new Date().toLocaleString('zh-TW', { hour12: false });
-    const startMsg = `[${timestamp}] 🚑 === 全站自我巡檢與目錄自動修復已於背景啟動 ===`;
-    try {
-      fs.appendFileSync(logPath, `\n${startMsg}\n`, 'utf-8');
-    } catch {}
-
-    let logContent = startMsg;
-    if (fs.existsSync(logPath)) {
-      const fullLog = fs.readFileSync(logPath, 'utf-8');
-      const lines = fullLog.trim().split('\n');
-      logContent = lines.slice(-500).join('\n');
+    const auth = authorizeTaskRequest(request);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.message }, { status: auth.status });
     }
+
+    if (!acquireScanLock()) {
+      return NextResponse.json(
+        { error: 'A scan or repair task is already running', status: 'busy' },
+        { status: 409 }
+      );
+    }
+
+    console.log('[API/Health-Check] Triggering self-healing script: auto_heal_catalog.py in background...');
+    appendLog('🚑 === 已觸發：全站自我巡檢與目錄自動修復 (pid guard active) ===');
+
+    runTaskScript('auto_heal_catalog.py', 'AutoHeal');
 
     return NextResponse.json({
       message: 'Catalog audit & self-healing launched in background',
       status: 'started',
-      recentLogs: logContent
+      running: HEAL_TASK,
+      recentLogs: readRecentLogs()
     });
   } catch (error: any) {
     console.error('[API/Health-Check] Error in POST handler:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to launch audit' }, { status: 500 });
   }
 }
