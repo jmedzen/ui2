@@ -14,6 +14,35 @@ const THEME_STORAGE_KEY = 'fayun_theme';
 const FONT_SIZE_PX_STORAGE_KEY = 'fayun_font_size_px';
 const LAST_COURSE_STORAGE_KEY = 'fayun_last_selected_course_id';
 
+/**
+ * Cheap "did this course actually change?" check.
+ *
+ * Used to keep the previously selected course object when a refreshed payload
+ * is equivalent, so `CourseDetail`'s effect (which depends on the `course`
+ * object) does not re-run its discovery requests for no reason. Compares by
+ * value at one level, with `pdfs` compared by length plus each entry's
+ * url/filename, which is what the UI actually renders. Returns false on any
+ * shape difference so a genuinely changed course is never masked.
+ */
+function shallowEqualCourse(a: CourseItem, b: CourseItem): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  const ra = a as unknown as Record<string, unknown>;
+  const rb = b as unknown as Record<string, unknown>;
+  for (const key of keys) {
+    if (key === 'pdfs') continue;
+    if (ra[key] !== rb[key]) {
+      return false;
+    }
+  }
+  const ap = a.pdfs || [];
+  const bp = b.pdfs || [];
+  if (ap.length !== bp.length) return false;
+  for (let i = 0; i < ap.length; i++) {
+    if (ap[i]?.url !== bp[i]?.url || ap[i]?.filename !== bp[i]?.filename) return false;
+  }
+  return true;
+}
+
 interface MainLayoutProps {
   isMobileSidebarOpen: boolean;
   setIsMobileSidebarOpen: (open: boolean) => void;
@@ -296,8 +325,15 @@ export default function Home() {
         hasCoursesRef.current = true;
         setSelectedCourse((prevSelected) => {
           if (prevSelected) {
+            // Reuse the previous object when the refreshed row is unchanged.
+            // `courseList` always contains freshly parsed objects, so returning
+            // the new one unconditionally gave CourseDetail a new `course`
+            // identity on every refresh (and on every /api/scan completion),
+            // re-triggering its three discovery routines — 7-13 upstream
+            // directory probes — even though nothing about the course changed.
             const updated = courseList.find((c) => c.id === prevSelected.id);
-            return updated || prevSelected;
+            if (!updated) return prevSelected;
+            return shallowEqualCourse(prevSelected, updated) ? prevSelected : updated;
           }
           return null;
         });

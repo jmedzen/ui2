@@ -299,6 +299,18 @@ test('Whole-site leak hardening', async (t) => {
     assert.match(src, /if \(activeTag === 'iframe' \|\| active\?\.isContentEditable\) \{/);
   });
 
+  await t.test('page.tsx preserves the selected course identity across refreshes', () => {
+    const src = read('src/app/page.tsx');
+
+    // Returning the freshly parsed row unconditionally gave CourseDetail a new
+    // `course` object on every refresh, re-running its discovery requests.
+    assert.match(src, /function shallowEqualCourse\(a: CourseItem, b: CourseItem\): boolean \{/);
+    assert.match(src, /return shallowEqualCourse\(prevSelected, updated\) \? prevSelected : updated;/);
+    assert.match(src, /if \(!updated\) return prevSelected;/);
+    // pdfs are compared by content, since a new array is always produced.
+    assert.match(src, /if \(ap\[i\]\?\.url !== bp\[i\]\?\.url \|\| ap\[i\]\?\.filename !== bp\[i\]\?\.filename\) return false;/);
+  });
+
   await t.test('CourseDetail scopes 本地分 discovery to the course volume', () => {
     const src = read('src/components/CourseDetail.tsx');
 
