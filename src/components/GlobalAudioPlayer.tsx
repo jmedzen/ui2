@@ -39,9 +39,17 @@ export default function GlobalAudioPlayer() {
   // Keyboard Shortcuts (Space: play/pause, Left/Right: seek -5s/+5s, M: mute)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      const active = document.activeElement as HTMLElement | null;
+      const activeTag = (active?.tagName || '').toLowerCase();
       if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') {
         return; // Ignore shortcuts when typing in inputs
+      }
+      // A focused iframe (the PDF viewer) makes activeElement the <iframe>
+      // element itself, so the tag check above does not catch it and the player
+      // would steal Space/arrows from PDF.js. Skip embedded documents and
+      // contenteditable hosts too.
+      if (activeTag === 'iframe' || active?.isContentEditable) {
+        return;
       }
 
       if (e.code === 'Space') {

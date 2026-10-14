@@ -4,6 +4,14 @@ import React, { useState, useMemo, useDeferredValue, useEffect } from 'react';
 import { CourseItem, TreeNode, ThemeType } from '@/types/course';
 import { useAudio } from '@/context/AudioContext';
 
+/**
+ * How many recently-visited courses are remembered and displayed.
+ *
+ * Shared by the reader and the writer below so the stored list and the rendered
+ * list can never drift apart.
+ */
+const MAX_RECENT_COURSES = 4;
+
 interface TreeNavProps {
   courses: CourseItem[];
   selectedCourse: CourseItem | null;
@@ -44,7 +52,14 @@ export default function TreeNav({
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          setRecentCourseIds(parsed);
+          // localStorage is user-writable and survives upgrades, so the stored
+          // value cannot be trusted: keep only finite numeric ids and at most
+          // the number this feature actually displays. Otherwise a corrupted or
+          // hand-edited entry would be held in state and re-persisted forever.
+          const ids = parsed
+            .filter((id): id is number => typeof id === 'number' && Number.isFinite(id))
+            .slice(0, MAX_RECENT_COURSES);
+          setRecentCourseIds(ids);
         }
       }
     } catch {}
@@ -54,7 +69,7 @@ export default function TreeNav({
     if (!selectedCourse) return;
     setRecentCourseIds((prev) => {
       const filtered = prev.filter((id) => id !== selectedCourse.id);
-      const updated = [selectedCourse.id, ...filtered].slice(0, 4);
+      const updated = [selectedCourse.id, ...filtered].slice(0, MAX_RECENT_COURSES);
       try {
         localStorage.setItem('fayun_recent_course_ids', JSON.stringify(updated));
       } catch {}
@@ -83,17 +98,26 @@ export default function TreeNav({
 
     courses.forEach((course) => {
       // 1. Filter by media type pill if selected
-      if (mediaFilter === 'audio' && course.total_episodes === 0) return;
+      // The 音訊 pill must test whether an audio file actually exists, not the
+      // episode count. `total_episodes === 0` matched nothing in the catalog
+      // (every row has episodes), so 音訊 showed the same 684 rows as 全部 while
+      // 161 courses have no audio_path at all — 157 of them video-only.
+      if (mediaFilter === 'audio' && !course.audio_path) return;
       if (mediaFilter === 'video' && !course.video_path) return;
       if (mediaFilter === 'pdf' && (!course.pdfs || course.pdfs.length === 0)) return;
 
       // 2. Filter by search query
+      // Search the branch titles the user can actually see in the tree as well
+      // as the row's own fields; matching only name/location/time/topic meant
+      // typing a visible category such as 開示與法語 returned "未找到".
       if (q) {
         const matchName = (course.name || '').toLowerCase().includes(q);
+        const matchMain = (course.main_menu_title || '').toLowerCase().includes(q);
+        const matchSub = (course.sub_menu_title || '').toLowerCase().includes(q);
         const matchLoc = (course.location || '').toLowerCase().includes(q);
         const matchYear = (course.time || '').toLowerCase().includes(q);
         const matchTopic = (course.topic_title || '').toLowerCase().includes(q);
-        if (!matchName && !matchLoc && !matchYear && !matchTopic) {
+        if (!matchName && !matchMain && !matchSub && !matchLoc && !matchYear && !matchTopic) {
           return;
         }
       }

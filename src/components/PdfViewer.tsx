@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PdfItem } from '@/types/course';
 
 interface PdfViewerProps {
@@ -12,9 +12,32 @@ export default function PdfViewer({ pdfs, courseTitle }: PdfViewerProps) {
   const [selectedPdfIndex, setSelectedPdfIndex] = useState<number>(0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
+  // Reset the selection when the course changes, but only *clamp* it when the
+  // document list is refreshed in the background. Keying the reset on the
+  // `pdfs` array identity reset it on every discovery refresh (the parent
+  // replaces the array), flashing the first document while the user was
+  // reading another.
+  const lastCourseRef = useRef(courseTitle);
   useEffect(() => {
-    setSelectedPdfIndex(0);
-  }, [courseTitle, pdfs]);
+    if (lastCourseRef.current !== courseTitle) {
+      lastCourseRef.current = courseTitle;
+      setSelectedPdfIndex(0);
+      return;
+    }
+    setSelectedPdfIndex((prev) => (prev < pdfs.length ? prev : 0));
+  }, [courseTitle, pdfs.length]);
+
+  // Escape exits fullscreen mode. "Fullscreen" here is a CSS class (not the
+  // Fullscreen API), so the browser's own Escape handling does not apply and
+  // without this the only way out was the toolbar button.
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsFullscreen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
 
   if (!pdfs || pdfs.length === 0) {
     return (

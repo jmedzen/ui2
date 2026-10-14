@@ -60,6 +60,56 @@ const extractFilename = (item: any): string => {
  * collapses repeated trailing directory segments and normalises the filename
  * so the app lists each lecture note exactly once.
  */
+/**
+ * Derives the shared volume root for a course that has no `video_path`.
+ *
+ * Multi-volume courses (瑜伽師地論．本地分_卷NN) previously fell back to the whole
+ * shared root `/media/釋論/瑜伽師地論・本地分`, so opening one volume listed all
+ * ~503 PDFs / 167 videos under every other volume's labels, with URLs
+ * synthesised into folders the file was never found in (verified: course 163
+ * holds 8 catalog PDFs but discovered 503).
+ *
+ * The catalog already records each volume's own directory in its PDF URLs
+ * (e.g. `.../本地分/卷14/bilu/T163b.pdf`), so the probe can be scoped to that
+ * volume. Only the true root course — the one whose name carries no volume
+ * suffix and which is already configured with the root as its video_path — has
+ * a legitimate reason to enumerate the entire tree.
+ */
+const sharedRootDirFor = (course: CourseItem): string | undefined => {
+  const name = String(course?.name || '');
+  if (!name.includes('本地分')) return undefined;
+
+  // The course NAME is the authoritative volume identifier, so decide from it
+  // first. The catalog's PDF URLs were tried first and mis-scoped the true root
+  // course (id 97, which legitimately owns all 503 PDFs) to whichever
+  // sub-folder happened to appear first — in its case `初發論端`.
+  //
+  // The volume token must be captured in full: `卷12至13-1` is a real directory
+  // name (course id 124), so matching only the leading digits would probe the
+  // non-existent `卷12` and return nothing.
+  const vols = name.match(/卷[0-9０-９]+(?:[至\-–~][0-9０-９]+)*(?:-[0-9０-９]+)?/g);
+
+  // Exactly one volume marker: scope to that volume.
+  if (vols && vols.length === 1) {
+    return `/media/釋論/瑜伽師地論・本地分/${vols[0]}`;
+  }
+
+  // No volume marker: this is the root course, so its own whole tree is correct.
+  if (!/卷/.test(name)) {
+    return '/media/釋論/瑜伽師地論・本地分';
+  }
+
+  // Ambiguous (several volume markers, e.g. "卷12至13-1"): probing any single
+  // volume would mis-attribute files, so fall back to the directory implied by
+  // this course's own catalog PDFs and otherwise probe nothing.
+  const pdfs = Array.isArray(course?.pdfs) ? course.pdfs : [];
+  for (const p of pdfs) {
+    const m = String(p?.url || '').match(/ftpadmin(\/media\/[^?]*?)\/(?:bilu|pdf|beizhu|video)\/[^/]+$/);
+    if (m) return m[1];
+  }
+  return undefined;
+};
+
 const canonicalPdfPath = (folder: string, name: string): string => {
   const decode = (v: string) => {
     try {
@@ -363,7 +413,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
       setCurrentVideoIndex(0);
 
       let fetchedVideos: VideoTrackInfo[] = [];
-      const vPath = course.video_path || (course.name.includes('本地分') ? '/media/釋論/瑜伽師地論・本地分' : undefined);
+      const vPath = course.video_path || sharedRootDirFor(course);
 
       if (vPath) {
         try {
@@ -510,7 +560,11 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
       if ((course as any).pdf_path) potentialPaths.push((course as any).pdf_path);
 
       if (course.name.includes('本地分')) {
-        potentialPaths.push('/media/釋論/瑜伽師地論・本地分');
+        // Scope to this course's own volume. Pushing the shared root here made
+        // every volume page enumerate the whole 503-PDF tree under other
+        // volumes' labels (see sharedRootDirFor).
+        const scoped = sharedRootDirFor(course) || '/media/釋論/瑜伽師地論・本地分';
+        potentialPaths.push(scoped);
       }
 
       if (course.audio_path && course.audio_path !== '/media') {
@@ -686,6 +740,18 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
 
   const hasVideo = Boolean(course.video_path || (course.name && course.name.includes('本地分')));
 
+  // Reset the tab during render when the course changes.
+  //
+  // The restore effect below runs *after* render, so the first commit after
+  // selecting a new course rendered the previous course's tab (a video or PDF
+  // pane backed by this course's still-empty lists). Adjusting state during
+  // render is React's documented way to avoid that extra, wrong frame.
+  const [tabCourseId, setTabCourseId] = useState<number>(course.id);
+  if (tabCourseId !== course.id) {
+    setTabCourseId(course.id);
+    setActiveTab('audio');
+  }
+
   // Restore saved active tab & video index per course on mount/course change
   useEffect(() => {
     try {
@@ -828,7 +894,10 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
               className={`tab-btn ${activeTab === 'video' ? 'active' : ''}`}
               onClick={() => handleTabClick('video')}
             >
-              🎬 影音講記 ({videoTracks.length || '載入中'})
+              {/* Distinguish "still loading" from "loaded with 0 results": the
+                  old `length || '載入中'` labelled a finished-but-empty list as
+                  loading forever (e.g. after an upstream 502). */}
+              🎬 影音講記 ({isLoadingVideo ? '載入中' : videoTracks.length})
             </button>
           )}
           <button

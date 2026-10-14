@@ -136,6 +136,11 @@ async function measureChunkSpeed(targetUrl: string): Promise<number> {
     });
 
     if (!res.ok && res.status !== 206) {
+      // Release the error response body. Returning without reading or
+      // cancelling it left the stream (and its buffers) alive until GC on every
+      // failed probe — and a dead mirror 404s both the direct and proxy probes
+      // on every track change.
+      await res.body?.cancel().catch(() => {});
       return 0;
     }
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import { Readable } from 'stream';
-import { getCacheFilePath, isCached, updateAccessTime, cacheRemoteMedia, fileLooksLikeHtml, invalidateCacheStats } from '@/lib/serverMediaCache';
+import { getCacheFilePath, isCached, updateAccessTime, cacheRemoteMedia, fileLooksLikeHtml, invalidateCacheStats, markCacheFileInUse } from '@/lib/serverMediaCache';
 import { authorizeTaskRequest } from '@/lib/serverTasks';
 
 const ALLOWED_HOSTS = ['www.fayun.org', 'fayun.org'];
@@ -458,6 +458,13 @@ export async function GET(request: NextRequest) {
           const { start, end } = parsed;
           const chunksize = end - start + 1;
           const fileStream = fs.createReadStream(cacheFilePath, { start, end });
+          // Pin the file against LRU eviction for the lifetime of the stream.
+          // Without this an eviction pass could unlink a file mid-playback; an
+          // already-open descriptor keeps serving on POSIX, but the next Range
+          // request would fail with ENOENT.
+          const releaseInUse = markCacheFileInUse(cacheFilePath);
+          fileStream.once('close', releaseInUse);
+          fileStream.once('error', releaseInUse);
 
           resHeaders.set('Content-Range', `bytes ${start}-${end}/${fileSize}`);
           resHeaders.set('Content-Length', String(chunksize));
@@ -470,6 +477,9 @@ export async function GET(request: NextRequest) {
 
         resHeaders.set('Content-Length', String(fileSize));
         const fileStream = fs.createReadStream(cacheFilePath);
+        const releaseInUse = markCacheFileInUse(cacheFilePath);
+        fileStream.once('close', releaseInUse);
+        fileStream.once('error', releaseInUse);
 
         return new NextResponse(Readable.from(fileStream) as any, {
           status: 200,

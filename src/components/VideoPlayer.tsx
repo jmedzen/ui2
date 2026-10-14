@@ -114,9 +114,12 @@ export default function VideoPlayer({
     };
 
     // Pause polling while the tab is hidden to avoid background request churn.
+    // The visible branch must re-check `isServerCached`: without the guard, simply
+    // hiding and showing the tab restarted a 3-second poll for a file that was
+    // already on disk (AudioContext already guarded this; VideoPlayer did not).
     const handleVisibility = () => {
       if (document.hidden) stopPolling();
-      else startPolling();
+      else if (!isServerCached) startPolling();
     };
 
     check();

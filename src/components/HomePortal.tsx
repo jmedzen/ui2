@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { CourseItem } from '@/types/course';
 
 interface HomePortalProps {
@@ -14,35 +14,59 @@ export default function HomePortal({
   onSelectCourse,
   onOpenMobileMenu
 }: HomePortalProps) {
-  // Find flagship courses
-  const yogaCourse = useMemo(
-    () => courses.find((c) => c.name.includes('瑜伽師地論')) || courses[0] || null,
+  // Find flagship courses.
+  //
+  // `courses.find(c => name.includes(term))` returned whatever came first in
+  // catalog order, which is not the flagship: 瑜伽師地論 resolved to a 58-episode
+  // excerpt (id 104) although 本地分 has 478 episodes and 503 PDFs, and
+  // 修止觀法門 resolved to a 1-episode audio clip instead of 修習止觀坐禪法要 (47).
+  // Pick the most substantial match instead: an exact title wins, otherwise the
+  // match with the most episodes (PDFs break ties).
+  const pickFlagship = useCallback(
+    (term: string, extra?: (c: CourseItem) => boolean) => {
+      const matches = courses.filter(
+        (c) => (c.name || '').includes(term) && (!extra || extra(c))
+      );
+      if (matches.length === 0) return null;
+      const exact = matches.find((c) => (c.name || '').trim() === term);
+      if (exact) return exact;
+      return [...matches].sort(
+        (a, b) =>
+          (b.total_episodes || 0) - (a.total_episodes || 0) ||
+          (b.pdfs?.length || 0) - (a.pdfs?.length || 0)
+      )[0];
+    },
     [courses]
+  );
+
+  const yogaCourse = useMemo(
+    () => pickFlagship('瑜伽師地論') || courses[0] || null,
+    [pickFlagship, courses]
   );
 
   const diamondCourse = useMemo(
-    () => courses.find((c) => c.name.includes('金剛') && c.name.includes('經')) || null,
-    [courses]
+    () => pickFlagship('金剛般若波羅蜜經') || pickFlagship('金剛'),
+    [pickFlagship]
   );
 
   const prajnaCourse = useMemo(
-    () => courses.find((c) => c.name.includes('摩訶般若波羅蜜經')) || null,
-    [courses]
+    () => pickFlagship('摩訶般若波羅蜜經'),
+    [pickFlagship]
   );
 
   const ahanCourse = useMemo(
-    () => courses.find((c) => c.name.includes('雜阿含經') || c.name.includes('阿含')) || null,
-    [courses]
+    () => pickFlagship('雜阿含經') || pickFlagship('阿含'),
+    [pickFlagship]
   );
 
   const sastraCourse = useMemo(
-    () => courses.find((c) => c.name.includes('大智度論')) || null,
-    [courses]
+    () => pickFlagship('大智度論'),
+    [pickFlagship]
   );
 
   const samathaCourse = useMemo(
-    () => courses.find((c) => c.name.includes('修止觀法門') || c.name.includes('坐禪')) || null,
-    [courses]
+    () => pickFlagship('修習止觀坐禪法要') || pickFlagship('修止觀法門') || pickFlagship('坐禪'),
+    [pickFlagship]
   );
 
   // Core featured courses list
@@ -343,7 +367,14 @@ export default function HomePortal({
 
               <div className="featured-meta-row">
                 <span className="featured-meta-item">📍 {course.location || '法雲寺禪學院'}</span>
-                {course.time && <span className="featured-meta-item">🗓️ {course.time} 年</span>}
+                {/* Append the unit only when the catalog value does not already
+                    carry it: 10 rows store "1997年" or "摘自2000年《…》", which
+                    previously rendered as "1997年 年". */}
+                {course.time && (
+                  <span className="featured-meta-item">
+                    🗓️ {/年/.test(String(course.time)) ? course.time : `${course.time} 年`}
+                  </span>
+                )}
                 {course.total_episodes > 0 && (
                   <span className="featured-meta-item">🎧 {course.total_episodes} 講</span>
                 )}

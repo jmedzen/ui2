@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CourseItem, ThemeType } from '@/types/course';
 import { AudioProvider, useAudio } from '@/context/AudioContext';
 import TreeNav from '@/components/TreeNav';
@@ -112,6 +112,12 @@ export default function Home() {
   const initialCourses: CourseItem[] = (initialDb.courses as CourseItem[]) || [];
 
   const [courses, setCourses] = useState<CourseItem[]>(initialCourses);
+  // Tracks whether the catalog has ever been populated, without making
+  // `fetchCourses` depend on `courses`. Reading `courses.length` from the
+  // callback closure made the callback's identity change whenever `setCourses`
+  // ran, so the mount effect re-triggered itself (reproduced: it settled after
+  // 1-2 fetches while the row count was stable, but looped while it alternated).
+  const hasCoursesRef = useRef<boolean>(initialCourses.length > 0);
   const [selectedCourse, setSelectedCourse] = useState<CourseItem | null>(null);
   // The bundled catalog is available synchronously, so the view starts loaded.
   // Keep the loading flag meaningful for the refresh path instead of hardcoding
@@ -264,10 +270,30 @@ export default function Home() {
       if (!res.ok) {
         throw new Error(`HTTP error ${res.status}`);
       }
-      const data = await res.json();
-      const courseList: CourseItem[] = data.courses || [];
-      if (courseList.length > 0) {
+      const data: unknown = await res.json();
+      // Validate at the boundary. The payload comes from the network and was
+      // previously cast straight to CourseItem[]; a single row missing `name`
+      // then crashed the tree builder (`course.name.toLowerCase()`) and the
+      // home portal (`c.name.includes(...)`), blanking the whole UI instead of
+      // skipping one bad row.
+      const rawList: unknown[] = Array.isArray((data as { courses?: unknown })?.courses)
+        ? ((data as { courses: unknown[] }).courses)
+        : [];
+      const isCourseRow = (c: unknown): c is CourseItem => {
+        if (!c || typeof c !== 'object') return false;
+        const row = c as Record<string, unknown>;
+        return (
+          typeof row.id === 'number' &&
+          Number.isFinite(row.id) &&
+          typeof row.name === 'string'
+        );
+      };
+      const courseList = rawList.filter(isCourseRow);
+      if (rawList.length > 0 && courseList.length === 0) {
+        setError('伺服器回傳的課程資料格式不正確');
+      } else if (courseList.length > 0) {
         setCourses(courseList);
+        hasCoursesRef.current = true;
         setSelectedCourse((prevSelected) => {
           if (prevSelected) {
             const updated = courseList.find((c) => c.id === prevSelected.id);
@@ -279,18 +305,25 @@ export default function Home() {
       } else {
         setError('伺服器回傳的課程清單為空');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Fall back to the bundled catalog, but surface the failure so the user
       // is not silently shown stale data. The initial state already holds the
       // bundled DB, so the UI remains usable.
       console.warn('Failed to refresh courses from API, using bundled DB:', err);
-      if (courses.length === 0) {
-        setError(err?.message || '無法載入課程資料庫');
+      if (!hasCoursesRef.current) {
+        setError(err instanceof Error ? err.message : '無法載入課程資料庫');
       }
     } finally {
       setIsLoading(false);
     }
-  }, [courses.length]);
+    // Intentionally empty deps. Reading `courses.length` from the closure here
+    // made this callback's identity depend on the course list, which
+    // `setCourses` above mutates — so the mount effect below re-triggered
+    // itself, refetching (and re-rendering the 684-row tree) whenever the
+    // server row count differed from the local one. Reproduced: it settled
+    // after 1-2 fetches while the count was stable but looped (never settling)
+    // while the count alternated. The ref breaks that cycle.
+  }, []);
 
   useEffect(() => {
     fetchCourses();

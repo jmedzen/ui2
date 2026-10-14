@@ -69,6 +69,9 @@ export async function getCacheStatsAsync(): Promise<CacheStats> {
       await Promise.all(
         files.slice(i, i + BATCH).map(async (file) => {
           if (file.endsWith('.tmp')) return;
+          // Count only genuine cache entries, matching the LRU scan, so foreign
+          // files in a shared/misconfigured directory do not inflate the report.
+          if (!CACHE_FILENAME_RE.test(file)) return;
           try {
             const stat = await fs.promises.stat(path.join(cacheDir, file));
             if (stat.isFile()) {
@@ -110,7 +113,7 @@ export function getCacheStats(): CacheStats {
     if (fs.existsSync(cacheDir)) {
       const files = fs.readdirSync(cacheDir);
       for (const file of files) {
-        if (!file.endsWith('.tmp')) {
+        if (!file.endsWith('.tmp') && CACHE_FILENAME_RE.test(file)) {
           try {
             const stat = fs.statSync(path.join(cacheDir, file));
             if (stat.isFile()) {
@@ -135,6 +138,15 @@ export function getCacheStats(): CacheStats {
 export function getCacheKey(targetUrlOrPath: string): string {
   return crypto.createHash('md5').update(targetUrlOrPath).digest('hex');
 }
+
+/**
+ * Names this module produces: `<md5 hex>.<alnum ext or "media">`.
+ *
+ * Used to confine cache accounting and LRU eviction to genuine cache entries so
+ * unrelated files in a shared or misconfigured cache directory are neither
+ * counted against the quota nor deleted.
+ */
+const CACHE_FILENAME_RE = /^[0-9a-f]{32}\.[a-zA-Z0-9]+$/;
 
 export function getCacheFilePath(targetUrlOrPath: string, ext: string): string {
   const hash = getCacheKey(targetUrlOrPath);
@@ -175,6 +187,32 @@ export function updateAccessTime(filePath: string): void {
 
 /** Temp paths with a download currently in flight; never reclaimed as "stale". */
 const activeTempPaths = new Set<string>();
+
+/**
+ * Committed cache files with a read stream currently open.
+ *
+ * Files must not be evicted mid-stream. The previous `activeTempPaths` check in
+ * the LRU scan could never match a committed file (and the scan already skips
+ * every `*.tmp`), so it was dead code and an eviction pass could unlink the very
+ * file the proxy had just opened for a Range response.
+ */
+const filesInUse = new Set<string>();
+
+/** Marks a committed cache file as being read; returns a release function. */
+export function markCacheFileInUse(filePath: string): () => void {
+  filesInUse.add(filePath);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    filesInUse.delete(filePath);
+  };
+}
+
+/** Test hook: number of committed cache files currently open for reading. */
+export function getInUseFileCount(): number {
+  return filesInUse.size;
+}
 
 /**
  * Removes every temporary (.tmp) file, unconditionally.
@@ -258,6 +296,7 @@ export async function enforceLRULimit(): Promise<void> {
 
 async function runLRUPass(): Promise<void> {
   const cacheDir = getCacheDir();
+  let evictedAny = false;
   try {
     if (!fs.existsSync(cacheDir)) return;
 
@@ -270,8 +309,17 @@ async function runLRUPass(): Promise<void> {
 
     for (const filename of files) {
       if (filename.endsWith('.tmp')) continue; // Exclude active temp files from LRU size
+      // Only entries this module could have created are counted or evicted.
+      // The scan previously treated every directory entry as cache: a foreign
+      // file (or a misconfigured MEDIA_CACHE_DIR pointing at a shared folder)
+      // was both counted against the quota and eligible for deletion.
+      if (!CACHE_FILENAME_RE.test(filename)) continue;
       const fullPath = path.join(cacheDir, filename);
       if (activeTempPaths.has(fullPath)) continue;
+      // Never evict a file that is currently being streamed to a client: the
+      // open descriptor survives the unlink on POSIX, so playback would break
+      // only on the *next* Range request with a confusing ENOENT.
+      if (filesInUse.has(fullPath)) continue;
       try {
         const stat = await fs.promises.stat(fullPath);
         if (stat.isFile()) {
@@ -304,11 +352,17 @@ async function runLRUPass(): Promise<void> {
       try {
         await fs.promises.unlink(item.filePath);
         totalSize -= item.size;
+        evictedAny = true;
         console.log(`[Media Cache LRU] Evicted: ${path.basename(item.filePath)} (${(item.size / 1024 / 1024).toFixed(2)} MB)`);
       } catch (e) {
         console.warn(`[Media Cache LRU] Failed to delete file ${item.filePath}:`, e);
       }
     }
+
+    // Deletions change the reported size; without this the stats memo kept
+    // reporting the pre-eviction total for up to STATS_TTL_MS (verified: 1200
+    // bytes reported while 800 were on disk).
+    if (evictedAny) invalidateCacheStats();
 
     console.log(`[Media Cache LRU] Eviction finished. Current cache size: ${(totalSize / 1024 / 1024 / 1024).toFixed(2)} GB`);
   } catch (e) {
@@ -410,21 +464,57 @@ export function setMaxCacheableBytesForTest(bytes: number | null): void {
   maxCacheableBytesOverride = bytes;
 }
 
-/** Acquires a download slot, awaiting a free one when the budget is full. */
-async function acquireDownloadSlot(): Promise<void> {
+/**
+ * Upper bound on how many downloads may be *waiting* for a slot.
+ *
+ * Without this the queue was unbounded: `acquireDownloadSlot` pushed a promise
+ * per caller and the unauthenticated proxy GET path calls `cacheRemoteMedia`
+ * for every distinct target, so a caller could mint endless distinct URLs
+ * (`?path=/anything/<n>.mp3`) and grow the queue — one retained closure and
+ * promise each — without limit. Requests beyond this bound are refused rather
+ * than queued, which keeps the queue a fixed-size buffer.
+ */
+const MAX_QUEUED_DOWNLOADS = Math.max(
+  1,
+  parseInt(process.env.MEDIA_CACHE_MAX_QUEUE || '', 10) || 200
+);
+
+/**
+ * Acquires a download slot.
+ *
+ * Resolves `true` when the caller holds a slot and must release it, `false`
+ * when the queue is full and the caller must not proceed.
+ *
+ * The handoff is deliberate: `releaseDownloadSlot` transfers the slot directly
+ * to the next waiter and does NOT decrement `slotsInUse` first. The previous
+ * version decremented, then resolved the waiter, leaving a window in which a
+ * newly arriving caller saw a free slot and took it too, while the woken waiter
+ * also incremented on resume — so the effective concurrency could exceed
+ * `MAX_CONCURRENT_DOWNLOADS` (reproduced: peak 3 transfers with a budget of 2).
+ */
+async function acquireDownloadSlot(): Promise<boolean> {
   if (slotsInUse < MAX_CONCURRENT_DOWNLOADS) {
     slotsInUse++;
-    return;
+    return true;
+  }
+  if (downloadQueue.length >= MAX_QUEUED_DOWNLOADS) {
+    return false;
   }
   await new Promise<void>((resolve) => downloadQueue.push(resolve));
-  slotsInUse++;
+  // The slot was transferred to us by releaseDownloadSlot(); slotsInUse already
+  // accounts for it, so it must not be incremented again here.
+  return true;
 }
 
-/** Releases a download slot and wakes the next waiter, if any. */
+/** Releases a download slot, handing it to the next waiter if there is one. */
 function releaseDownloadSlot(): void {
-  if (slotsInUse > 0) slotsInUse--;
   const next = downloadQueue.shift();
-  if (next) next();
+  if (next) {
+    // Direct handoff: the slot stays in use, now by the woken waiter.
+    next();
+    return;
+  }
+  if (slotsInUse > 0) slotsInUse--;
 }
 
 
@@ -489,8 +579,17 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string)
   const downloadPromise = (async () => {
     // Reserve a slot BEFORE registering, so activeDownloads only ever contains
     // downloads that are actually transferring. Callers queue instead of
-    // stampeding the origin when the budget is exhausted.
-    await acquireDownloadSlot();
+    // stampeding the origin when the budget is exhausted, and are refused (not
+    // queued) once the queue itself is full.
+    const acquired = await acquireDownloadSlot();
+    if (!acquired) {
+      console.warn(
+        `[Media Cache] Download queue full (${MAX_QUEUED_DOWNLOADS}); skipping ${path.basename(cacheFilePath)}`
+      );
+      // Drop the registration so a later request can retry once the queue drains.
+      activeDownloads.delete(cacheFilePath);
+      return;
+    }
     activeTempPaths.add(tempPath);
 
     /**
@@ -501,6 +600,12 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string)
      * GC happened to run. Repeated rejections pinned connections and memory.
      */
     let upstream: ReadableStream<Uint8Array> | null = null;
+    /**
+     * True only while this call owns a freshly renamed cache file that has not
+     * yet been fully finalised. A throw in that window means the committed file
+     * is untrustworthy and must be removed (see the catch block).
+     */
+    let committed = false;
     const discardUpstream = async () => {
       if (!upstream) return;
       try {
@@ -523,12 +628,19 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string)
         cache: 'no-store'
       });
 
+      // Assign BEFORE any early return. `discardUpstream()` is a no-op while
+      // `upstream` is null, and this assignment used to sit after the `!res.ok`
+      // check — so on exactly the error path the helper was written to protect,
+      // it did nothing and the error body was abandoned unread (verified: a 404
+      // left the source stream with 0 cancels while the transport had already
+      // pulled a chunk).
+      upstream = res.body;
+
       if (!res.ok || !res.body) {
         console.warn(`[Media Cache] Failed to fetch remote file ${targetUrl}: HTTP ${res.status}`);
         await discardUpstream();
         return;
       }
-      upstream = res.body;
 
       // Reject HTML/SPA error pages served with a 200 status before writing anything.
       if (looksLikeHtmlContentType(res.headers.get('content-type'))) {
@@ -635,9 +747,17 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string)
             return;
           }
           await fs.promises.rename(tempPath, cacheFilePath);
+          // From here the committed file exists. If anything below throws, the
+          // catch block must remove it: `isCached()` only requires size > 0, so a
+          // partially-committed entry would otherwise be served as a cache HIT
+          // forever (the temp path no longer exists, so the finally-unlink is a
+          // no-op). `committed` records that this call owns the file at this point.
+          committed = true;
           updateAccessTime(cacheFilePath);
           invalidateCacheStats();
-          console.log(`[Media Cache] Successfully cached formal file: ${path.basename(cacheFilePath)} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
+          const committedSize = stat.size;
+          committed = false; // Successfully finalised; the file is now legitimate.
+          console.log(`[Media Cache] Successfully cached formal file: ${path.basename(cacheFilePath)} (${(committedSize / 1024 / 1024).toFixed(2)} MB)`);
           scheduleLRUEnforcement();
         } else {
           console.warn(`[Media Cache] Incomplete download for ${path.basename(cacheFilePath)} (got ${stat.size}/${expectedSize} bytes). Cleaning temp file.`);
@@ -646,6 +766,16 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string)
       }
     } catch (e: unknown) {
       console.warn(`[Media Cache] Download error for ${path.basename(cacheFilePath)}:`, (e as Error)?.message || e);
+      // A failure between the rename and finalisation leaves a file that
+      // `isCached()` would treat as a valid HIT forever, so the asset would be
+      // served truncated with 0 upstream fetches on every later request.
+      if (committed) {
+        try {
+          await fs.promises.unlink(cacheFilePath);
+          invalidateCacheStats();
+          console.warn(`[Media Cache] Removed partially-committed cache file: ${path.basename(cacheFilePath)}`);
+        } catch {}
+      }
     } finally {
       await discardUpstream();
       activeTempPaths.delete(tempPath);
