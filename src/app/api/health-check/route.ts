@@ -7,9 +7,15 @@ import {
   getScanLockInfo,
   appendLog,
   readRecentLogs,
+  readRunResult,
   readDbInfo,
   runTaskScript
 } from '@/lib/serverTasks';
+
+/** Generates the id echoed back so the UI can detect THIS run completing. */
+function newRunId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +30,7 @@ export async function GET() {
       lastAutoHeal: dbInfo.last_auto_healed_at,
       totalCourses: dbInfo.total_courses,
       totalRepaired: dbInfo.total_repaired,
+      lastRun: readRunResult(),
       recentLogs: readRecentLogs()
     });
   } catch (error: any) {
@@ -66,11 +73,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     console.log('[API/Health-Check] Triggering self-healing script: auto_heal_catalog.py in background...');
     appendLog('🚑 === 已觸發：全站自我巡檢與目錄自動修復 (pid guard active) ===');
 
-    runTaskScript('auto_heal_catalog.py', 'AutoHeal');
+    const runId = newRunId();
+    runTaskScript('auto_heal_catalog.py', 'AutoHeal', lock.token, runId);
 
     return NextResponse.json({
       message: 'Catalog audit & self-healing launched in background',
       status: 'started',
+      runId,
       running: HEAL_TASK,
       recentLogs: readRecentLogs()
     });

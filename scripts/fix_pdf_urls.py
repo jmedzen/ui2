@@ -5,7 +5,11 @@ Scans all courses in src/data/courses_db.json and resolves working PDF URLs from
 
 import os
 import json
+import sys
 import urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import media_common as mc
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(PROJECT_DIR, "data")
@@ -74,8 +78,8 @@ def main():
         print("Database file not found.")
         return
 
-    with open(DB_PATH, "r", encoding="utf-8") as f:
-        db = json.load(f)
+    # Tolerant load: a truncated catalog used to raise here and abort the tool.
+    db, _source = mc.load_catalog(DB_PATH)
 
     courses = db.get("courses", [])
     updated_count = 0
@@ -98,8 +102,9 @@ def main():
             c["pdfs"] = valid_pdfs
 
     db["courses"] = courses
-    with open(DB_PATH, "w", encoding="utf-8") as f:
-        json.dump(db, f, ensure_ascii=False, indent=2)
+    # Atomic write: this used to open("w") + json.dump, which truncates first, so
+    # an interrupt mid-write destroyed the catalog and left no valid file behind.
+    mc.write_json_atomic(DB_PATH, db)
 
     print(f"Done! Updated PDF entries for {updated_count} courses.")
 

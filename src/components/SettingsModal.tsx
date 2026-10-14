@@ -25,11 +25,26 @@ export default function SettingsModal({
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<'preferences' | 'logs'>('preferences');
   const [logs, setLogs] = useState<string>('讀取日誌中...');
+  // Structured outcome of the most recent run. Completion is detected from this
+  // (by matching the run id returned by POST) instead of by searching the log
+  // tail for magic strings: those strings did not match what the Python scripts
+  // actually emit, and both scripts share one log file, so a previous scan's
+  // "Scan finished" line made a later heal run look finished immediately.
+  const [lastRun, setLastRunState] = useState<{ id?: string; task?: string; ok?: boolean } | null>(null);
+  // Mirror of `lastRun` that is readable synchronously inside the polling loop:
+  // setState is asynchronous, so comparing against the state value would lag.
+  const lastRunRef = useRef<{ id?: string; task?: string; ok?: boolean } | null>(null);
+  const setLastRun = useCallback((value: { id?: string; task?: string; ok?: boolean } | null) => {
+    lastRunRef.current = value;
+    setLastRunState(value);
+  }, []);
   const [lastScan, setLastScan] = useState<string>('未知');
   const [totalCourses, setTotalCourses] = useState<number>(0);
   const [cacheStats, setCacheStats] = useState<{ currentBytes: number; maxBytes: number; fileCount: number; maxGb: number } | null>(null);
   const [isFetchingLogs, setIsFetchingLogs] = useState<boolean>(false);
   const [isTriggeringScan, setIsTriggeringScan] = useState<boolean>(false);
+  /** True when the server reports a maintenance task holding the lock. */
+  const [isTaskRunning, setIsTaskRunning] = useState<boolean>(false);
   const [isTriggeringHeal, setIsTriggeringHeal] = useState<boolean>(false);
   const [copyToast, setCopyToast] = useState<boolean>(false);
 
@@ -84,6 +99,7 @@ export default function SettingsModal({
         if (data.cacheStats) {
           setCacheStats(data.cacheStats);
         }
+        if (data.lastRun) setLastRun(data.lastRun);
         return data.recentLogs || '';
       } else {
         setLogs(`⚠️ 無法讀取媒體同步日誌檔 (${data.error || 'HTTP Error'})`);
@@ -95,13 +111,38 @@ export default function SettingsModal({
     } finally {
       setIsFetchingLogs(false);
     }
-  }, []);
+    // setLastRun is a stable useCallback (ref mirror + setState), so adding it
+    // cannot cause this callback to be recreated on every render.
+  }, [setLastRun]);
 
   useEffect(() => {
     if (isOpen) {
       fetchLogs();
     }
   }, [isOpen, fetchLogs]);
+
+  // While a task is running server-side, keep the buttons disabled even if this
+  // browser did not start it (e.g. the page was reloaded mid-scan, or another
+  // operator triggered it). `isRunning` was already returned by both GET
+  // endpoints but nothing consumed it, so a reload showed an idle UI while a
+  // scan held the lock.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const check = async () => {
+      const { ok, data } = await safeFetchJson('/api/scan');
+      if (cancelled || !ok) return;
+      setIsTaskRunning(Boolean(data.isRunning));
+    };
+    check();
+    const timer = setInterval(check, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+    // safeFetchJson is a plain function recreated each render; depending on it
+    // would restart this interval on every render, and it closes over nothing.
+  }, [isOpen]);
 
   // Auto scroll to bottom when logs update or tab switches to logs
   useEffect(() => {
@@ -132,19 +173,17 @@ export default function SettingsModal({
 
       const { ok, data } = await safeFetchJson('/api/scan', { method: 'POST' });
       if (ok) {
-        if (data.recentLogs) setLogs(data.recentLogs);
+        // Keep the locally prepended trigger line; the server tail does not
+        // contain it, so replacing the buffer made it disappear instantly.
+        if (data.recentLogs) setLogs((prev) => (prev ? `${prev}\n${data.recentLogs}` : data.recentLogs));
         if (data.lastScan) setLastScan(data.lastScan);
         if (data.totalCourses) setTotalCourses(data.totalCourses);
 
-        // Poll logs for up to 30 seconds to stream background progress and detect completion
-        for (let i = 0; i < 12; i++) {
-          if (!(await interruptibleSleep(2500))) return;
-          const latestLogs = await fetchLogs();
-          if (!isMountedRef.current) return;
-          if (latestLogs && (latestLogs.includes('Scan finished') || latestLogs.includes('Error scanning'))) {
-            break;
-          }
-        }
+        // Poll until THIS run reports an outcome. 60 iterations x 2.5s = ~150s of
+        // progress streaming; the scan itself keeps running in the background
+        // regardless, so leaving the loop is purely a UI concern.
+        await pollUntilRunFinishes(data.runId, 60);
+        if (!isMountedRef.current) return;
 
         if (onRefreshCourses && isMountedRef.current) {
           await onRefreshCourses();
@@ -182,17 +221,13 @@ export default function SettingsModal({
 
       const { ok, data } = await safeFetchJson('/api/health-check', { method: 'POST' });
       if (ok) {
-        if (data.recentLogs) setLogs(data.recentLogs);
+        // See handleTriggerScan: preserve the local trigger line.
+        if (data.recentLogs) setLogs((prev) => (prev ? `${prev}\n${data.recentLogs}` : data.recentLogs));
 
-        // Poll logs for up to 35 seconds to stream background healing progress and detect completion
-        for (let i = 0; i < 14; i++) {
-          if (!(await interruptibleSleep(2500))) return;
-          const latestLogs = await fetchLogs();
-          if (!isMountedRef.current) return;
-          if (latestLogs && (latestLogs.includes('自我巡檢與修復完成') || latestLogs.includes('Scan finished') || latestLogs.includes('Inspection finished'))) {
-            break;
-          }
-        }
+        // See handleTriggerScan: completion is read from the structured run
+        // record, never from the shared log tail.
+        await pollUntilRunFinishes(data.runId, 60);
+        if (!isMountedRef.current) return;
 
         if (onRefreshCourses && isMountedRef.current) {
           await onRefreshCourses();
@@ -247,6 +282,37 @@ export default function SettingsModal({
     }
     return isMountedRef.current;
   }, []);
+
+  /**
+   * Streams progress until the run identified by `runId` reports an outcome.
+   *
+   * Returns true when the run finished, false if it is still going when the
+   * budget is exhausted.
+   */
+  const pollUntilRunFinishes = useCallback(
+    async (runId: string | undefined, iterations: number): Promise<boolean> => {
+      for (let i = 0; i < iterations; i++) {
+        if (!(await interruptibleSleep(2500))) return false;
+        const latestLogs = await fetchLogs();
+        if (!isMountedRef.current) return false;
+        if (
+          runId &&
+          lastRunRef.current &&
+          lastRunRef.current.id === runId
+        ) {
+          return true;
+        }
+        // Fall back to completion by log line only when the server did not
+        // provide an id (older server during a rolling deploy).
+        if (!runId && latestLogs && /Finished|Complete/.test(latestLogs)) {
+          return true;
+        }
+      }
+      return false;
+    },
+    [fetchLogs, interruptibleSleep]
+  );
+
 
   // Mouse Drag Resizing for Window Width
   const handleMouseDownResize = (e: React.MouseEvent) => {
@@ -508,6 +574,16 @@ export default function SettingsModal({
                   <span className="stat-value">{totalCourses ? `${totalCourses} 門` : '---'}</span>
                 </div>
                 <div className="stat-card">
+                  <span className="stat-label">🧾 最近維護結果</span>
+                  <span className="stat-value">
+                    {isTaskRunning
+                      ? '執行中…'
+                      : lastRun
+                        ? `${lastRun.ok ? '✅ 成功' : '❌ 失敗'}（${lastRun.task || '-'}）`
+                        : '---'}
+                  </span>
+                </div>
+                <div className="stat-card">
                   <span className="stat-label">💾 媒體快取容量</span>
                   <span className="stat-value">
                     {cacheStats ? `${cacheStats.maxGb} GB` : '20 GB'}
@@ -525,7 +601,7 @@ export default function SettingsModal({
                   <button
                     className="log-sync-btn"
                     onClick={handleTriggerScan}
-                    disabled={isTriggeringScan || isTriggeringHeal || isFetchingLogs}
+                    disabled={isTriggeringScan || isTriggeringHeal || isFetchingLogs || isTaskRunning}
                     title="連線 fayun.org 掃描新上架之佛法經論、禪修開示與音訊影音媒體資源"
                   >
                     {isTriggeringScan ? '⏳ 正在掃描同步中...' : '🔄 同步新媒體'}
@@ -536,7 +612,7 @@ export default function SettingsModal({
                   <button
                     className="log-heal-btn"
                     onClick={handleTriggerAutoHeal}
-                    disabled={isTriggeringHeal || isTriggeringScan || isFetchingLogs}
+                    disabled={isTriggeringHeal || isTriggeringScan || isFetchingLogs || isTaskRunning}
                     title="自動檢測全站所有課程之音訊、影音與 PDF 講義鏈結，發現無效網址自動校正修復"
                   >
                     {isTriggeringHeal ? '🚑 正在巡檢修復中...' : '🚑 自我巡檢自動修復'}
@@ -558,7 +634,7 @@ export default function SettingsModal({
                   <button
                     className="log-refresh-btn"
                     onClick={fetchLogs}
-                    disabled={isFetchingLogs || isTriggeringScan || isTriggeringHeal}
+                    disabled={isFetchingLogs || isTriggeringScan || isTriggeringHeal || isTaskRunning}
                     title="從網頁伺服器重新載入最新 scanner.log 內容"
                   >
                     🔄 重新整理日誌

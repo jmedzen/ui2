@@ -1,54 +1,46 @@
 #!/usr/bin/env python3
 """
-Fayun.org Daily Media Scanner
-Scans fayun.org every 24 hours for new courses, audio, video, and PDF notes.
-Updates src/data/courses_db.json automatically.
+Fayun.org Media Scanner
+
+Scans fayun.org for new courses, audio, video and PDF notes and updates the
+catalog. Shared concerns (locking, atomic writes, corrupt-file recovery, log
+rotation) live in media_common so this script and auto_heal_catalog.py cannot
+diverge from each other again.
 """
 
+import json
 import os
 import sys
-import json
-import time
 import urllib.request
 from datetime import datetime
 
-PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(PROJECT_DIR, "data")
-os.makedirs(DATA_DIR, exist_ok=True)
-DB_PATH = os.path.join(DATA_DIR, "courses_db.json")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import media_common as mc
 
-# Fallback initialization from src/data/courses_db.json if data/courses_db.json doesn't exist
-SRC_DB_PATH = os.path.join(PROJECT_DIR, "src", "data", "courses_db.json")
-if not os.path.exists(DB_PATH) and os.path.exists(SRC_DB_PATH):
-    try:
-        import shutil
-        shutil.copyfile(SRC_DB_PATH, DB_PATH)
-    except Exception as e:
-        print(f"Warning: Could not initialize {DB_PATH}: {e}")
-
-LOG_DIR = os.path.join(PROJECT_DIR, "data", "logs")
-os.makedirs(LOG_DIR, exist_ok=True)
-LOG_PATH = os.path.join(LOG_DIR, "scanner.log")
+PROJECT_DIR = mc.PROJECT_DIR
+# Sourced from media_common so both scripts agree on where the catalog lives.
+DB_PATH = mc.DB_PATH
+SRC_DB_PATH = mc.SRC_DB_PATH
 
 # Rotate the log once it grows past this size. The log is append-only and was
 # never rotated, so it could grow without bound and every /api/scan read had to
 # page through an ever-larger file.
-LOG_MAX_BYTES = 5 * 1024 * 1024
-LOG_BACKUPS = 3
+LOG_MAX_BYTES = mc.LOG_MAX_BYTES
+LOG_BACKUPS = mc.LOG_BACKUPS
 
-legacy_logs = [
-    os.path.join(PROJECT_DIR, "logs", "scanner.log"),
-    os.path.join(PROJECT_DIR, "scanner.log")
-]
-for old_log in legacy_logs:
-    if os.path.exists(old_log) and old_log != LOG_PATH:
-        try:
-            if not os.path.exists(LOG_PATH):
-                import shutil
-                shutil.copyfile(old_log, LOG_PATH)
-                break
-        except:
-            pass
+
+def log_message(msg):
+    mc.log(msg)
+
+
+def write_json_atomic(target_path, payload):
+    """Delegates to the shared writer (unique temp name + surrogate safety)."""
+    mc.write_json_atomic(target_path, payload)
+
+
+def rotate_log_if_needed():
+    mc.rotate_log_if_needed()
+
 
 DB_ACCESS_URL = "https://www.fayun.org/public/php/dbaccess.php"
 
@@ -120,51 +112,6 @@ TOPIC_MAP = {
     "yoga": "瑜伽師地論"
 }
 
-def write_json_atomic(target_path, payload):
-    """
-    Writes JSON via a temp file + os.replace so a crash or SIGTERM mid-write can
-    never leave a truncated database behind. The previous open("w") + json.dump
-    truncated the file first, so an interrupted scan destroyed the catalog.
-    """
-    tmp_path = f"{target_path}.tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp_path, target_path)
-
-
-def rotate_log_if_needed():
-    """Keeps scanner.log bounded by rolling it into numbered backups."""
-    try:
-        if not os.path.exists(LOG_PATH):
-            return
-        if os.path.getsize(LOG_PATH) < LOG_MAX_BYTES:
-            return
-        for i in range(LOG_BACKUPS - 1, 0, -1):
-            older = f"{LOG_PATH}.{i}"
-            newer = f"{LOG_PATH}.{i + 1}"
-            if os.path.exists(older):
-                if i + 1 >= LOG_BACKUPS:
-                    os.remove(older)
-                else:
-                    os.replace(older, newer)
-        os.replace(LOG_PATH, f"{LOG_PATH}.1")
-    except Exception as e:
-        print(f"Log rotation skipped: {e}", flush=True)
-
-
-def log_message(msg):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    line = f"[{timestamp}] {msg}"
-    print(line, flush=True)
-    try:
-        rotate_log_if_needed()
-        with open(LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-    except Exception as e:
-        print(f"Failed to write log: {e}", flush=True)
-
 def fetch_category_media(main_menu, sub_menu):
     req = urllib.request.Request(
         DB_ACCESS_URL,
@@ -206,24 +153,59 @@ def normalize_media_path(p):
 def run_scan():
     log_message("🔄 === 開始連線 fayun.org 執行媒體同步與掃描 ===")
 
-    existing_db = {"courses": []}
-    if os.path.exists(DB_PATH):
-        with open(DB_PATH, "r", encoding="utf-8") as f:
-            existing_db = json.load(f)
+    # Tolerant load: a truncated or non-object catalog used to raise here, before
+    # any network work, so every later run died the same way and the broken file
+    # was left in place. load_catalog() quarantines it and recovers from the
+    # bundled src copy when that is healthy.
+    existing_db, source = mc.load_catalog()
+    if not isinstance(existing_db, dict) or not isinstance(existing_db.get("courses"), list):
+        log_message("❌ 無法取得可用的課程資料庫，中止掃描。")
+        return {"total": 0, "new": 0, "updated": 0, "error": "no usable catalog"}
+    log_message(f"ℹ️ 已載入課程資料庫（來源：{source}，共 {len(existing_db.get('courses', []))} 筆）")
 
-    existing_courses = {str(c["id"]): c for c in existing_db.get("courses", [])}
+    # Defensive: only rows that are objects carrying an id can be indexed.
+    existing_courses = {
+        str(c["id"]): c
+        for c in existing_db.get("courses", [])
+        if isinstance(c, dict) and "id" in c
+    }
     new_items_count = 0
     updated_items_count = 0
+    # Counts rows actually returned by the API this run. The preservation loop
+    # below re-adds every existing course, so `scanned_courses` is never empty
+    # and cannot be used to detect a total upstream failure.
+    fetched_items_count = 0
+    categories_ok = 0
 
     scanned_courses = []
 
     for main_menu, sub_menu in MENU_TARGETS:
+        # Fetch errors are per-category; a single bad ROW is handled per item
+        # below, because previously one malformed row aborted the whole category
+        # and silently dropped every remaining new course in it (exit code 0).
         try:
             items = fetch_category_media(main_menu, sub_menu)
-            for item in items:
+        except Exception as e:
+            log_message(f"❌ Error fetching {main_menu}/{sub_menu}: {e}")
+            continue
+
+        if not isinstance(items, list):
+            log_message(f"⚠️ Unexpected response for {main_menu}/{sub_menu}; skipping category.")
+            continue
+        categories_ok += 1
+
+        for item in items:
+            try:
+                if not isinstance(item, dict):
+                    log_message(f"⚠️ Skipped non-object item in {main_menu}/{sub_menu}.")
+                    continue
                 c_id = item.get("id")
-                c_name = item.get("name", "").strip()
+                if c_id is None:
+                    log_message(f"⚠️ Skipped item without id in {main_menu}/{sub_menu}.")
+                    continue
+                c_name = (item.get("name") or "").strip()
                 topic = item.get("topic") or ""
+                fetched_items_count += 1
 
                 main_title = MENU_MAP.get(main_menu, {}).get("title", main_menu)
                 sub_title = MENU_MAP.get(main_menu, {}).get("subs", {}).get(sub_menu, sub_menu)
@@ -245,19 +227,32 @@ def run_scan():
                         video_p = PATH_OVERRIDES[c_id]["video_path"]
 
                 if existing:
-                    # Preserve all repaired/corrected paths and data from existing database
-                    if existing.get("audio_path"):
+                    # Preserve repaired/corrected paths from the existing database.
+                    #
+                    # PATH_OVERRIDES is applied just above and was then
+                    # unconditionally overwritten by the stored value, so an
+                    # override (or any server-side correction) could never take
+                    # effect for a course already in the database — only for
+                    # brand-new ids. Overrides now win, since they exist precisely
+                    # to correct what is stored.
+                    override = PATH_OVERRIDES.get(c_id) or {}
+                    if existing.get("audio_path") and "audio_path" not in override:
                         audio_p = existing["audio_path"]
-                    if existing.get("lecture_path"):
+                    if existing.get("lecture_path") and "lecture_path" not in override:
                         lecture_p = existing["lecture_path"]
-                    if existing.get("video_path") is not None:
+                    if existing.get("video_path") is not None and "video_path" not in override:
                         video_p = existing["video_path"]
                     if existing.get("pdfs"):
                         c_pdfs = existing["pdfs"]
-                    if existing.get("total_episodes") and existing["total_episodes"] > 0:
-                        total_episodes = existing["total_episodes"]
-                    else:
-                        total_episodes = item.get("total", 0) or 0
+                    # The stored count used to win forever, so a course that
+                    # gained lectures upstream kept the old figure permanently
+                    # (161 of 684 courses have no audio_path for the healer to
+                    # recount from). Trust the API when it reports a larger count,
+                    # otherwise keep the stored value, which may hold a manual
+                    # correction.
+                    api_total = item.get("total", 0) or 0
+                    stored_total = existing.get("total_episodes") or 0
+                    total_episodes = max(stored_total, api_total)
                 else:
                     total_episodes = item.get("total", 0) or 0
 
@@ -293,37 +288,62 @@ def run_scan():
                     log_message(f"🔄 [更新同步] ID: {c_id} | 完整名稱: '{c_name}' | 分類: {main_title} ➔ {sub_title} ➔ {topic_title} | 音訊路徑: {course_obj.get('audio_path')} | 集數: {course_obj.get('total_episodes')}")
 
                 scanned_courses.append(course_obj)
-        except Exception as e:
-            log_message(f"❌ Error scanning {main_menu}/{sub_menu}: {e}")
+            except Exception as e:
+                # Per-item: keep processing the rest of the category instead of
+                # discarding it, and say which row failed so it can be fixed.
+                log_message(f"⚠️ Skipped item in {main_menu}/{sub_menu}: {e}")
 
-    # Preserve any existing courses in database that were not returned in current scan
-    scanned_ids = {c["id"] for c in scanned_courses}
+    # Preserve any existing courses in database that were not returned in current scan.
+    # Only well-formed rows are carried over; a row without an id or sort keys used
+    # to raise here, AFTER all the network work, discarding the entire scan.
+    scanned_ids = {c["id"] for c in scanned_courses if isinstance(c, dict) and "id" in c}
     for old_c in existing_db.get("courses", []):
+        if not isinstance(old_c, dict) or "id" not in old_c:
+            log_message("⚠️ Dropped malformed existing course row (missing id).")
+            continue
         if old_c["id"] not in scanned_ids:
             scanned_courses.append(old_c)
 
-    scanned_courses.sort(key=lambda x: (x["main_menu"], x["sub_menu"], x["topic"], x["name"]))
+    def _sort_key(c):
+        return (
+            str(c.get("main_menu") or ""),
+            str(c.get("sub_menu") or ""),
+            str(c.get("topic") or ""),
+            str(c.get("name") or ""),
+        )
 
-    new_db = {
+    scanned_courses.sort(key=_sort_key)
+
+    # Carry over EVERY unknown top-level key, not just the two known ones, so
+    # metadata written by other tooling is not silently erased by a scan.
+    new_db = dict(existing_db) if isinstance(existing_db, dict) else {}
+    new_db.update({
         "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "total_courses": len(scanned_courses),
         "menu_schema": MENU_MAP,
         "topic_schema": TOPIC_MAP,
         "courses": scanned_courses
-    }
-    if existing_db:
-        if "last_auto_healed_at" in existing_db:
-            new_db["last_auto_healed_at"] = existing_db["last_auto_healed_at"]
-        if "total_repaired_courses" in existing_db:
-            new_db["total_repaired_courses"] = existing_db["total_repaired_courses"]
+    })
+
+    # Never publish over a healthy catalog when upstream yielded nothing: a
+    # network outage or an API shape change would otherwise rewrite the database
+    # (and the bundled copy) with the preserved rows while reporting success.
+    if fetched_items_count == 0 and existing_courses:
+        log_message(
+            f"❌ Scan fetched 0 items across {len(MENU_TARGETS)} categories "
+            f"({categories_ok} responded); keeping the existing catalog unchanged."
+        )
+        return {
+            "total": len(existing_courses),
+            "new": 0,
+            "updated": 0,
+            "error": "scan fetched no items; catalog left unchanged",
+        }
 
     write_json_atomic(DB_PATH, new_db)
 
-    if os.path.exists(SRC_DB_PATH):
-        try:
-            write_json_atomic(SRC_DB_PATH, new_db)
-        except Exception as e:
-            log_message(f"Notice: Could not sync to {SRC_DB_PATH}: {e}")
+    # Sync the bundled copy (used as the recovery source and shipped in the image).
+    mc.sync_to_src(new_db)
 
     log_message(f"✅ Scan finished. Total courses: {len(scanned_courses)} | New: {new_items_count} | Updated: {updated_items_count}")
     return {
@@ -333,5 +353,22 @@ def run_scan():
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
 
+
+def main():
+    """Takes the shared catalog lock, then runs the scan."""
+    try:
+        with mc.catalog_lock():
+            result = run_scan()
+    except mc.CatalogBusy as e:
+        log_message(f"⏭️ 略過掃描：{e}")
+        return mc.EXIT_BUSY
+
+    # A scan that could not produce courses must not report success, otherwise
+    # the Node parent logs "Completed successfully" and the UI shows no problem.
+    if isinstance(result, dict) and result.get("error"):
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
-    run_scan()
+    sys.exit(main())

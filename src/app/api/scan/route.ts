@@ -8,9 +8,15 @@ import {
   getScanLockInfo,
   appendLog,
   readRecentLogs,
+  readRunResult,
   readDbInfo,
   runTaskScript
 } from '@/lib/serverTasks';
+
+/** Generates the id echoed back so the UI can detect THIS run completing. */
+function newRunId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +33,7 @@ export async function GET() {
       lastScan: dbInfo.generated_at,
       totalCourses: dbInfo.total_courses,
       recentLogs: readRecentLogs(),
+      lastRun: readRunResult(),
       cacheStats
     });
   } catch (error: any) {
@@ -71,12 +78,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     console.log('[API/Scan] Triggering media scan script: scan_fayun.py in background...');
     appendLog(`🔄 === 已觸發：連線 fayun.org 執行媒體同步與掃描 (pid guard active) ===`);
 
-    runTaskScript('scan_fayun.py', 'Scan');
+    const runId = newRunId();
+    runTaskScript('scan_fayun.py', 'Scan', lock.token, runId);
 
     const dbInfo = readDbInfo();
     return NextResponse.json({
       message: 'Scan launched in background',
       status: 'started',
+      runId,
       running: SCAN_TASK,
       lastScan: dbInfo.generated_at,
       totalCourses: dbInfo.total_courses,

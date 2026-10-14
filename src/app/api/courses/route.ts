@@ -52,19 +52,52 @@ function getDatabasePath(): string {
       const srcTotal = Number(srcContent.total_courses || srcContent.courses?.length || 0);
 
       // If bundled SRC has more courses than the host data file, upgrade host data file!
-      if (srcTotal > dataTotal) {
+      //
+      // Guarded: the bundled file is only trusted when it is structurally sound.
+      // "More courses" alone is not evidence of a better catalog -- a truncated
+      // or half-written src file can report a larger count while carrying no
+      // usable rows, and this path would then replace a good host catalog with
+      // it (only two bookkeeping fields were preserved).
+      const dataCourses = Array.isArray(dataContent.courses) ? dataContent.courses : null;
+      const srcCourses = Array.isArray(srcContent.courses) ? srcContent.courses : null;
+      const srcUsable =
+        srcCourses !== null &&
+        srcCourses.length > 0 &&
+        srcCourses.every((c: unknown) => c && typeof c === 'object' && (c as { id?: unknown }).id != null);
+
+      if (srcTotal > dataTotal && srcUsable && dataCourses !== null) {
         console.log(`[Database] Auto-upgrading data/courses_db.json (${dataTotal} -> ${srcTotal} courses) from bundled image.`);
-        // Preserve any auto_healed stats
-        if (dataContent.last_auto_healed_at) {
-          srcContent.last_auto_healed_at = dataContent.last_auto_healed_at;
+        // Preserve every bookkeeping field the host file owns, not just two:
+        // anything the bundled copy cannot know about would otherwise be lost.
+        for (const key of Object.keys(dataContent)) {
+          if (key.startsWith('last_auto_healed') || key.startsWith('total_repaired')) {
+            srcContent[key] = dataContent[key];
+          }
         }
-        if (dataContent.total_repaired_courses) {
-          srcContent.total_repaired_courses = dataContent.total_repaired_courses;
+        // Unique temp name: the Python maintenance scripts write this same file,
+        // and a shared `.tmp` name lets two writers clobber each other's partial
+        // output before either rename lands.
+        const tmpPath = `${DATA_FILE}.${process.pid}.${Date.now().toString(36)}.tmp`;
+        try {
+          fs.writeFileSync(tmpPath, JSON.stringify(srcContent, null, 2), 'utf-8');
+          // fsync before rename so the swap cannot expose an unflushed file after
+          // a crash, matching the atomic-write contract used elsewhere.
+          const handle = fs.openSync(tmpPath, 'r+');
+          try {
+            fs.fsyncSync(handle);
+          } finally {
+            fs.closeSync(handle);
+          }
+          fs.renameSync(tmpPath, DATA_FILE); // Atomic swap: never leave a truncated DB
+          resolved = DATA_FILE;
+        } catch (e) {
+          try {
+            fs.rmSync(tmpPath, { force: true });
+          } catch {}
+          throw e;
         }
-        const tmpPath = `${DATA_FILE}.tmp`;
-        fs.writeFileSync(tmpPath, JSON.stringify(srcContent, null, 2), 'utf-8');
-        fs.renameSync(tmpPath, DATA_FILE); // Atomic swap: never leave a truncated DB
-        resolved = DATA_FILE;
+      } else if (srcTotal > dataTotal && !srcUsable) {
+        console.warn('[Database] Skipped auto-upgrade: bundled catalog is not structurally usable.');
       }
     } else if (fs.existsSync(SRC_FILE) && !fs.existsSync(DATA_FILE)) {
       const dataDir = path.dirname(DATA_FILE);
