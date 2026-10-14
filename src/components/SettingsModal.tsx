@@ -47,6 +47,11 @@ export default function SettingsModal({
   const [isTaskRunning, setIsTaskRunning] = useState<boolean>(false);
   const [isTriggeringHeal, setIsTriggeringHeal] = useState<boolean>(false);
   const [copyToast, setCopyToast] = useState<boolean>(false);
+  // Transient "you triggered X" notice, rendered as a banner instead of being
+  // spliced into `logs`. It used to be prepended to the log text, which the next
+  // poll overwrote (the server tail does not contain it) -- and appending the
+  // server tail to it instead made the same lines accumulate on every poll.
+  const [localNotice, setLocalNotice] = useState<string>('');
 
   // Resizable Width & Log Scroll References
   const [modalWidth, setModalWidth] = useState<number>(820);
@@ -71,6 +76,17 @@ export default function SettingsModal({
     if (logBodyRef.current) {
       logBodyRef.current.scrollTop = logBodyRef.current.scrollHeight;
     }
+  }, []);
+
+  // The log now refreshes every 3s. Auto-scrolling on every update would yank
+  // the view back to the bottom while the user is reading earlier lines, so the
+  // window only follows the tail when it is already near the bottom.
+  const stickToBottomRef = useRef<boolean>(true);
+  const handleLogScroll = useCallback(() => {
+    const el = logBodyRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = distanceFromBottom < 40;
   }, []);
 
   const safeFetchJson = async (url: string, options?: RequestInit) => {
@@ -100,6 +116,8 @@ export default function SettingsModal({
           setCacheStats(data.cacheStats);
         }
         if (data.lastRun) setLastRun(data.lastRun);
+        // Carried by the same payload, so the poll below needs only one request.
+        setIsTaskRunning(Boolean(data.isRunning));
         return data.recentLogs || '';
       } else {
         setLogs(`⚠️ 無法讀取媒體同步日誌檔 (${data.error || 'HTTP Error'})`);
@@ -121,69 +139,66 @@ export default function SettingsModal({
     }
   }, [isOpen, fetchLogs]);
 
-  // While a task is running server-side, keep the buttons disabled even if this
-  // browser did not start it (e.g. the page was reloaded mid-scan, or another
-  // operator triggered it). `isRunning` was already returned by both GET
-  // endpoints but nothing consumed it, so a reload showed an idle UI while a
-  // scan held the lock.
+  // Keep the log window and the running indicator fresh while the log tab is
+  // open, no matter who started the task.
+  //
+  // Previously this effect refreshed ONLY `isRunning` and threw the `recentLogs`
+  // payload away, and the separate 2s log poll below ran only while this browser
+  // was inside a trigger call. So once a run finished -- or when it was started
+  // from another browser, by the 24h daemon, or by curl -- the window kept
+  // showing whatever it had loaded when the modal opened, forever.
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || activeTab !== 'logs') return;
     let cancelled = false;
-    const check = async () => {
-      const { ok, data } = await safeFetchJson('/api/scan');
-      if (cancelled || !ok) return;
-      setIsTaskRunning(Boolean(data.isRunning));
+
+    // One request per tick: fetchLogs writes the log text, the stat cards and
+    // the running flag from the same /api/scan payload.
+    const refresh = async () => {
+      if (cancelled) return;
+      await fetchLogs();
     };
-    check();
-    const timer = setInterval(check, 5000);
+
+    refresh();
+    const timer = setInterval(refresh, 3000);
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-    // safeFetchJson is a plain function recreated each render; depending on it
-    // would restart this interval on every render, and it closes over nothing.
-  }, [isOpen]);
+    // fetchLogs is a stable useCallback, so this effect is not restarted by
+    // unrelated re-renders and the interval survives while the tab stays open.
+  }, [isOpen, activeTab, fetchLogs]);
 
-  // Auto scroll to bottom when logs update or tab switches to logs
+  // Auto scroll to bottom when logs update or the tab switches, unless the user
+  // has scrolled up to read earlier output.
   useEffect(() => {
-    if (activeTab === 'logs') {
-      const timer = setTimeout(scrollToBottom, 60);
-      return () => clearTimeout(timer);
-    }
+    if (activeTab !== 'logs') return;
+    if (!stickToBottomRef.current) return;
+    const timer = setTimeout(scrollToBottom, 60);
+    return () => clearTimeout(timer);
   }, [logs, activeTab, scrollToBottom]);
-
-  // Poll logs periodically while a background task is triggering
-  useEffect(() => {
-    if (!isTriggeringScan && !isTriggeringHeal) return;
-
-    const interval = setInterval(() => {
-      fetchLogs();
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [isTriggeringScan, isTriggeringHeal, fetchLogs]);
 
   const handleTriggerScan = async () => {
     try {
       setIsTriggeringScan(true);
       setActiveTab('logs');
       const timestamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
-      const promptMsg = `[${timestamp}] ⏳ [系統操作] 使用者觸發：連線 fayun.org 執行媒體同步與掃描中...`;
-      setLogs((prev) => (prev ? `${prev}\n${promptMsg}` : promptMsg));
+      setLocalNotice(`⏳ 已觸發：連線 fayun.org 執行媒體同步與掃描中…（${timestamp}）`);
 
       const { ok, data } = await safeFetchJson('/api/scan', { method: 'POST' });
       if (ok) {
-        // Keep the locally prepended trigger line; the server tail does not
-        // contain it, so replacing the buffer made it disappear instantly.
-        if (data.recentLogs) setLogs((prev) => (prev ? `${prev}\n${data.recentLogs}` : data.recentLogs));
+        // The trigger message lives in the banner above, so the log buffer is
+        // simply the server tail. Appending it here (or prepending to it) either
+        // dropped the message on the next poll or duplicated every line.
+        if (data.recentLogs) setLogs(data.recentLogs);
         if (data.lastScan) setLastScan(data.lastScan);
         if (data.totalCourses) setTotalCourses(data.totalCourses);
 
         // Poll until THIS run reports an outcome. 60 iterations x 2.5s = ~150s of
         // progress streaming; the scan itself keeps running in the background
         // regardless, so leaving the loop is purely a UI concern.
-        await pollUntilRunFinishes(data.runId, 60);
+        const finished = await pollUntilRunFinishes(data.runId, 60);
         if (!isMountedRef.current) return;
+        if (finished) setLocalNotice('');
 
         if (onRefreshCourses && isMountedRef.current) {
           await onRefreshCourses();
@@ -199,8 +214,7 @@ export default function SettingsModal({
             : data.status === 'busy'
               ? '（請稍候，或檢查是否有殘留的掃描程序）'
               : '';
-        const errorMsg = `[${timestamp}] ❌ [系統錯誤] 媒體同步失敗: ${data.error || '未知錯誤'}${hint}`;
-        setLogs((prev) => `${prev}\n${errorMsg}`);
+        setLocalNotice(`❌ 媒體同步失敗：${data.error || '未知錯誤'}${hint}`);
       }
     } catch (e: any) {
       const errorMsg = `[${new Date().toLocaleTimeString('zh-TW', { hour12: false })}] ❌ [系統錯誤] 執行同步出錯: ${e.message}`;
@@ -216,18 +230,18 @@ export default function SettingsModal({
       setActiveTab('logs');
       const timestamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
       const countLabel = totalCourses || 684;
-      const promptMsg = `[${timestamp}] ⏳ [系統操作] 使用者觸發：全站 ${countLabel} 門課程巡檢與自我修復中...`;
-      setLogs((prev) => (prev ? `${prev}\n${promptMsg}` : promptMsg));
+      setLocalNotice(`⏳ 已觸發：全站 ${countLabel} 門課程巡檢與自我修復中…（${timestamp}）`);
 
       const { ok, data } = await safeFetchJson('/api/health-check', { method: 'POST' });
       if (ok) {
-        // See handleTriggerScan: preserve the local trigger line.
-        if (data.recentLogs) setLogs((prev) => (prev ? `${prev}\n${data.recentLogs}` : data.recentLogs));
+        // See handleTriggerScan: the trigger message is shown in the banner.
+        if (data.recentLogs) setLogs(data.recentLogs);
 
         // See handleTriggerScan: completion is read from the structured run
         // record, never from the shared log tail.
-        await pollUntilRunFinishes(data.runId, 60);
+        const finished = await pollUntilRunFinishes(data.runId, 60);
         if (!isMountedRef.current) return;
+        if (finished) setLocalNotice('');
 
         if (onRefreshCourses && isMountedRef.current) {
           await onRefreshCourses();
@@ -642,13 +656,31 @@ export default function SettingsModal({
                 </div>
               </div>
 
+              {/* Transient trigger/error notice: kept out of the log text so a
+                  poll cannot erase it and repeated polls cannot duplicate it. */}
+              {localNotice && (
+                <div className="log-notice-bar" role="status">
+                  <span>{localNotice}</span>
+                  <button
+                    type="button"
+                    className="log-notice-dismiss"
+                    onClick={() => setLocalNotice('')}
+                    aria-label="關閉通知"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               {/* Log Display Window */}
               <div className="log-window-wrapper">
                 <div className="log-window-header">
                   <span className="log-file-tag">📄 scanner.log</span>
-                  <span className="log-hint">紀錄 fayun.org 媒體掃描、新上架與路徑自我修復歷史資訊 (自動跳至最新)</span>
+                  <span className="log-hint">
+                    紀錄 fayun.org 媒體掃描、新上架與路徑自我修復歷史資訊（每 3 秒自動更新，自動跳至最新）
+                  </span>
                 </div>
-                <pre className="log-window-body" ref={logBodyRef}>
+                <pre className="log-window-body" ref={logBodyRef} onScroll={handleLogScroll}>
                   {logs}
                 </pre>
               </div>

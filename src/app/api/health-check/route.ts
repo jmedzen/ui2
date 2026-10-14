@@ -1,4 +1,12 @@
 import { NextResponse } from 'next/server';
+
+/**
+ * These endpoints report live process state (a lock file, a log tail, a run
+ * record). They are dynamic, but a GET with no cache directive at all is still
+ * eligible for heuristic caching in some intermediaries, which would leave the
+ * UI polling a frozen body. Being explicit removes the ambiguity.
+ */
+const NO_STORE = { 'Cache-Control': 'no-store, max-age=0' } as const;
 import {
   HEAL_TASK,
   authorizeTaskRequest,
@@ -32,7 +40,7 @@ export async function GET() {
       totalRepaired: dbInfo.total_repaired,
       lastRun: readRunResult(),
       recentLogs: readRecentLogs()
-    });
+    }, { headers: NO_STORE });
   } catch (error: any) {
     console.error('[API/Health-Check] Error in GET handler:', error);
     return NextResponse.json({ error: 'Failed to read audit status' }, { status: 500 });
