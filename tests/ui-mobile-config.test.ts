@@ -79,6 +79,25 @@ test('UI, Mobile Configuration & Theme Integrity Suite', async (t) => {
     assert.ok(compose.includes('no-new-privileges:true'), 'no-new-privileges must stay enabled');
     assert.ok(compose.includes('cap_drop:'), 'capabilities must still be dropped wholesale');
     assert.ok(!/^\s*user:\s/m.test(compose), 'compose must not force a uid that cannot write the bind mount');
+
+    // Regression: chown on a directory does not re-own the files already inside
+    // it. A root-owned scanner.log on the bind mount therefore survived the
+    // directory fix-up, and because the log is appended IN PLACE it needs WRITE
+    // on the FILE — unlike the catalog, which is published by rename and needs
+    // only directory write. Every append failed silently while the old tail kept
+    // rendering, which is what made the log window look frozen.
+    assert.ok(
+      /for f in "\$DATA_DIR"\/\*/.test(entrypoint),
+      'entrypoint must also re-own the FILES inside the data and logs directories'
+    );
+    assert.ok(
+      entrypoint.includes('scanner.log'),
+      'entrypoint must probe scanner.log itself, not just the directory'
+    );
+    assert.ok(
+      !/chown -R\s+"\$APP_UID:\$APP_GID"\s+"\$d"/.test(entrypoint),
+      'the media cache must not be chowned recursively (it can hold 20 GB)'
+    );
   });
 
   await t.test('brand header in TreeNav and mobile navbar are interactive with return-to-home support', () => {

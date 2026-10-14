@@ -139,6 +139,32 @@ def log(message, to_file=True, prefix=""):
         with open(LOG_PATH, "a", encoding="utf-8", errors="replace") as f:
             f.write(line + "\n")
     except Exception as e:
+        # A log file that can be READ but not WRITTEN is why the web log window
+        # looked frozen: the tail rendered fine, so everything appeared healthy,
+        # while every new line was dropped. It happens when scanner.log is owned
+        # by another user (e.g. root-owned on a bind mount). Rebuilding the file
+        # through a temp + os.replace needs WRITE on the DIRECTORY only, so the
+        # log heals itself instead of staying silent forever.
+        try:
+            if isinstance(e, PermissionError) or getattr(e, "errno", None) == errno.EACCES:
+                existing = ""
+                try:
+                    with open(LOG_PATH, "r", encoding="utf-8", errors="replace") as f:
+                        existing = f.read()
+                except Exception:
+                    pass
+                tmp = f"{LOG_PATH}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp"
+                with open(tmp, "w", encoding="utf-8", errors="replace") as f:
+                    f.write(existing + line + "\n")
+                os.replace(tmp, LOG_PATH)
+                print(f"scanner.log was not appendable; replaced it via temp+rename", flush=True)
+                return
+        except Exception as e2:
+            try:
+                print(f"Failed to write log: {e2}", flush=True)
+            except Exception:
+                pass
+            return
         try:
             print(f"Failed to write log: {e}", flush=True)
         except Exception:

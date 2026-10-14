@@ -158,6 +158,56 @@ test('scan lock — checkLogDirWritable succeeds on a usable directory', () => {
   );
 });
 
+// Regression: the boot check only ever wrote a probe FILE, which proves the
+// DIRECTORY is writable. scanner.log is appended in place and needs WRITE on the
+// FILE, so a root-owned scanner.log passed the boot check while every append
+// failed silently. The two must be reported separately, because their
+// consequences differ: a bad directory breaks scan/repair triggers, whereas an
+// unappendable log only loses log lines (appendLog now recovers).
+test('scan lock — boot check detects an unappendable scanner.log', async (t) => {
+  const scannerLog = path.join(LOG_DIR, 'scanner.log');
+  const canTest = process.getuid?.() !== 0 && process.platform !== 'win32';
+
+  t.afterEach(() => {
+    try {
+      fs.chmodSync(scannerLog, 0o644);
+    } catch {}
+    fs.rmSync(scannerLog, { force: true });
+  });
+
+  await t.test('a read-only log is flagged without claiming the dir is broken', { skip: !canTest }, () => {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.writeFileSync(scannerLog, 'stale tail\n');
+    fs.chmodSync(scannerLog, 0o444);
+
+    const probe = checkLogDirWritable();
+    assert.strictEqual(probe.writable, true, 'the directory itself is still usable');
+    assert.strictEqual(probe.logFileWritable, false, 'the unappendable log must be detected');
+    assert.ok(probe.logFileWarning, 'the condition must be surfaced with a remedy');
+    assert.ok(
+      !probe.error,
+      'an unappendable log must not be reported as a fatal directory error, because ' +
+        'scan/repair triggers still work'
+    );
+  });
+
+  await t.test('a writable log is reported as healthy', () => {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.writeFileSync(scannerLog, 'normal\n');
+    const probe = checkLogDirWritable();
+    assert.strictEqual(probe.writable, true);
+    assert.strictEqual(probe.logFileWritable, true);
+    assert.ok(!probe.logFileWarning);
+  });
+
+  await t.test('an absent log is not an error (it is created on first write)', () => {
+    fs.rmSync(scannerLog, { force: true });
+    const probe = checkLogDirWritable();
+    assert.strictEqual(probe.writable, true);
+    assert.ok(!probe.logFileWarning, 'a missing log must not warn');
+  });
+});
+
 test('scan lock — getScanLockInfo exposes the holder', async (t) => {
   await t.test('null when unlocked', () => {
     reset();

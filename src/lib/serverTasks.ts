@@ -118,12 +118,31 @@ export function readRunResult(): RunResult | null {
 export function readRecentLogs(): string {
   const logPath = getScannerLogPath();
   try {
-    if (!fs.existsSync(logPath)) return 'No logs available';
+    if (!fs.existsSync(logPath)) {
+      // The writers rotate with os.replace, which removes scanner.log for the
+      // instant between the shift and the new file's creation. A read landing in
+      // that window used to render "No logs available" and blank the window even
+      // though the history still existed one generation down.
+      return readLogTailFrom(`${logPath}.1`);
+    }
     const stat = fs.statSync(logPath);
-    if (stat.size === 0) return 'No logs available';
+    if (stat.size === 0) return readLogTailFrom(`${logPath}.1`);
+    return readLogTailFrom(logPath, stat);
+  } catch (e) {
+    console.warn('[Logs] Failed to read scanner log:', e);
+    return 'No logs available';
+  }
+}
 
-    const start = Math.max(0, stat.size - LOG_READ_MAX_BYTES);
-    const length = stat.size - start;
+/** Reads the tail of one log file, or the no-logs placeholder when it is unusable. */
+function readLogTailFrom(logPath: string, stat?: fs.Stats): string {
+  try {
+    if (!fs.existsSync(logPath)) return 'No logs available';
+    const st = stat ?? fs.statSync(logPath);
+    if (st.size === 0) return 'No logs available';
+
+    const start = Math.max(0, st.size - LOG_READ_MAX_BYTES);
+    const length = st.size - start;
     const handle = fs.openSync(logPath, 'r');
     let chunk: string;
     try {
@@ -147,8 +166,7 @@ export function readRecentLogs(): string {
     const lines = chunk.split('\n').filter((l) => l.trim() !== '');
     if (lines.length === 0) return 'No logs available';
     return lines.slice(-LOG_TAIL_LINES).join('\n');
-  } catch (e) {
-    console.warn('[Logs] Failed to read scanner log:', e);
+  } catch {
     return 'No logs available';
   }
 }
@@ -156,10 +174,41 @@ export function readRecentLogs(): string {
 export function appendLog(line: string): void {
   const logPath = getScannerLogPath();
   const timestamp = new Date().toLocaleString('zh-TW', { hour12: false });
+  const text = `[${timestamp}] ${line}\n`;
+
   try {
-    fs.appendFileSync(logPath, `[${timestamp}] ${line}\n`, 'utf-8');
+    fs.appendFileSync(logPath, text, 'utf-8');
+    return;
   } catch (e) {
-    console.warn('[Logs] Failed to append scanner log:', e);
+    // A log file the process can READ but not WRITE is the failure mode behind
+    // the "window never updates" report: the tail renders fine (so the UI looks
+    // healthy and probes pass), while every new line is silently dropped. It
+    // happens when scanner.log is owned by someone else — e.g. a root-owned file
+    // left on the bind mount, which docker-entrypoint.sh does not re-own because
+    // it chowns directories, not the files inside them.
+    //
+    // Rewriting through a unique temp + rename needs only WRITE on the DIRECTORY,
+    // not on the existing file, so the log repairs itself and starts growing
+    // again. Only fall back for permission-shaped errors; a genuinely broken
+    // filesystem should not be papered over.
+    const code = (e as NodeJS.ErrnoException)?.code;
+    if (code !== 'EACCES' && code !== 'EPERM' && code !== 'EROFS') {
+      console.warn('[Logs] Failed to append scanner log:', e);
+      return;
+    }
+    try {
+      const dir = path.dirname(logPath);
+      let existing = '';
+      try {
+        existing = fs.readFileSync(logPath, 'utf-8');
+      } catch {}
+      const tmp = path.join(dir, `.scanner.log.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`);
+      fs.writeFileSync(tmp, existing + text, 'utf-8');
+      fs.renameSync(tmp, logPath);
+      console.warn(`[Logs] scanner.log was not appendable (${code}); replaced it via temp+rename.`);
+    } catch (e2) {
+      console.warn('[Logs] Failed to append scanner log:', e2);
+    }
   }
 }
 
@@ -534,17 +583,51 @@ export function getScanLockInfo(): LockInfo | null {
  * immediately, rather than surfacing as a confusing error the first time a user
  * presses a maintenance button.
  */
-export function checkLogDirWritable(): { writable: boolean; dir: string; error?: string } {
+export function checkLogDirWritable(): {
+  writable: boolean;
+  dir: string;
+  error?: string;
+  logFileWritable?: boolean;
+  logFileWarning?: string;
+} {
   const dir = ensureLogDir();
   const probe = path.join(dir, `.write-probe-${process.pid}`);
   try {
     fs.writeFileSync(probe, 'ok');
     fs.unlinkSync(probe);
-    return { writable: true, dir };
   } catch (e: unknown) {
     const err = e as NodeJS.ErrnoException;
     return { writable: false, dir, error: `${err?.code || 'UNKNOWN'}: ${err?.message || String(e)}` };
   }
+
+  // The directory probe above is not sufficient. scanner.log is appended IN
+  // PLACE, so it needs WRITE on the FILE, while creating the probe only needed
+  // WRITE on the DIRECTORY. A root-owned scanner.log on the bind mount therefore
+  // passed this check while every append failed — which is exactly how the log
+  // window came to look frozen: an old tail rendered fine and boot reported the
+  // directory as healthy.
+  //
+  // This is reported SEPARATELY from `writable`, because the two consequences
+  // differ: a bad directory breaks scan/repair triggers, whereas a bad log file
+  // only loses log lines (appendLog now rewrites it via temp+rename). Claiming
+  // triggers will fail here would be wrong.
+  const logPath = scannerLogPath();
+  if (fs.existsSync(logPath)) {
+    try {
+      fs.accessSync(logPath, fs.constants.W_OK);
+    } catch (e: unknown) {
+      return {
+        writable: true,
+        dir,
+        logFileWritable: false,
+        logFileWarning:
+          `${(e as NodeJS.ErrnoException)?.code || 'EACCES'}: ${logPath} is not directly ` +
+          'appendable (its directory is). Log lines are recovered via temp+rename, so the ' +
+          `history keeps growing, but fix the ownership with: chown <app-uid>:<app-gid> ${logPath}`
+      };
+    }
+  }
+  return { writable: true, dir, logFileWritable: true };
 }
 
 /**

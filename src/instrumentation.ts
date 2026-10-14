@@ -24,6 +24,9 @@ export async function register(): Promise<void> {
   const probe = checkLogDirWritable();
   if (probe.writable) {
     console.log(`[Boot] Task log directory is writable: ${probe.dir}`);
+    if (probe.logFileWarning) {
+      console.warn(`[Boot] ${probe.logFileWarning}`);
+    }
   } else {
     console.error(
       `[Boot] Task log directory is NOT writable: ${probe.dir} (${probe.error}). ` +

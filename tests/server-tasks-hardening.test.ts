@@ -238,3 +238,119 @@ test('logs — run results are structured and id-scoped', async (t) => {
     assert.strictEqual(readRunResult(), null);
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * A readable but UNAPPENDABLE scanner.log must still receive new lines
+ * ------------------------------------------------------------------ */
+
+// Regression for the "log window never updates" report. scanner.log is appended
+// IN PLACE, so it needs WRITE on the FILE; the catalog, published by rename,
+// needs only WRITE on the directory. A root-owned scanner.log on the bind mount
+// therefore blocked every append while the old tail kept rendering perfectly —
+// so the window looked frozen and every health probe passed. The writers must
+// recover by rebuilding the file through a unique temp + rename, which needs
+// only directory write, and must never lose the existing history.
+test('logs — an unappendable scanner.log is recovered, not dropped', async (t) => {
+  // chmod-based write denial is meaningless for uid 0 (root ignores it), and
+  // Windows has no such bits; skip rather than assert something untrue.
+  const canTest = process.getuid?.() !== 0 && process.platform !== 'win32';
+
+  t.beforeEach(reset);
+  t.afterEach(() => {
+    try {
+      fs.chmodSync(SCANNER_LOG, 0o644);
+    } catch {}
+    reset();
+  });
+
+  await t.test('appendLog rewrites the file and preserves prior history', { skip: !canTest }, () => {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.writeFileSync(SCANNER_LOG, '[2026-10-01 11:56:07] Scan finished. Total courses: 680\n');
+    fs.chmodSync(SCANNER_LOG, 0o444); // readable, not appendable
+
+    appendLog('triggered by the web UI');
+    appendLog('Scan finished. Total courses: 684');
+
+    const out = readRecentLogs();
+    assert.ok(
+      out.includes('Total courses: 680'),
+      'recovery must not discard the existing history'
+    );
+    assert.ok(
+      out.includes('triggered by the web UI'),
+      'the new line must actually reach the window'
+    );
+    assert.ok(
+      out.includes('Total courses: 684'),
+      'subsequent appends must keep working after recovery'
+    );
+    assert.ok(!out.includes('\u0000'), 'recovery must not leave NUL bytes');
+  });
+
+  await t.test('recovery leaves no temp files behind', { skip: !canTest }, () => {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.writeFileSync(SCANNER_LOG, 'stale\n');
+    fs.chmodSync(SCANNER_LOG, 0o444);
+
+    appendLog('after recovery');
+
+    const strays = fs.readdirSync(LOG_DIR).filter((f) => f.endsWith('.tmp'));
+    assert.deepStrictEqual(strays, [], 'the scratch file must be renamed, not left behind');
+  });
+
+  await t.test('a writable log is still appended in place', () => {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.writeFileSync(SCANNER_LOG, 'existing\n');
+    appendLog('appended normally');
+    const out = readRecentLogs();
+    assert.ok(out.includes('existing') && out.includes('appended normally'));
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Rotation window: scanner.log absent but scanner.log.1 present
+ * ------------------------------------------------------------------ */
+
+// The writers rotate with os.replace, so scanner.log does not exist for the
+// instant between shifting generations and creating the new file. A read landing
+// in that window rendered "No logs available" and blanked the window even though
+// the history was still on disk one generation down.
+test('logs — history survives the rotation window', async (t) => {
+  t.beforeEach(() => {
+    reset();
+    try {
+      fs.rmSync(`${SCANNER_LOG}.1`, { force: true });
+    } catch {}
+  });
+  t.afterEach(() => {
+    reset();
+    try {
+      fs.rmSync(`${SCANNER_LOG}.1`, { force: true });
+    } catch {}
+  });
+
+  await t.test('falls back to .1 when the primary is momentarily absent', () => {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.writeFileSync(`${SCANNER_LOG}.1`, '[2026-10-13 09:00:00] rotated history\n');
+    const out = readRecentLogs();
+    assert.ok(!/No logs available/.test(out), 'the window must not blank mid-rotation');
+    assert.ok(out.includes('rotated history'), 'the previous generation must be shown');
+  });
+
+  await t.test('an empty primary also falls back to .1', () => {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.writeFileSync(`${SCANNER_LOG}.1`, '[2026-10-13 09:00:00] rotated history\n');
+    fs.writeFileSync(SCANNER_LOG, '');
+    const out = readRecentLogs();
+    assert.ok(out.includes('rotated history'), 'an empty new log must not hide history');
+  });
+
+  await t.test('a normal non-empty log is still preferred over .1', () => {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.writeFileSync(`${SCANNER_LOG}.1`, 'older generation\n');
+    fs.writeFileSync(SCANNER_LOG, 'current generation\n');
+    const out = readRecentLogs();
+    assert.ok(out.includes('current generation'));
+    assert.ok(!out.includes('older generation'), 'the primary log wins when it has content');
+  });
+});
