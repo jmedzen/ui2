@@ -3055,6 +3055,58 @@ html, body {
   flex-wrap: wrap;
 }
 
+/* Task-trigger credential row. Only rendered when the server demands a token,
+   so it must read as an instruction rather than as permanent chrome. */
+.task-token-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+  padding: 8px 12px;
+  border: 1px solid rgba(212, 175, 55, 0.45);
+  border-radius: 8px;
+  background: rgba(212, 175, 55, 0.08);
+}
+
+.task-token-label {
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 600;
+  color: var(--gold-accent, #d4af37);
+  white-space: nowrap;
+}
+
+.task-token-input {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.task-token-input:focus {
+  outline: none;
+  border-color: var(--gold-accent, #d4af37);
+}
+
+.task-token-hint {
+  flex: 1 1 100%;
+  font-size: calc(11px * var(--font-scale));
+  opacity: 0.8;
+  line-height: 1.5;
+}
+
+.task-token-hint code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
 .log-sync-btn {
   background: var(--gold-accent);
   color: #fff;

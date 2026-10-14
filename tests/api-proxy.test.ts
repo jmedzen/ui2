@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/proxy/route';
+import { getTaskToken } from '@/lib/serverTasks';
 
 test('API Proxy Security & Routing Suite', async (t) => {
   await t.test('blocks external domains to prevent SSRF (Forbidden 403)', async () => {
@@ -51,7 +52,12 @@ test('API Proxy Security & Routing Suite', async (t) => {
   });
 
   await t.test('action=preload triggers non-blocking cache request', async () => {
-    const req = new NextRequest('http://localhost:8410/api/proxy?path=/audio/test_preload.mp3&action=preload');
+    // A preload persists a remote file to disk, so it requires the task token
+    // (authorizeTaskRequest is fail-closed). Sending it is what the browser does
+    // once the operator has pasted the boot token into Settings.
+    const req = new NextRequest('http://localhost:8410/api/proxy?path=/audio/test_preload.mp3&action=preload', {
+      headers: { 'x-task-token': getTaskToken() }
+    });
     const res = await GET(req);
     assert.strictEqual(res.status, 200, 'action=preload must return 200 JSON');
     const data = await res.json();
@@ -84,6 +90,8 @@ test('API Proxy Security & Routing Suite', async (t) => {
     const { POST: scanPost } = await import('@/app/api/scan/route');
     const { POST: healPost } = await import('@/app/api/health-check/route');
 
+    // A browser-declared cross-site request is refused outright, before the
+    // credential is even considered.
     const crossSiteReq = new Request('http://localhost:8410/api/scan', {
       method: 'POST',
       headers: { 'sec-fetch-site': 'cross-site' }
@@ -91,11 +99,25 @@ test('API Proxy Security & Routing Suite', async (t) => {
     const scanRes = await scanPost(crossSiteReq);
     assert.strictEqual(scanRes.status, 403, 'Cross-site scan trigger must be rejected');
 
+    // A foreign Origin is no longer a trust signal: Origin and Host are both
+    // client-supplied, so they cannot validate each other. Such a request is
+    // refused for the real reason -- it presents no credential (401) -- rather
+    // than because its Origin looked wrong (403). Asserting 403 here would
+    // re-encode the old, forgeable check as if it were a security boundary.
     const healReq = new Request('http://localhost:8410/api/health-check', {
       method: 'POST',
       headers: { origin: 'https://evil.example.com' }
     });
     const healRes = await healPost(healReq);
-    assert.strictEqual(healRes.status, 403, 'Cross-origin heal trigger must be rejected');
+    assert.strictEqual(healRes.status, 401, 'An unauthenticated heal trigger must be rejected');
+
+    // A wrong-but-present credential is distinguished from a missing one, and
+    // this path spawns no subprocess (it is rejected before the task starts).
+    const wrongTokenReq = new Request('http://localhost:8410/api/health-check', {
+      method: 'POST',
+      headers: { 'x-task-token': 'definitely-not-the-token' }
+    });
+    const wrongTokenRes = await healPost(wrongTokenReq);
+    assert.strictEqual(wrongTokenRes.status, 403, 'An invalid token must be rejected');
   });
 });

@@ -98,17 +98,37 @@ test('scan lock — a lock from a dead process is reclaimed', async (t) => {
     assert.strictEqual(fs.existsSync(LOCK), false);
   });
 
-  await t.test('an old lock is stale even if the pid looks alive', () => {
+  await t.test('an old lock is NOT reclaimable while its holder is alive', () => {
     reset();
-    // Our own pid is definitely alive, so only the age can make this stale.
+    // Our own pid is definitely alive. The age of the lock must not override
+    // that: reclaiming it would let a second maintenance run write the catalog
+    // concurrently, which is the single-writer invariant this lock exists for.
+    //
+    // This asserts the opposite of the previous behaviour, which checked age
+    // FIRST and so handed a live run's lock to any contender once its mtime
+    // looked stale -- reachable whenever the heartbeat stalls (a blocked event
+    // loop, a failed utimesSync, a throttled container).
     writeLock(
       JSON.stringify({ pid: process.pid, hostname: os.hostname(), startedAt: '2024-01-01T00:00:00.000Z' }),
       31 * 60 * 1000
     );
 
+    assert.strictEqual(isScanLocked(), true, 'a live holder keeps the lock');
+    const contended = acquireScanLock();
+    assert.strictEqual(contended.ok, false);
+    reset();
+  });
+
+  await t.test('a stale lock held by another host is reclaimed by age', () => {
+    reset();
+    // Liveness cannot be checked for a foreign host, so age is the only signal
+    // available and must still break the deadlock.
+    writeLock(
+      JSON.stringify({ pid: 999999, hostname: 'some-other-host', startedAt: '2024-01-01T00:00:00.000Z' }),
+      31 * 60 * 1000
+    );
     assert.strictEqual(isScanLocked(), false);
-    assert.strictEqual(acquireScanLock().ok, true);
-    releaseScanLock();
+    reset();
   });
 });
 

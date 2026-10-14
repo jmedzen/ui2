@@ -212,110 +212,87 @@ export function appendLog(line: string): void {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * Authorization for task-triggering endpoints
+ * ------------------------------------------------------------------ */
+
 /**
- * Authorization for task-triggering endpoints.
+ * The credential required by every endpoint that spawns a maintenance task.
  *
- * These routes spawn Python subprocesses that rewrite the catalog, so they must
- * not be callable by any anonymous visitor. When TASK_API_TOKEN is configured it
- * is required; otherwise only same-origin browser requests are accepted (a
- * cross-site form/fetch cannot forge these headers from a foreign origin).
+ * Resolution order:
+ *  1. `TASK_API_TOKEN`, when the operator sets it (the documented path).
+ *  2. Otherwise a random token generated once per boot and printed to the log.
+ *
+ * Falling back to a *generated* token rather than to "no token" is the whole
+ * point. The previous behaviour allowed any request that merely omitted Origin
+ * and Sec-Fetch-* headers — which a plain `curl -X POST` does — so an anonymous
+ * caller could spawn scan_fayun.py / auto_heal_catalog.py and rewrite the
+ * catalog. Fetch Metadata cannot repair that: it is a browser feature, and a
+ * non-browser client simply does not send it. Origin/Host are equally
+ * client-supplied and were being used to *validate themselves*.
+ *
+ * Keeping the gate on a secret means a public deployment fails closed, and the
+ * operator enables the UI deliberately by setting TASK_API_TOKEN.
  */
-/** Normalises an authority into a comparable "host:port" pair. */
-function normalizeAuthority(hostname: string, protocol: string, port: string): string {
-  const effectivePort = port || (protocol === 'https:' ? '443' : '80');
-  return `${hostname.toLowerCase()}:${effectivePort}`;
+let generatedTaskToken: string | null = null;
+
+/** True when the operator configured an explicit token. */
+export function isTaskTokenExplicit(): boolean {
+  return (process.env.TASK_API_TOKEN || '').trim().length > 0;
 }
 
-/**
- * Collects the authorities this request could legitimately have been made to.
- *
- * `request.url` is NOT reliable for this: behind a reverse proxy (e.g. Caddy
- * terminating TLS in front of `fyweb:8410`) it reports the *internal* address
- * while the browser's Origin reports the public one. Trusting it rejected every
- * legitimate same-origin trigger. The Host / X-Forwarded-Host headers carry the
- * authority the client actually used, so they are checked first.
- */
-function allowedAuthorities(request: Request): Set<string> {
-  const hostnames = new Set<string>();
-
-  const addAuthority = (value: string | null) => {
-    if (!value) return;
-    // X-Forwarded-Host may be a comma-separated chain; the first entry is the
-    // one the client addressed.
-    const first = value.split(',')[0].trim();
-    if (!first) return;
-    try {
-      // Parsed with a scheme so a bare "host:port" is accepted.
-      const parsed = new URL(`http://${first}`);
-      // An explicit port is authoritative. Without one we cannot know whether
-      // the edge terminated on 80 or 443, so both defaults are permitted.
-      if (parsed.port) {
-        hostnames.add(`${parsed.hostname.toLowerCase()}:${parsed.port}`);
-      } else {
-        const name = parsed.hostname.toLowerCase();
-        hostnames.add(`${name}:80`);
-        hostnames.add(`${name}:443`);
-      }
-    } catch {
-      /* ignore malformed authority */
-    }
-  };
-
-  addAuthority(request.headers.get('x-forwarded-host'));
-  addAuthority(request.headers.get('host'));
-
-  try {
-    const self = new URL(request.url);
-    hostnames.add(normalizeAuthority(self.hostname, self.protocol, self.port));
-  } catch {
-    /* ignore unparseable request URL */
+/** The token task endpoints require; generated once per boot when unset. */
+export function getTaskToken(): string {
+  const configured = (process.env.TASK_API_TOKEN || '').trim();
+  if (configured) return configured;
+  if (!generatedTaskToken) {
+    generatedTaskToken = crypto.randomBytes(24).toString('hex');
   }
+  return generatedTaskToken;
+}
 
-  return hostnames;
+/** Test hook: forget a generated token so resolution starts clean. */
+export function resetGeneratedTaskToken(): void {
+  generatedTaskToken = null;
+}
+
+/** A token value from either the dedicated header or `Authorization: Bearer`. */
+function presentedTaskToken(request: Request): string {
+  const direct = (request.headers.get('x-task-token') || '').trim();
+  if (direct) return direct;
+  return (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
 }
 
 export function authorizeTaskRequest(request: Request): { ok: true } | { ok: false; status: number; message: string } {
-  const expected = process.env.TASK_API_TOKEN;
-  if (expected) {
-    const provided =
-      request.headers.get('x-task-token') ||
-      (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-    if (!provided) {
-      return { ok: false, status: 401, message: 'Missing task token' };
-    }
-    const a = Buffer.from(provided);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-      return { ok: false, status: 403, message: 'Invalid task token' };
-    }
-    return { ok: true };
-  }
-
-  // Fetch Metadata is set by the browser and cannot be forged from JS. A
-  // same-origin (or user-initiated) request is exactly what we want to allow.
+  // Cheap defence-in-depth first: a browser tells us when a request is
+  // cross-site, and there is never a legitimate cross-site task trigger.
   const fetchSite = (request.headers.get('sec-fetch-site') || '').toLowerCase();
-  if (fetchSite === 'same-origin' || fetchSite === 'none') {
-    return { ok: true };
-  }
-  if (fetchSite) {
+  if (fetchSite === 'cross-site') {
     return { ok: false, status: 403, message: 'Cross-site task trigger rejected' };
   }
 
-  // No Fetch Metadata (older browser or non-browser client): fall back to
-  // comparing Origin against the authorities the client could have used.
-  const origin = request.headers.get('origin');
-  if (origin) {
-    try {
-      const parsedOrigin = new URL(origin);
-      const originAuthority = normalizeAuthority(parsedOrigin.hostname, parsedOrigin.protocol, parsedOrigin.port);
-      if (!allowedAuthorities(request).has(originAuthority)) {
-        return { ok: false, status: 403, message: 'Cross-origin task trigger rejected' };
-      }
-    } catch {
-      return { ok: false, status: 403, message: 'Malformed Origin header' };
-    }
+  const expected = getTaskToken();
+  const provided = presentedTaskToken(request);
+
+  if (!provided) {
+    return {
+      ok: false,
+      status: 401,
+      message: isTaskTokenExplicit()
+        ? 'Missing task token'
+        : 'Missing task token. No TASK_API_TOKEN is configured, so this server generated one at ' +
+          'startup — read it from the boot log and send it as the X-Task-Token header. Set ' +
+          'TASK_API_TOKEN to choose your own.'
+    };
   }
 
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  // Length is compared first because timingSafeEqual throws on a mismatch; the
+  // length itself is not secret.
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return { ok: false, status: 403, message: 'Invalid task token' };
+  }
   return { ok: true };
 }
 
@@ -403,6 +380,35 @@ function isProcessAlive(pid: number): boolean {
 }
 
 /**
+ * Whether a Python maintenance run currently holds the catalog lock.
+ *
+ * The Python scripts serialize on `data/courses_db.lock` via `fcntl.flock`
+ * (scripts/media_common.py). Node cannot test that lock directly — there is no
+ * flock binding — but the holder writes its pid into the file, so liveness can
+ * be checked the same way the scan lock does it. This runs in the same container
+ * and therefore the same pid namespace, which makes the pid meaningful.
+ *
+ * Callers must use this to stay out of a maintenance run's way: a run publishes
+ * its result and then mirrors it to src/data, so rewriting either file in that
+ * window discards the scan's own output and can copy the stale payload back over
+ * the good one.
+ */
+export function isCatalogRunActive(): boolean {
+  try {
+    const lockPath = path.join(process.cwd(), 'data', 'courses_db.lock');
+    const raw = fs.readFileSync(lockPath, 'utf-8');
+    const info = JSON.parse(raw) as { pid?: unknown };
+    const pid = Number(info?.pid);
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    if (pid === process.pid) return false; // Our own writer, not a foreign run.
+    return isProcessAlive(pid);
+  } catch {
+    // Absent or unreadable lock means no run is advertising itself.
+    return false;
+  }
+}
+
+/**
  * Whether an existing lock is still owned by a live task.
  *
  * Two failure modes had to be closed here:
@@ -417,28 +423,78 @@ function isProcessAlive(pid: number): boolean {
  *    now heartbeats the file (see `startLockHeartbeat`).
  */
 function lockIsLive(stat: fs.Stats): boolean {
-  if (Date.now() - stat.mtimeMs >= LOCK_STALE_MS) return false;
-
   const info = readLockInfo();
-  if (!info) {
-    // Unparseable: fall back to age so we never wedge forever.
+
+  // Decide on the HOLDER first, and only fall back to age.
+  //
+  // The age rule used to come first, so a lock whose mtime had gone stale was
+  // declared reclaimable even when the recorded holder was demonstrably alive on
+  // this host. A run whose heartbeat stalls (blocked event loop, a failed
+  // utimesSync, a throttled container) could therefore have its lock taken away
+  // by a second maintenance run — two writers on one catalog, which is exactly
+  // what this lock exists to prevent.
+  if (info) {
+    // A pid is only meaningful for a process on this same machine; in a
+    // container the lock's pid namespace is our own, so this check is valid.
+    const sameHost = info.hostname === os.hostname() || info.hostname === 'unknown';
+    if (sameHost) {
+      if (isProcessAlive(info.pid)) return true; // Alive holder: never reclaim.
+      console.warn(`[Lock] Reclaiming lock from dead pid ${info.pid} (started ${info.startedAt}).`);
+      return false;
+    }
+    // Holder claims another host: liveness is unverifiable, so age decides.
     return Date.now() - stat.mtimeMs < LOCK_STALE_MS;
   }
 
-  // A pid is only meaningful for a process on this same machine; in a container
-  // the lock's pid namespace is our own, so this check is valid there too.
-  const sameHost = info.hostname === os.hostname() || info.hostname === 'unknown';
-  if (sameHost && !isProcessAlive(info.pid)) {
-    console.warn(`[Lock] Reclaiming lock from dead pid ${info.pid} (started ${info.startedAt}).`);
-    return false;
-  }
-  return true;
+  // Unparseable: fall back to age so we never wedge forever.
+  return Date.now() - stat.mtimeMs < LOCK_STALE_MS;
 }
 
+/**
+ * Unconditionally removes the lock file.
+ *
+ * Only safe where ownership is already established: `releaseScanLock` verifies
+ * the token first, and boot recovery runs when no task exists. Acquisition must
+ * NOT use this — see `tryReclaimStaleLock` for why an unlink based on an earlier
+ * `stat` loses the lock to a concurrent peer.
+ */
 function tryUnlinkLock(): void {
   try {
     if (fs.existsSync(lockFilePath())) fs.unlinkSync(lockFilePath());
   } catch {}
+}
+
+/**
+ * Atomically claims the right to replace a stale lock.
+ *
+ * `unlink` on the strength of an earlier `stat` is a TOCTOU: between deciding
+ * "this lock is stale" and calling `unlinkSync`, a peer can remove the stale
+ * lock and create its OWN fresh one — which we then delete, after which both
+ * processes hold the lock and run a catalog-writing job concurrently.
+ * Reproduced with 6 processes: 88/215, 85/289 and 74/192 acquisitions were
+ * stolen from their owner.
+ *
+ * Renaming the observed file to a unique name makes the claim atomic: exactly
+ * one contender succeeds in renaming THAT inode away, and only the winner may
+ * proceed to create a new lock. A contender that lost the race finds the lock
+ * gone and simply retries the whole acquisition.
+ */
+function tryReclaimStaleLock(): boolean {
+  const lockPath = lockFilePath();
+  const claimPath = `${lockPath}.reclaim.${process.pid}.${crypto.randomUUID()}`;
+  try {
+    fs.renameSync(lockPath, claimPath);
+  } catch (e: unknown) {
+    const err = e as NodeJS.ErrnoException;
+    if (err?.code === 'ENOENT') return true; // A peer already cleared it.
+    return false;
+  }
+  try {
+    fs.unlinkSync(claimPath);
+  } catch {
+    /* The next boot's stale sweep will clear it. */
+  }
+  return true;
 }
 
 /**
@@ -454,43 +510,58 @@ export function acquireScanLock(): LockResult {
   const lockPath = lockFilePath();
 
   try {
-    if (fs.existsSync(lockPath)) {
-      const stat = fs.statSync(lockPath);
-      if (lockIsLive(stat)) {
-        const info = readLockInfo();
-        return {
-          ok: false,
-          reason: 'busy',
-          holder: info ? { ...info, age: formatAge(Date.now() - stat.mtimeMs) } : null
-        };
+    // Bounded retries: a lost reclaim race means a peer just changed the lock,
+    // so the correct response is to re-evaluate rather than to guess.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      let stat: fs.Stats | null = null;
+      try {
+        stat = fs.statSync(lockPath);
+      } catch {
+        stat = null;
       }
-      // Stale or orphaned lock; reclaim it.
-      tryUnlinkLock();
+
+      if (stat) {
+        if (lockIsLive(stat)) {
+          const info = readLockInfo();
+          return {
+            ok: false,
+            reason: 'busy',
+            holder: info ? { ...info, age: formatAge(Date.now() - stat.mtimeMs) } : null
+          };
+        }
+        if (!tryReclaimStaleLock()) continue; // Lost the race; re-evaluate.
+      }
+
+      const token = crypto.randomBytes(16).toString('hex');
+      try {
+        fs.writeFileSync(
+          lockPath,
+          JSON.stringify({
+            pid: process.pid,
+            hostname: os.hostname(),
+            startedAt: new Date().toISOString(),
+            token
+          }),
+          { flag: 'wx' }
+        );
+        return { ok: true, token };
+      } catch (e: unknown) {
+        const err = e as NodeJS.ErrnoException;
+        if (err?.code === 'EEXIST') continue; // A peer won; re-evaluate.
+        throw e;
+      }
     }
 
-    const token = crypto.randomBytes(16).toString('hex');
-    fs.writeFileSync(
-      lockPath,
-      JSON.stringify({
-        pid: process.pid,
-        hostname: os.hostname(),
-        startedAt: new Date().toISOString(),
-        token
-      }),
-      { flag: 'wx' }
-    );
-    return { ok: true, token };
+    // Every attempt lost a race. Report busy rather than claiming the lock.
+    const stat = fs.existsSync(lockPath) ? fs.statSync(lockPath) : null;
+    const info = readLockInfo();
+    return {
+      ok: false,
+      reason: 'busy',
+      holder: info && stat ? { ...info, age: formatAge(Date.now() - stat.mtimeMs) } : info
+    };
   } catch (e: unknown) {
     const err = e as NodeJS.ErrnoException;
-    if (err?.code === 'EEXIST') {
-      const stat = fs.existsSync(lockPath) ? fs.statSync(lockPath) : null;
-      const info = readLockInfo();
-      return {
-        ok: false,
-        reason: 'busy',
-        holder: info && stat ? { ...info, age: formatAge(Date.now() - stat.mtimeMs) } : info
-      };
-    }
     // EACCES/EROFS/ENOSPC and friends: the lock cannot be written at all. This
     // is an environment problem, not a concurrency one, and must be reported
     // as such instead of masquerading as "already running".
@@ -577,6 +648,35 @@ export function getScanLockInfo(): LockInfo | null {
 }
 
 /**
+ * Lock holder details with the ownership token removed, for HTTP responses.
+ *
+ * `GET /api/scan` and `GET /api/health-check` are unauthenticated — they must be,
+ * because the log window is how an operator discovers the boot-generated task
+ * token, and gating the log behind that token would be circular. They were
+ * therefore publishing `lockHolder.token`, the exact secret needed to authorize
+ * a scan, to any anonymous caller. The UI never reads this field; it only shows
+ * whether a task is running, so removing the token costs nothing.
+ */
+export function getScanLockInfoPublic(): Omit<LockInfo, 'token'> | null {
+  const info = getScanLockInfo();
+  if (!info) return null;
+  return stripLockToken(info);
+}
+
+/**
+ * Returns a copy of `info` without the ownership token.
+ *
+ * Kept as an explicit delete rather than an object rest-omit so the intent
+ * ("this field must never leave the process") is visible and there is no
+ * throwaway binding to satisfy the linter.
+ */
+export function stripLockToken<T extends { token?: string }>(info: T): Omit<T, 'token'> {
+  const copy: Record<string, unknown> = { ...info };
+  delete copy.token;
+  return copy as Omit<T, 'token'>;
+}
+
+/**
  * Probes whether the log directory can actually be written.
  *
  * Called once at boot so a misconfigured volume is reported in the logs
@@ -592,12 +692,29 @@ export function checkLogDirWritable(): {
 } {
   const dir = ensureLogDir();
   const probe = path.join(dir, `.write-probe-${process.pid}`);
+
+  // The write and the cleanup must be judged SEPARATELY. Sharing one try meant a
+  // failed unlink reported `writable: false` even though the write had just
+  // succeeded — direct proof the directory IS writable. Boot then logged
+  // "Task log directory is NOT writable ... triggers will fail", sending the
+  // operator after the wrong problem, and the un-unlinkable probe accumulated in
+  // data/logs. A write failure is the only thing that proves unwritability.
   try {
     fs.writeFileSync(probe, 'ok');
-    fs.unlinkSync(probe);
   } catch (e: unknown) {
     const err = e as NodeJS.ErrnoException;
     return { writable: false, dir, error: `${err?.code || 'UNKNOWN'}: ${err?.message || String(e)}` };
+  }
+
+  try {
+    fs.unlinkSync(probe);
+  } catch (e: unknown) {
+    // Writable, but cleanup failed. Reuse one fixed name so repeated boots
+    // cannot litter the directory, and surface it as a warning, not a failure.
+    const warn =
+      `${(e as NodeJS.ErrnoException)?.code || 'UNKNOWN'}: could not remove the write probe ` +
+      `${probe}; the directory is writable but stale probes may accumulate`;
+    return { writable: true, dir, logFileWritable: true, logFileWarning: warn };
   }
 
   // The directory probe above is not sufficient. scanner.log is appended IN
@@ -643,7 +760,7 @@ export function reclaimOrphanedLock(): LockInfo | null {
     const stat = fs.statSync(lockPath);
     if (lockIsLive(stat)) return null;
     const info = readLockInfo();
-    tryUnlinkLock();
+    tryReclaimStaleLock();
     return info;
   } catch {
     return null;

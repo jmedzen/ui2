@@ -740,6 +740,14 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
 
   const hasVideo = Boolean(course.video_path || (course.name && course.name.includes('本地分')));
 
+  // The index actually handed to VideoPlayer. Guarding both the lookup it does
+  // (`tracks[currentTrackIndex]`) and its "第 N / M 集" label against a stale
+  // saved index, for the frames before the clamp effect below has run. The
+  // stored state itself is deliberately left untouched here so the persistence
+  // contract (fayun_last_video_idx_<id>) still round-trips.
+  const safeVideoIndex =
+    videoTracks.length > 0 && currentVideoIndex >= videoTracks.length ? 0 : currentVideoIndex;
+
   // Reset the tab during render when the course changes.
   //
   // The restore effect below runs *after* render, so the first commit after
@@ -769,6 +777,9 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
       const savedVideoIdx = localStorage.getItem(`fayun_last_video_idx_${course.id}`);
       if (savedVideoIdx) {
         const parsed = parseInt(savedVideoIdx, 10);
+        // Lower bound only. `videoTracks` is still empty here (discovery is an
+        // async request), so the upper bound cannot be applied until the list
+        // arrives — the clamp effect below does that.
         if (!isNaN(parsed) && parsed >= 0) {
           setCurrentVideoIndex(parsed);
         } else {
@@ -781,6 +792,27 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
       console.warn('Failed to restore course tab state:', e);
     }
   }, [course.id, course.video_path, hasVideo]);
+
+  // Clamp the restored video index against the discovered list.
+  //
+  // The restore above runs while `videoTracks` is still empty, so an index that
+  // was valid when it was saved can outlive the list it was saved against: a
+  // renumbered/auto-healed listing, one of the discovery-dependent 本地分
+  // volumes, or a shrunk /api/list-files result. VideoPlayer resolves
+  // `tracks[currentTrackIndex]`, so an out-of-range index made it bail out and
+  // the whole pane rendered blank — no video, no nav, no empty state.
+  //
+  // Adjusted during render (the same idiom as the tab reset above) so the very
+  // first commit that has a non-empty list already shows episode 1. An empty
+  // list is deliberately not clamped: the saved index is kept so a transient
+  // discovery failure can still restore the episode the user was watching.
+  const [videoListLength, setVideoListLength] = useState<number>(videoTracks.length);
+  if (videoListLength !== videoTracks.length) {
+    setVideoListLength(videoTracks.length);
+    if (videoTracks.length > 0 && currentVideoIndex >= videoTracks.length) {
+      setCurrentVideoIndex(0);
+    }
+  }
 
   const handleTabClick = (tab: 'audio' | 'video' | 'pdf' | 'info' | 'split') => {
     if ((tab === 'video' || tab === 'split') && !hasVideo) {
@@ -1044,7 +1076,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
               ) : (
                 <VideoPlayer
                   tracks={videoTracks}
-                  currentTrackIndex={currentVideoIndex}
+                  currentTrackIndex={safeVideoIndex}
                   onTrackChange={handleVideoSelect}
                   courseTitle={course.name}
                 />
@@ -1073,7 +1105,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
                 <h3 className="split-pane-title">🎬 影音講記</h3>
                 <VideoPlayer
                   tracks={videoTracks}
-                  currentTrackIndex={currentVideoIndex}
+                  currentTrackIndex={safeVideoIndex}
                   onTrackChange={handleVideoSelect}
                   courseTitle={course.name}
                 />

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { isCatalogRunActive } from '@/lib/serverTasks';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -26,7 +27,12 @@ function statSignature(): string {
   for (const file of [DATA_FILE, SRC_FILE]) {
     try {
       const st = fs.statSync(file);
-      parts.push(`${st.size}:${st.mtimeMs}`);
+      // `ino` and `ctimeMs` are included because size+mtime alone misses a
+      // replacement of the same length at the same timestamp — the shape an
+      // mtime-preserving restore or a same-second swap produces — and the route
+      // would then serve the stale catalog from cache forever. The extra fields
+      // also change on any rename-into-place, which is how this repo writes it.
+      parts.push(`${st.size}:${st.mtimeMs}:${st.ino}:${st.ctimeMs}`);
     } catch {
       parts.push('missing');
     }
@@ -66,6 +72,19 @@ function getDatabasePath(): string {
         srcCourses.every((c: unknown) => c && typeof c === 'object' && (c as { id?: unknown }).id != null);
 
       if (srcTotal > dataTotal && srcUsable && dataCourses !== null) {
+        // Never reconcile while a Python maintenance run is writing the catalog.
+        //
+        // The run publishes its result to data/ and then mirrors it to src/data.
+        // Rewriting data/ in that window discards the scan's own output, and the
+        // run's later mirror then copies the OLD payload over src/data — so the
+        // catalog regresses to the bundled copy while the run reports success.
+        // The scan's output was silently lost in a reproduced run.
+        if (isCatalogRunActive()) {
+          console.warn(
+            '[Database] Skipped auto-upgrade: a maintenance run is currently writing the catalog.'
+          );
+          return resolved;
+        }
         console.log(`[Database] Auto-upgrading data/courses_db.json (${dataTotal} -> ${srcTotal} courses) from bundled image.`);
         // Preserve every bookkeeping field the host file owns, not just two:
         // anything the bundled copy cannot know about would otherwise be lost.
@@ -104,7 +123,25 @@ function getDatabasePath(): string {
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
       }
-      fs.copyFileSync(SRC_FILE, DATA_FILE);
+      // Atomic, like every other catalog write in this repo. A bare
+      // `copyFileSync` is not: a crash or a concurrent reader mid-copy leaves a
+      // truncated ~900 KB JSON file where the catalog used to be.
+      const tmpPath = `${DATA_FILE}.${process.pid}.${Date.now().toString(36)}.tmp`;
+      try {
+        fs.copyFileSync(SRC_FILE, tmpPath);
+        const handle = fs.openSync(tmpPath, 'r+');
+        try {
+          fs.fsyncSync(handle);
+        } finally {
+          fs.closeSync(handle);
+        }
+        fs.renameSync(tmpPath, DATA_FILE);
+      } catch (e) {
+        try {
+          fs.rmSync(tmpPath, { force: true });
+        } catch {}
+        throw e;
+      }
       resolved = DATA_FILE;
     }
   } catch (e) {
@@ -120,6 +157,8 @@ interface CachedCourses {
   filePath: string;
   rawJson: string;
   mtimeMs: number;
+  /** inode, so a same-size same-mtime replacement still invalidates the cache. */
+  ino: number;
   etag: string;
 }
 
@@ -135,14 +174,21 @@ export async function GET(request: Request) {
 
     const stat = await fs.promises.stat(filePath);
     const mtimeMs = stat.mtimeMs;
+    const ino = stat.ino;
 
-    if (!memoryCache || memoryCache.filePath !== filePath || memoryCache.mtimeMs !== mtimeMs) {
+    if (
+      !memoryCache ||
+      memoryCache.filePath !== filePath ||
+      memoryCache.mtimeMs !== mtimeMs ||
+      memoryCache.ino !== ino
+    ) {
       const rawJson = await fs.promises.readFile(filePath, 'utf-8');
-      const etag = `W/"${stat.size}-${mtimeMs}"`;
+      const etag = `W/"${stat.size}-${mtimeMs}-${ino}"`;
       memoryCache = {
         filePath,
         rawJson,
         mtimeMs,
+        ino,
         etag
       };
     }

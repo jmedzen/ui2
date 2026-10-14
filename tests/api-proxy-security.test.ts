@@ -8,6 +8,7 @@ import fs from 'fs';
 import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/proxy/route';
 import { ensureCacheDir, getCacheFilePath } from '@/lib/serverMediaCache';
+import { getTaskToken } from '@/lib/serverTasks';
 
 const HOST = 'http://localhost:8410';
 
@@ -100,12 +101,28 @@ test('S1 — preload is authorized and rate limited', async (t) => {
     assert.strictEqual(res.status, 403, 'Cross-site preload must be rejected');
   });
 
-  await t.test('rejects foreign-origin preload triggers', async () => {
+  await t.test('rejects an unauthenticated preload trigger', async () => {
+    // A preload writes to cache disk, so it now requires the task token.
+    // Regression: an anonymous caller could drive unbounded disk writes.
     const req = new NextRequest(`${HOST}/api/proxy?path=/media/audio/x.mp3&action=preload`, {
       headers: { origin: 'https://evil.example.com' }
     });
     const res = await GET(req);
-    assert.strictEqual(res.status, 403, 'Cross-origin preload must be rejected');
+    assert.strictEqual(res.status, 401, 'An unauthenticated preload must be rejected');
+  });
+
+  await t.test('accepts a preload carrying the task token', async () => {
+    const restore = stubFetch(htmlUpstream);
+    try {
+      const req = new NextRequest(`${HOST}/api/proxy?path=/media/audio/__auth_ok__.mp3&action=preload`, {
+        headers: { 'x-task-token': getTaskToken() }
+      });
+      const res = await GET(req);
+      assert.strictEqual(res.status, 200, 'A correctly authenticated preload must be accepted');
+      await settle();
+    } finally {
+      restore();
+    }
   });
 
   await t.test('enforces a per-client preload budget', async () => {
@@ -116,7 +133,7 @@ test('S1 — preload is authorized and rate limited', async (t) => {
       for (let i = 0; i < 40; i++) {
         const req = new NextRequest(
           `${HOST}/api/proxy?path=${encodeURIComponent(`/media/__rl_${i}__.mp3`)}&action=preload`,
-          { headers: { 'x-forwarded-for': '203.0.113.77' } }
+          { headers: { 'x-forwarded-for': '203.0.113.77', 'x-task-token': getTaskToken() } }
         );
         const res = await GET(req);
         if (res.status === 429) {

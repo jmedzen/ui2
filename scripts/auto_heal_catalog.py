@@ -97,6 +97,19 @@ def verify_media_url(url):
 LIST_PHP_URL = "https://www.fayun.org/public/php/list.php"
 AUDIO_EXTS = (".mp3", ".m4a", ".wav", ".wma", ".aac", ".ogg", ".mp4", ".m4v", ".webm")
 
+# Filename words that name a document type or a volume rather than a course.
+# They are excluded from the token match in course_matches_filename so a file
+# called "卷上.pdf" or "講義.pdf" cannot be attributed to a course by accident.
+GENERIC_FILENAME_TOKENS = {
+    "卷上", "卷中", "卷下", "上卷", "中卷", "下卷",
+    "筆錄", "講記", "講義", "大意", "科表", "總科表", "冠科",
+    "問答", "補充", "目錄", "前言", "附錄", "參考", "教材",
+    "課程", "開示", "節錄", "整理", "全文", "講稿", "手稿",
+    "摘錄", "講解", "導讀", "表解", "科判", "題解", "序文",
+    "偈頌", "原文", "audio", "video", "bilu", "pdf", "beizhu",
+    "notes", "note", "doc", "docs",
+}
+
 def query_remote_list(src_path):
     """
     Queries fayun.org list.php for file listings inside a directory path.
@@ -128,16 +141,84 @@ def query_remote_list(src_path):
     except Exception:
         return None
 
+def _name_tokens(name):
+    """
+    Splits a course title into matchable tokens.
+
+    Tokens shorter than two characters, and tokens that only describe a document
+    type or a volume ("卷上", "筆錄", "講義", "pdf", ...), are dropped: they appear
+    in hundreds of filenames and identify no particular course.
+    """
+    if not name:
+        return []
+    tokens = []
+    for part in re.split(r"[．·\.\:\s\-_/\\()（）\[\]【】]+", str(name)):
+        part = part.strip()
+        if len(part) >= 2 and part.lower() not in GENERIC_FILENAME_TOKENS:
+            tokens.append(part)
+    return tokens
+
+
 def course_matches_filename(c_name, fname):
     """
-    Robust matching of course titles and filenames, handling sutra prefixes like 雜阿含經．
+    Decides whether a file plausibly belongs to the course named `c_name`.
+
+    The previous rule was a bare substring test on the whole name plus on every
+    token of length >= 2. Both directions are unsafe: the full-name test is fine
+    ("解深密經．一切法相品第四" appearing in a filename really does identify that
+    course), but short fragments do not. Measuring this against the real catalog
+    (2089 stored PDFs, 684 courses) showed 246 filenames substring-matching more
+    than one course, because unrelated courses share prefixes and because generic
+    fragments such as "經", "論", "大意" and "卷上" appear everywhere.
+
+    The rule enforced here is deliberately conservative:
+
+      1. a full, distinctive name of at least 4 characters that appears verbatim
+         in the filename is a match; or
+      2. one distinctive multi-character token (>= 2 chars, not a document-type
+         word) appears in the filename.
+
+    A caller that needs certainty must use course_filename_verdict(); this
+    boolean answers "plausible", so ambiguous evidence stays usable for listings
+    where only one file is judged at a time.
     """
-    if not c_name or not fname:
-        return False
-    if c_name in fname:
-        return True
-    parts = [p.strip() for p in re.split(r"[．·\.\:\s\-_/\\()（）]+", c_name) if len(p.strip()) >= 2]
-    return any(p in fname for p in parts)
+    return bool(course_filename_verdict(c_name, fname)["match"])
+
+
+def course_filename_verdict(c_name, fname, other_names=()):
+    """
+    Ambiguity-aware version of course_matches_filename.
+
+    Returns ``{"match": bool, "ambiguous": bool, "reason": str}``. ``ambiguous``
+    is True when the filename also matches another known course title in
+    `other_names`, which means the file cannot be attributed safely and MUST NOT
+    be attached/rewritten. `other_names` is compared with the same privacy rule:
+    a bare substring of a longer course name is not itself a match, so a short
+    course name does not "claim" a longer unrelated one.
+    """
+    candidate = (c_name or "").strip()
+    filename = (fname or "").strip()
+    if not candidate or not filename:
+        return {"match": False, "ambiguous": False, "reason": "empty"}
+
+    tokens = _name_tokens(candidate)
+    full_hit = len(candidate) >= 4 and candidate in filename
+    token_hits = [t for t in tokens if t in filename]
+    match = full_hit or bool(token_hits)
+
+    if match and other_names:
+        for other in other_names:
+            other = (other or "").strip()
+            if not other or other == candidate:
+                continue
+            if len(other) >= 4 and other in filename:
+                return {"match": True, "ambiguous": True,
+                        "reason": f"also matches '{other}'"}
+            if any(t in filename for t in _name_tokens(other)):
+                return {"match": True, "ambiguous": True,
+                        "reason": f"also matches '{other}'"}
+
+    return {"match": match, "ambiguous": False, "reason": "token" if token_hits else "full"}
 
 def extract_fname(item):
     """
@@ -217,11 +298,16 @@ def find_real_pdfs_for_course(course):
 
     return verified_pdfs
 
-def verify_and_heal_course(course):
+def verify_and_heal_course(course, other_course_names=()):
     """
     Verifies audio, video, and PDF entries for a course. Repairs any invalid entries.
     Returns (modified: bool, repair_notes: str)
+
+    A course that is not a dict cannot be healed; rather than raising, it is
+    reported so the caller can count it as a failure and continue (F4).
     """
+    if not isinstance(course, dict):
+        raise TypeError(f"course is {type(course).__name__}, not a dict")
     course_name = course.get("name", "")
     modified = False
     notes = []
@@ -258,14 +344,46 @@ def verify_and_heal_course(course):
             else:
                 notes.append("No PDFs found")
         else:
-            course["pdfs"] = real_pdfs
-            modified = True
-            notes.append(f"Repaired PDFs: {len(real_pdfs)} valid files found")
+            # F2: MERGE instead of replace. The old code assigned real_pdfs over
+            # the whole curated list, so one 404 turned 3 curated PDFs into the 1
+            # file the finder happened to see. Only entries that actually failed
+            # verification are dropped; every PDF that was not proven bad survives,
+            # order-stable, and newly discovered files are appended.
+            failed_url_set = {u for u, _ in failed_pdf_urls if u}
+            merged = []
+            seen_urls = set()
+            for entry in pdfs:
+                url = entry.get("url") if isinstance(entry, dict) else None
+                if url and url in failed_url_set:
+                    continue
+                key = url or (entry.get("filename") if isinstance(entry, dict) else str(entry))
+                if key in seen_urls:
+                    continue
+                seen_urls.add(key)
+                merged.append(entry)
+            added = 0
+            for new_pdf in real_pdfs:
+                url = new_pdf.get("url")
+                if url and url not in seen_urls:
+                    seen_urls.add(url)
+                    merged.append(new_pdf)
+                    added += 1
+            for i, entry in enumerate(merged, start=1):
+                if isinstance(entry, dict):
+                    entry["num"] = i
+            if merged != pdfs:
+                course["pdfs"] = merged
+                modified = True
+                notes.append(
+                    f"Repaired PDFs: kept {len(pdfs) - len(failed_url_set)} curated, "
+                    f"added {added} discovered"
+                )
 
     # 2. Audit Audio Path
     audio_path = course.get("audio_path")
     if audio_path:
         audio_data = query_remote_list(audio_path)
+        audio_probe_failed = audio_data is None
 
         # Check if audio_data files actually belong to this course
         is_mismatched = False
@@ -298,7 +416,14 @@ def verify_and_heal_course(course):
                 cand_data = query_remote_list(cand)
                 if isinstance(cand_data, list) and len(cand_data) > 0:
                     cand_fnames = [extract_fname(f) for f in cand_data]
-                    if any(course_matches_filename(course_name, fn) for fn in cand_fnames):
+                    # Do not re-point a course at a directory whose files also
+                    # match a different course: attaching the wrong media is worse
+                    # than leaving the original path alone (F10).
+                    verdicts = [
+                        course_filename_verdict(course_name, fn, other_course_names)
+                        for fn in cand_fnames
+                    ]
+                    if any(v["match"] and not v["ambiguous"] for v in verdicts):
                         repaired_path = cand
                         audio_data = cand_data
                         break
@@ -330,12 +455,30 @@ def verify_and_heal_course(course):
             audio_files = [f for f in audio_data if extract_fname(f).lower().endswith(AUDIO_EXTS)]
             old_count = course.get("total_episodes")
             if len(audio_files) > 0 and old_count != len(audio_files):
-                # Never let the count grow from this listing: the directory also holds
-                # QA/companion audio artifacts that are not episodes (a live run grew
-                # id 113 from 14 to 42). Only initialise a missing count, or reduce an
-                # inflated one. Skipped entirely when the directory was mismatched,
-                # because then the files belong to some other course.
-                if not isinstance(old_count, int) or old_count <= 0 or len(audio_files) < old_count:
+                # A listing is authoritative only when it actually identifies this
+                # course. The old rule shrank the count on any non-empty listing,
+                # so a truncated response (or a directory holding a single QA clip)
+                # silently reduced a course's episode count. F9: grow freely on a
+                # verified listing, initialise a missing count, and only shrink when
+                # the remaining files still match the course and the probe that
+                # produced them did not fail.
+                names_match = any(
+                    course_matches_filename(course_name, extract_fname(f))
+                    for f in audio_files
+                )
+                can_shrink = (
+                    isinstance(old_count, int)
+                    and old_count > 0
+                    and len(audio_files) < old_count
+                    and not audio_probe_failed
+                    and names_match
+                )
+                can_grow = not isinstance(old_count, int) or old_count <= 0 or len(audio_files) > old_count
+                # Reaching this point already proves the probe succeeded: a failed
+                # probe (audio_data is None) leaves the isinstance() guard above
+                # False. So the only extra evidence a shrink needs is that the
+                # surviving files still identify this course.
+                if can_grow or can_shrink:
                     course["total_episodes"] = len(audio_files)
                     modified = True
                     notes.append(f"Updated audio total_episodes: {old_count} -> {len(audio_files)}")
@@ -344,20 +487,33 @@ def verify_and_heal_course(course):
     video_path = course.get("video_path")
     if video_path:
         vdata = query_remote_list(video_path)
-        # Only inspect if query returned an explicit empty list (server 400 or empty directory)
+        # F3: only act when the server POSITIVELY answered. `None` is a failed
+        # probe and must never be treated as "the file is gone"; `[]` is an
+        # explicit "this directory is empty" answer.
         if vdata is not None and len(vdata) == 0:
             parent = video_path.split("/video")[0]
-            vdata_parent = query_remote_list(parent)
+            vdata_parent = query_remote_list(parent) if parent != video_path else None
             if isinstance(vdata_parent, dict) and "video" in vdata_parent and len(vdata_parent["video"]) > 0:
                 repaired = f"{parent}/video"
                 if course.get("video_path") != repaired:
                     course["video_path"] = repaired
                     modified = True
                     notes.append(f"Repaired video_path to {repaired}")
-            elif vdata_parent is not None and (len(vdata_parent) == 0 or (isinstance(vdata_parent, dict) and "video" not in vdata_parent)):
+            elif (
+                vdata_parent is not None
+                and vdata_parent != []
+                and isinstance(vdata_parent, dict)
+                and "video" not in vdata_parent
+            ):
                 course["video_path"] = None
                 modified = True
                 notes.append("Cleared invalid video_path (verified absent on server)")
+            else:
+                # No positive evidence that the media moved or is gone: the
+                # directory is empty, but the parent listing was inconclusive
+                # (network failure, an empty answer, or a path with no /video
+                # component such as course 97). Keep the stored value.
+                notes.append("video listing empty but absence not confirmed; kept video_path")
 
     return modified, "; ".join(notes)
 
@@ -383,11 +539,26 @@ def _auto_heal_locked():
     log(f"📋 Loaded {total_courses} courses for integrity verification.")
 
     total_repaired = 0
+    total_failed = 0
     repaired_details = []
+    # Every course name in the catalog, used to refuse ambiguous filename matches:
+    # a PDF that also matches another course's title must not be re-attached (F10).
+    known_names = [
+        c.get("name")
+        for c in courses
+        if isinstance(c, dict) and isinstance(c.get("name"), str)
+    ]
 
     for idx, course in enumerate(courses):
+        # F4: take a snapshot BEFORE touching the course. The old handler assumed
+        # `course` was a dict and raised AttributeError itself
+        # ('str' object has no attribute 'get'), which aborted the whole pass
+        # after visiting only 2 of 3 courses. It also left whatever the failing
+        # call had already mutated in place. Restoring the snapshot makes a
+        # failure a no-op for that course and lets the pass continue.
+        snapshot = dict(course) if isinstance(course, dict) else None
         try:
-            modified, notes = verify_and_heal_course(course)
+            modified, notes = verify_and_heal_course(course, known_names)
             if modified:
                 total_repaired += 1
                 repaired_details.append({
@@ -397,7 +568,18 @@ def _auto_heal_locked():
                 })
                 log(f"🔧 [修復路徑] ID: {course['id']} | 完整名稱: '{course['name']}' | 分類: {course.get('main_menu_title','')} ➔ {course.get('sub_menu_title','')} | 修復結果: {notes}")
         except Exception as e:
-            log(f"⚠️ Error auditing course {course.get('name')}: {e}")
+            total_failed += 1
+            # Never assume the row is a dict: a non-dict record must be reported,
+            # not allowed to crash the run.
+            if snapshot is not None and isinstance(course, dict):
+                course.clear()
+                course.update(snapshot)
+            label = None
+            if isinstance(course, dict):
+                label = course.get("name") or course.get("id")
+            if label is None:
+                label = f"record #{idx} ({type(course).__name__})"
+            log(f"⚠️ Error auditing course {label}: {type(e).__name__}: {e} (course left unchanged)")
 
     db["courses"] = courses
     db["last_auto_healed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -413,15 +595,23 @@ def _auto_heal_locked():
         mc.sync_to_src(db)
 
     summary_msg = f"✅ Self-Healing Complete! Audited: {total_courses} | Repaired: {total_repaired}"
+    if total_failed:
+        summary_msg += f" | Failed: {total_failed}"
     log(summary_msg)
 
-    return {
+    result = {
         "status": "success",
         "total_audited": total_courses,
         "total_repaired": total_repaired,
         "timestamp": db["last_auto_healed_at"],
         "details": repaired_details
     }
+    if total_failed:
+        # A pass that could not audit part of the catalog is not a clean success,
+        # even though the rows it did visit were written.
+        result["status"] = "partial"
+        result["total_failed"] = total_failed
+    return result
 
 def run_auto_heal():
     # One maintenance run at a time: a scheduled daemon and a web-triggered run
@@ -435,6 +625,12 @@ def run_auto_heal():
         sys.exit(mc.EXIT_BUSY)
 
 if __name__ == "__main__":
-    run_auto_heal()
-    # Explicit success exit so callers can tell a clean run from a crash.
-    sys.exit(0)
+    # F12: this used to call run_auto_heal() and then unconditionally
+    # sys.exit(0), so even {"status": "error", "message": "Database file not
+    # found"} exited 0 and the UI/CI could not tell a failed pass from a clean
+    # one. run_auto_heal() owns the busy case (mc.EXIT_BUSY); every other
+    # non-success outcome is a real failure.
+    result = run_auto_heal()
+    if isinstance(result, dict) and result.get("status") in (None, "success"):
+        sys.exit(0)
+    sys.exit(1)

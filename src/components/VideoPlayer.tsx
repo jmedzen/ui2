@@ -22,6 +22,24 @@ interface VideoPlayerProps {
 
 const PAGE_SIZE = 20;
 
+/**
+ * Writes the chosen speed to the video element from one place.
+ *
+ * `defaultPlaybackRate` is the durable half of the pair: the HTML media load
+ * algorithm — which every `load()` and every `src` assignment runs — ends with
+ * "Set the playbackRate attribute to the value of the defaultPlaybackRate
+ * attribute". Writing only `playbackRate` is therefore lost on the next episode
+ * change (the route effect assigns `src` and calls `load()`), leaving the
+ * element at 1.0x while the speed button still highlighted the chosen rate.
+ */
+function applyElementPlaybackRate(el: HTMLMediaElement | null, rate: number) {
+  if (!el) return;
+  try {
+    el.defaultPlaybackRate = rate;
+    el.playbackRate = rate;
+  } catch {}
+}
+
 export default function VideoPlayer({
   tracks,
   currentTrackIndex,
@@ -43,6 +61,13 @@ export default function VideoPlayer({
 
   const currentTrack = tracks[currentTrackIndex];
 
+  /**
+   * The chosen speed, readable from the route effect. That effect cannot depend
+   * on `playbackRate` without re-running its route probe on every speed change,
+   * so it reads the current value through this ref, kept up to date here.
+   */
+  const playbackRateRef = useRef<number>(playbackRate);
+
   // Sync range tab when currentTrackIndex changes
   useEffect(() => {
     const pageOfCurrentTrack = Math.floor(currentTrackIndex / PAGE_SIZE);
@@ -50,9 +75,8 @@ export default function VideoPlayer({
   }, [currentTrackIndex]);
 
   useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.playbackRate = playbackRate;
-    }
+    playbackRateRef.current = playbackRate;
+    applyElementPlaybackRate(videoRef.current, playbackRate);
   }, [playbackRate]);
 
   // Evaluate optimal media route & track server disk cache status
@@ -75,6 +99,12 @@ export default function VideoPlayer({
       if (videoRef.current) {
         if (videoRef.current.getAttribute('src') !== routeRes.activeUrl) {
           videoRef.current.src = routeRes.activeUrl;
+          // `load()` is what switches episodes, and it resets the rate to
+          // `defaultPlaybackRate`. Without re-applying here the episode changed
+          // while the element silently fell back to 1.0x; the dependency list
+          // below deliberately omits `playbackRate` so a speed change does not
+          // restart the route probe.
+          applyElementPlaybackRate(videoRef.current, playbackRateRef.current);
           videoRef.current.load();
         }
       }
@@ -157,7 +187,20 @@ export default function VideoPlayer({
     return tracks.slice(start, start + PAGE_SIZE);
   }, [tracks, selectedRangePage]);
 
-  if (!currentTrack) return null;
+  if (!currentTrack) {
+    // `tracks[outOfRangeIndex]` is undefined for an out-of-range index, and
+    // returning null there removed the entire player (video, prev/next nav,
+    // dropdown, auto-next toggle, range tabs) with no explanation. Fail
+    // visibly instead, reusing the existing audio empty-state styling.
+    return (
+      <div className="video-player-card">
+        <div className="no-audio-state">
+          <span className="empty-icon">🎬</span>
+          <p>此課程目前無影音講記檔案，或清單正在同步中。</p>
+        </div>
+      </div>
+    );
+  }
 
   const hasPrev = currentTrackIndex > 0;
   const hasNext = currentTrackIndex < tracks.length - 1;

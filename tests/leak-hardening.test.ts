@@ -243,7 +243,10 @@ test('Whole-site leak hardening', async (t) => {
     const src = read('src/lib/serverMediaCache.ts');
 
     assert.match(src, /const CACHE_FILENAME_RE = \/\^\[0-9a-f\]\{32\}/);
-    assert.match(src, /const filesInUse = new Set<string>\(\);/);
+    // A Set, not a flag: two concurrent readers of one file must each hold a
+    // pin, so the last one out clears it. A Set let the first reader's release
+    // drop the pin for both, and LRU then evicted a file still being streamed.
+    assert.match(src, /const filesInUse = new Map<string, number>\(\);/);
     assert.match(src, /export function markCacheFileInUse\(filePath: string\): \(\) => void \{/);
     assert.match(src, /if \(filesInUse\.has\(fullPath\)\) continue;/);
     assert.match(src, /if \(!CACHE_FILENAME_RE\.test\(filename\)\) continue;/);

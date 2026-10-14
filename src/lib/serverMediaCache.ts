@@ -189,29 +189,44 @@ export function updateAccessTime(filePath: string): void {
 const activeTempPaths = new Set<string>();
 
 /**
- * Committed cache files with a read stream currently open.
+ * Committed cache files with a read stream currently open, as a REFCOUNT.
  *
  * Files must not be evicted mid-stream. The previous `activeTempPaths` check in
  * the LRU scan could never match a committed file (and the scan already skips
  * every `*.tmp`), so it was dead code and an eviction pass could unlink the very
  * file the proxy had just opened for a Range response.
+ *
+ * A plain Set was still wrong: two concurrent readers of one file share a single
+ * entry, so whichever finished first cleared the pin for both and LRU could
+ * evict a file the other was still streaming (a seek/scrub overlaps exactly
+ * like this, since the proxy marks per Range request). POSIX unlink semantics
+ * keep an already-open descriptor working, so the in-flight response survived —
+ * but the reader's NEXT Range request hit ENOENT and refetched from the origin.
+ * Counting instead of flagging fixes that.
  */
-const filesInUse = new Set<string>();
+const filesInUse = new Map<string, number>();
 
 /** Marks a committed cache file as being read; returns a release function. */
 export function markCacheFileInUse(filePath: string): () => void {
-  filesInUse.add(filePath);
+  filesInUse.set(filePath, (filesInUse.get(filePath) || 0) + 1);
   let released = false;
   return () => {
     if (released) return;
     released = true;
-    filesInUse.delete(filePath);
+    const remaining = (filesInUse.get(filePath) || 0) - 1;
+    if (remaining > 0) filesInUse.set(filePath, remaining);
+    else filesInUse.delete(filePath);
   };
 }
 
 /** Test hook: number of committed cache files currently open for reading. */
 export function getInUseFileCount(): number {
   return filesInUse.size;
+}
+
+/** Test hook: how many readers currently pin one file. */
+export function getInUseRefCount(filePath: string): number {
+  return filesInUse.get(filePath) || 0;
 }
 
 /**
@@ -421,6 +436,11 @@ export function startCacheMaintenance(): void {
 // Map to prevent duplicate concurrent background downloads for the same target file
 const activeDownloads = new Map<string, Promise<void>>();
 
+/** Whether a background download for this cache file is already running. */
+export function isDownloadInFlight(cacheFilePath: string): boolean {
+  return activeDownloads.has(cacheFilePath);
+}
+
 /** FIFO queue of waiters when the download concurrency budget is exhausted. */
 const downloadQueue: (() => void)[] = [];
 
@@ -456,7 +476,18 @@ let maxCacheableBytesOverride: number | null = null;
 
 function getMaxCacheableBytes(): number {
   if (maxCacheableBytesOverride !== null) return maxCacheableBytesOverride;
-  return parseInt(process.env.MEDIA_CACHE_MAX_FILE_BYTES || '', 10) || 4 * 1024 * 1024 * 1024;
+  const raw = (process.env.MEDIA_CACHE_MAX_FILE_BYTES || '').trim();
+  // `parseInt(raw, 10) || default` collapsed a legitimate "0" to the default,
+  // so the documented "0 disables the check" actually meant the OPPOSITE: a
+  // 4 GiB ceiling stayed in force. Treat an explicit 0 as unlimited (Infinity)
+  // and only fall back when the value is absent or unparseable.
+  if (raw !== '') {
+    const parsed = Number.parseInt(raw, 10);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return parsed === 0 ? Number.POSITIVE_INFINITY : parsed;
+    }
+  }
+  return 4 * 1024 * 1024 * 1024;
 }
 
 /** Test hook: pins the per-file ceiling without re-importing the module. */
@@ -549,7 +580,18 @@ export async function fileLooksLikeHtml(filePath: string): Promise<boolean> {
  * Downloads remote media file to server cache disk in background and renames it to a formal file upon completion
  */
 export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string): Promise<void> {
-  const tempPath = `${cacheFilePath}.tmp`;
+  // The scratch path must be UNIQUE per attempt, not derived from the target.
+  //
+  // It used to be `${cacheFilePath}.tmp`, which is the SAME name in every
+  // process, while `activeDownloads`/`activeTempPaths` are in-process Sets that
+  // give no cross-process protection. Two processes fetching one target then
+  // interleaved writes into a single file; each checked only
+  // `stat.size >= expectedSize`, which a splice satisfies, and renamed the
+  // shared file into the final path — so the cache permanently served a file
+  // that was part one recording and part another, and reported success. The
+  // Python side already writes to a pid+uuid temp name for this exact reason;
+  // the Node cache was the outlier.
+  const tempPath = `${cacheFilePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
 
   if (isCached(cacheFilePath)) {
     return;
@@ -566,13 +608,17 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string)
   // fresh mtime, so a .tmp orphaned by a restart (or a crash) made every
   // subsequent request return early for up to 5 minutes: nothing downloaded,
   // nothing was cached, and playback kept hitting the origin.
+  //
+  // Reclaiming a specific path is now unnecessary: the name above is unique to
+  // this attempt, so no other process can be writing this exact file, and the
+  // global sweepers (cleanAllTempFiles / sweepStaleTempFiles) clear orphans
+  // left by previous processes without ever racing a live writer's own name.
   if (fs.existsSync(tempPath)) {
     if (activeTempPaths.has(tempPath)) {
       return; // A download owned by this process is genuinely in flight.
     }
     try {
-      fs.unlinkSync(tempPath); // Orphan from a previous process: reclaim it.
-      console.warn(`[Media Cache] Removed orphaned temp file: ${path.basename(tempPath)}`);
+      fs.unlinkSync(tempPath);
     } catch {}
   }
 
@@ -777,10 +823,18 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string)
         } catch {}
       }
     } finally {
-      await discardUpstream();
+      // Release the bookkeeping BEFORE any await. `discardUpstream()` awaits
+      // `upstream.cancel()`, which can stall indefinitely on a wedged socket;
+      // when it was awaited first, the three lines below never ran and the
+      // download slot was never returned. Enough stalled cancels then wedged
+      // the whole download subsystem silently, because `activeDownloads` kept
+      // the promise and no slot was ever free again.
       activeTempPaths.delete(tempPath);
       activeDownloads.delete(cacheFilePath);
       releaseDownloadSlot();
+
+      await discardUpstream();
+
       if (fs.existsSync(tempPath)) {
         try {
           await fs.promises.unlink(tempPath);

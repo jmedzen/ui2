@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ThemeType } from '@/types/course';
+import { getStoredTaskToken, setStoredTaskToken, taskTokenHeaders } from '@/lib/taskToken';
 import packageInfo from '../../package.json';
 
 interface SettingsModalProps {
@@ -52,6 +53,17 @@ export default function SettingsModal({
   // poll overwrote (the server tail does not contain it) -- and appending the
   // server tail to it instead made the same lines accumulate on every poll.
   const [localNotice, setLocalNotice] = useState<string>('');
+  // The task endpoints now REQUIRE a credential (see authorizeTaskRequest).
+  // Without TASK_API_TOKEN the server generates one per boot and prints it to the
+  // log, so the operator pastes it here once.
+  //
+  // This state is for DISPLAY only. Requests read the token straight from
+  // localStorage (see `safeFetchJson`), so there is no effect and no extra render
+  // just to publish a value the network layer can read for itself.
+  const [taskToken, setTaskToken] = useState<string>(() =>
+    typeof window === 'undefined' ? '' : getStoredTaskToken()
+  );
+  const [needsTaskToken, setNeedsTaskToken] = useState<boolean>(false);
 
   // Resizable Width & Log Scroll References
   const [modalWidth, setModalWidth] = useState<number>(820);
@@ -89,12 +101,21 @@ export default function SettingsModal({
     stickToBottomRef.current = distanceFromBottom < 40;
   }, []);
 
-  const safeFetchJson = async (url: string, options?: RequestInit) => {
+  const safeFetchJson = useCallback(async (url: string, options?: RequestInit) => {
     try {
-      const res = await fetch(url, options);
+      // Read the token at call time rather than closing over React state, so
+      // this callback has no dependency on it and never goes stale after the
+      // operator pastes a token.
+      const opts: RequestInit = { ...options, headers: { ...taskTokenHeaders(), ...(options?.headers as Record<string, string> | undefined) } };
+      const res = await fetch(url, opts);
       const text = await res.text();
       try {
         const json = JSON.parse(text);
+        if (res.status === 401 || res.status === 403) {
+          // Surface the "token required/invalid" case as a prompt rather than as
+          // a generic failure, so the fix (paste the token) is obvious.
+          setNeedsTaskToken(true);
+        }
         return { ok: res.ok, status: res.status, data: json };
       } catch {
         return { ok: false, status: res.status, data: { error: text ? text.slice(0, 200) : '伺服器未傳回 JSON 格式' } };
@@ -102,7 +123,7 @@ export default function SettingsModal({
     } catch (err: any) {
       return { ok: false, status: 0, data: { error: err.message || '網路連線失敗' } };
     }
-  };
+  }, []);
 
   const fetchLogs = useCallback(async (): Promise<string | null> => {
     try {
@@ -129,9 +150,10 @@ export default function SettingsModal({
     } finally {
       setIsFetchingLogs(false);
     }
-    // setLastRun is a stable useCallback (ref mirror + setState), so adding it
-    // cannot cause this callback to be recreated on every render.
-  }, [setLastRun]);
+    // setLastRun is a stable useCallback (ref mirror + setState), and
+    // safeFetchJson is a stable useCallback with no deps, so neither can cause
+    // this callback to be recreated on every render.
+  }, [setLastRun, safeFetchJson]);
 
   useEffect(() => {
     if (isOpen) {
@@ -277,13 +299,20 @@ export default function SettingsModal({
   // Tracks whether the modal is still mounted; the long-running scan/heal
   // polling loops below must not keep fetching and calling setState after the
   // user closes the dialog.
+  //
+  // This component is NEVER unmounted on close: page.tsx always renders it and
+  // it early-returns `null` on `!isOpen`, so a `[]` effect left this flag true
+  // forever and every guard below was a no-op. Closing mid-scan therefore kept
+  // hitting /api/scan every 2.5s for up to 150s and refetching the whole 684-row
+  // catalog. Folding `isOpen` into the same flag makes "closed" behave like
+  // "unmounted", which is what the loops were always meant to stop on.
   const isMountedRef = useRef<boolean>(true);
   useEffect(() => {
-    isMountedRef.current = true;
+    isMountedRef.current = isOpen;
     return () => {
       isMountedRef.current = false;
     };
-  }, []);
+  }, [isOpen]);
 
   /** Sleeps in short slices so an unmount can interrupt a long poll loop. */
   const interruptibleSleep = useCallback(async (ms: number) => {
@@ -608,6 +637,39 @@ export default function SettingsModal({
                   <span className="stat-value active">連線運作中</span>
                 </div>
               </div>
+
+              {/* Task-trigger credential.
+                  The scan/heal endpoints spawn Python processes that rewrite
+                  the catalog, so they require a token. When TASK_API_TOKEN is
+                  unset the server generates one per boot and prints it to
+                  scanner.log, so this panel appears exactly when the operator
+                  still needs to paste it. */}
+              {(needsTaskToken || taskToken) && (
+                <div className="task-token-row">
+                  <label className="task-token-label" htmlFor="task-token-input">
+                    🔑 任務授權碼
+                  </label>
+                  <input
+                    id="task-token-input"
+                    className="task-token-input"
+                    type="password"
+                    value={taskToken}
+                    placeholder="貼上啟動日誌中的 X-Task-Token"
+                    onChange={(e) => {
+                      const next = e.target.value.trim();
+                      setTaskToken(next);
+                      setStoredTaskToken(next);
+                      if (next) setNeedsTaskToken(false);
+                    }}
+                  />
+                  {needsTaskToken && (
+                    <span className="task-token-hint">
+                      伺服器要求授權碼才能執行掃描／修復。未設定 <code>TASK_API_TOKEN</code> 時，
+                      啟動時會自動產生一組並寫入日誌，請複製貼上。
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Action Toolbar with Tooltips */}
               <div className="log-action-toolbar">

@@ -8,3 +8,14 @@ Dockerfile
 scanner.log
 auto_heal.log
 README.md
+
+# Runtime state, never build input.
+#
+# `data/` is gitignored and untracked on every dev machine, but the Dockerfile
+# does `COPY . .`, so the host's live catalog (data/courses_db.json), log history
+# and media cache were being copied into the builder layer and pushed to the
+# registry as image layers -- publishing operator data and making the build
+# non-reproducible (a host catalog could be baked in instead of the committed
+# src/data copy, which is the only one that should ship).
+data
+data/**

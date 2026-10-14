@@ -3,97 +3,159 @@ import './helpers/isolated-media-cache';
 
 import test from 'node:test';
 import assert from 'node:assert';
-import { authorizeTaskRequest } from '@/lib/serverTasks';
+import {
+  authorizeTaskRequest,
+  getTaskToken,
+  resetGeneratedTaskToken,
+  isTaskTokenExplicit
+} from '@/lib/serverTasks';
 
 /** Builds a POST request with an explicit Host/Origin, as a browser would send. */
 function mk(url: string, headers: Record<string, string>) {
   return new Request(url, { method: 'POST', headers });
 }
 
-test('authorizeTaskRequest — same-origin detection', async (t) => {
-  const allowed: [string, string, Record<string, string>][] = [
-    ['plain direct request', 'http://localhost:8410/api/scan', { host: 'localhost:8410', origin: 'http://localhost:8410' }],
-    // Regression: behind Caddy the internal request URL is http://fyweb:8410
-    // while the browser's Origin is the public https host. Comparing Origin to
-    // request.url rejected every legitimate trigger from the app's own UI.
-    ['reverse proxy, Host preserved', 'http://fyweb:8410/api/scan', { host: 'myhost.org', origin: 'https://myhost.org' }],
-    ['reverse proxy, x-forwarded-host', 'http://fyweb:8410/api/scan', { host: 'fyweb:8410', 'x-forwarded-host': 'myhost.org', origin: 'https://myhost.org' }],
-    ['origin omits default https port', 'http://fyweb:8410/api/scan', { host: 'myhost.org', origin: 'https://myhost.org' }],
-    ['explicit :443 origin', 'http://fyweb:8410/api/scan', { host: 'myhost.org', origin: 'https://myhost.org:443' }],
-    ['browser same-origin metadata', 'http://fyweb:8410/api/scan', { host: 'fyweb:8410', 'sec-fetch-site': 'same-origin', origin: 'https://myhost.org' }],
-    ['user-navigated (sec-fetch none)', 'http://fyweb:8410/api/scan', { host: 'fyweb:8410', 'sec-fetch-site': 'none' }],
-    ['comma-separated forwarded chain', 'http://fyweb:8410/api/scan', { host: 'fyweb:8410', 'x-forwarded-host': 'myhost.org, inner', origin: 'https://myhost.org' }],
-  ];
-
-  for (const [name, url, headers] of allowed) {
-    await t.test(`allows ${name}`, () => {
-      const result = authorizeTaskRequest(mk(url, headers));
-      assert.strictEqual(result.ok, true, `expected allow, got: ${result.ok ? '' : result.message}`);
-    });
-  }
-});
-
-test('authorizeTaskRequest — rejects cross-origin and malformed input', async (t) => {
-  const denied: [string, string, Record<string, string>][] = [
-    ['foreign origin', 'http://myhost.org/api/scan', { host: 'myhost.org', origin: 'https://evil.com' }],
-    ['cross-site fetch metadata', 'http://myhost.org/api/scan', { host: 'myhost.org', 'sec-fetch-site': 'cross-site', origin: 'https://evil.com' }],
-    ['lookalike host', 'http://myhost.org/api/scan', { host: 'myhost.org', origin: 'https://myhost.org.evil.com' }],
-    ['userinfo trick', 'http://myhost.org/api/scan', { host: 'myhost.org', origin: 'https://myhost.org@evil.com' }],
-    ['same host, different port', 'http://myhost.org:8410/api/scan', { host: 'myhost.org:8410', origin: 'http://myhost.org:9999' }],
-    ['malformed origin', 'http://myhost.org/api/scan', { host: 'myhost.org', origin: 'not-a-url' }],
-  ];
-
-  for (const [name, url, headers] of denied) {
-    await t.test(`denies ${name}`, () => {
-      const result = authorizeTaskRequest(mk(url, headers));
-      assert.strictEqual(result.ok, false, 'expected the request to be denied');
-      assert.strictEqual(result.status, 403);
-    });
-  }
-});
-
-test('authorizeTaskRequest — token takes precedence when configured', async (t) => {
+/** Runs `fn` with TASK_API_TOKEN set to `value`, restoring the previous state. */
+async function withToken(value: string | undefined, fn: () => Promise<void> | void) {
   const previous = process.env.TASK_API_TOKEN;
-  process.env.TASK_API_TOKEN = 'correct-horse-battery-staple';
-
-  t.after(() => {
+  if (value === undefined) delete process.env.TASK_API_TOKEN;
+  else process.env.TASK_API_TOKEN = value;
+  resetGeneratedTaskToken();
+  try {
+    await fn();
+  } finally {
     if (previous === undefined) delete process.env.TASK_API_TOKEN;
     else process.env.TASK_API_TOKEN = previous;
-  });
+    resetGeneratedTaskToken();
+  }
+}
 
-  await t.test('rejects a request with no token', () => {
-    const result = authorizeTaskRequest(mk('http://myhost.org/api/scan', { host: 'myhost.org', origin: 'https://myhost.org' }));
+test('authorizeTaskRequest — browser metadata alone never authorizes', async (t) => {
+  await withToken(undefined, async () => {
+    // Every one of these used to be ALLOWED whenever TASK_API_TOKEN was unset.
+    // They are all client-supplied headers, and a non-browser client simply
+    // omits or forges them, so they cannot gate a process-spawning endpoint.
+    const formerlyTrusted: [string, Record<string, string>][] = [
+      ['same-origin fetch metadata', { host: 'myhost.org', 'sec-fetch-site': 'same-origin', origin: 'https://myhost.org' }],
+      ['user-navigated (sec-fetch none)', { host: 'myhost.org', 'sec-fetch-site': 'none' }],
+      ['matching Origin', { host: 'myhost.org', origin: 'https://myhost.org' }],
+      ['reverse proxy x-forwarded-host', { host: 'fyweb:8410', 'x-forwarded-host': 'myhost.org', origin: 'https://myhost.org' }],
+      ['comma-separated forwarded chain', { host: 'fyweb:8410', 'x-forwarded-host': 'myhost.org, inner', origin: 'https://myhost.org' }],
+      ['no headers at all (plain curl)', {}]
+    ];
+
+    for (const [name, headers] of formerlyTrusted) {
+      await t.test(`denies ${name} without a token`, () => {
+        const result = authorizeTaskRequest(mk('http://myhost.org/api/scan', headers));
+        assert.strictEqual(result.ok, false, 'expected the request to be denied');
+        assert.strictEqual(result.status, 401);
+      });
+    }
+  });
+});
+
+test('authorizeTaskRequest — a forged Origin+Host pair cannot authorize', async () => {
+  await withToken(undefined, () => {
+    // The old code derived the trusted authority set FROM these same headers and
+    // then compared Origin against it, so a caller could validate itself by
+    // sending a consistent pair. Verified live before the fix: no headers was
+    // ALLOWED, and `Origin: http://evil.com` + `Host: evil.com` was ALLOWED.
+    const result = authorizeTaskRequest(
+      mk('http://127.0.0.1:8410/api/scan', { host: 'evil.com', origin: 'http://evil.com' })
+    );
     assert.strictEqual(result.ok, false);
     assert.strictEqual(result.status, 401);
   });
+});
 
-  await t.test('rejects a wrong token', () => {
-    const result = authorizeTaskRequest(
-      mk('http://myhost.org/api/scan', { host: 'myhost.org', 'x-task-token': 'nope' })
-    );
-    assert.strictEqual(result.ok, false);
-    assert.strictEqual(result.status, 403);
+test('authorizeTaskRequest — generated token gates the endpoints (default config)', async () => {
+  await withToken(undefined, () => {
+    assert.strictEqual(isTaskTokenExplicit(), false);
+    const token = getTaskToken();
+    assert.ok(token.length >= 32, 'generated token should be long');
+
+    // Stable across calls within a boot, so the same value can be advertised.
+    assert.strictEqual(getTaskToken(), token);
+
+    const ok = authorizeTaskRequest(mk('http://myhost.org/api/scan', { 'x-task-token': token }));
+    assert.strictEqual(ok.ok, true);
+
+    const bad = authorizeTaskRequest(mk('http://myhost.org/api/scan', { 'x-task-token': 'wrong' }));
+    assert.strictEqual(bad.ok, false);
+    assert.strictEqual(bad.status, 403);
   });
+});
 
-  await t.test('accepts the correct token via header', () => {
-    const result = authorizeTaskRequest(
-      mk('http://myhost.org/api/scan', { host: 'myhost.org', 'x-task-token': 'correct-horse-battery-staple' })
-    );
-    assert.strictEqual(result.ok, true);
-  });
-
-  await t.test('accepts the correct token via bearer authorization', () => {
-    const result = authorizeTaskRequest(
-      mk('http://myhost.org/api/scan', { host: 'myhost.org', authorization: 'Bearer correct-horse-battery-staple' })
-    );
-    assert.strictEqual(result.ok, true);
-  });
-
-  await t.test('token is required even for a same-origin request', () => {
-    const result = authorizeTaskRequest(
-      mk('http://myhost.org/api/scan', { host: 'myhost.org', 'sec-fetch-site': 'same-origin' })
-    );
+test('authorizeTaskRequest — reports why a token is needed when none is configured', async () => {
+  await withToken(undefined, () => {
+    const result = authorizeTaskRequest(mk('http://myhost.org/api/scan', {}));
     assert.strictEqual(result.ok, false);
     assert.strictEqual(result.status, 401);
+    // The message must tell the operator where to find the generated token.
+    assert.match(result.message, /TASK_API_TOKEN/);
+  });
+});
+
+test('authorizeTaskRequest — cross-site is rejected before anything else', async (t) => {
+  await withToken(undefined, async () => {
+    await t.test('cross-site fetch metadata is 403 even with a valid token', () => {
+      const result = authorizeTaskRequest(
+        mk('http://myhost.org/api/scan', { 'sec-fetch-site': 'cross-site', 'x-task-token': getTaskToken() })
+      );
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.status, 403);
+    });
+  });
+});
+
+test('authorizeTaskRequest — explicit token takes precedence', async (t) => {
+  await withToken('correct-horse-battery-staple', async () => {
+    assert.strictEqual(isTaskTokenExplicit(), true);
+    assert.strictEqual(getTaskToken(), 'correct-horse-battery-staple');
+
+    await t.test('rejects a request with no token', () => {
+      const result = authorizeTaskRequest(mk('http://myhost.org/api/scan', { host: 'myhost.org', origin: 'https://myhost.org' }));
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.status, 401);
+    });
+
+    await t.test('rejects a wrong token', () => {
+      const result = authorizeTaskRequest(
+        mk('http://myhost.org/api/scan', { host: 'myhost.org', 'x-task-token': 'nope' })
+      );
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.status, 403);
+    });
+
+    await t.test('accepts the correct token via header', () => {
+      const result = authorizeTaskRequest(
+        mk('http://myhost.org/api/scan', { host: 'myhost.org', 'x-task-token': 'correct-horse-battery-staple' })
+      );
+      assert.strictEqual(result.ok, true);
+    });
+
+    await t.test('accepts the correct token via bearer authorization', () => {
+      const result = authorizeTaskRequest(
+        mk('http://myhost.org/api/scan', { host: 'myhost.org', authorization: 'Bearer correct-horse-battery-staple' })
+      );
+      assert.strictEqual(result.ok, true);
+    });
+
+    await t.test('token is required even for a same-origin request', () => {
+      const result = authorizeTaskRequest(
+        mk('http://myhost.org/api/scan', { host: 'myhost.org', 'sec-fetch-site': 'same-origin' })
+      );
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.status, 401);
+    });
+
+    await t.test('a token of the right length but wrong value is rejected', () => {
+      // Guards the timingSafeEqual length shortcut: equal lengths must still fail.
+      const result = authorizeTaskRequest(
+        mk('http://myhost.org/api/scan', { 'x-task-token': 'correct-horse-battery-staple'.replace('c', 'x') })
+      );
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.status, 403);
+    });
   });
 });

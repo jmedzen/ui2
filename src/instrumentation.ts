@@ -19,7 +19,24 @@ export async function register(): Promise<void> {
   // Only meaningful on the Node.js server; the Edge runtime has no filesystem.
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 
-  const { reclaimOrphanedLock, checkLogDirWritable } = await import('@/lib/serverTasks');
+  const { reclaimOrphanedLock, checkLogDirWritable, getTaskToken, isTaskTokenExplicit } = await import('@/lib/serverTasks');
+
+  // Report how the task-trigger endpoints are gated. These endpoints spawn
+  // Python processes that rewrite the catalog, so the server now REQUIRES a
+  // token instead of trusting browser-only headers that any HTTP client can
+  // omit. Printing the generated token is what keeps a zero-config deployment
+  // usable: the operator copies it from the boot log, or sets TASK_API_TOKEN.
+  if (isTaskTokenExplicit()) {
+    console.log('[Boot] Task triggers require the configured TASK_API_TOKEN.');
+  } else {
+    console.warn(
+      `[Boot] No TASK_API_TOKEN set. Task triggers (scan/repair) are locked behind a ` +
+        `token generated for this boot: ${getTaskToken()}\n` +
+        '       Send it as the X-Task-Token header to use those endpoints. Set TASK_API_TOKEN ' +
+        'to choose a stable value. This limit is deliberate: Fetch Metadata and Origin are ' +
+        'browser-only, so they cannot stop a non-browser client from triggering tasks.'
+    );
+  }
 
   const probe = checkLogDirWritable();
   if (probe.writable) {

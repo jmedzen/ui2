@@ -8,8 +8,10 @@ rotation) live in media_common so this script and auto_heal_catalog.py cannot
 diverge from each other again.
 """
 
+import argparse
 import json
 import os
+import re
 import sys
 import urllib.request
 from datetime import datetime
@@ -150,7 +152,87 @@ def normalize_media_path(p):
         p = '/' + p
     return p
 
-def run_scan():
+
+def _is_int(value):
+    """True only for a real integer (bool is not an id)."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def coerce_int(value):
+    """
+    Best-effort int coercion for upstream numerics.
+
+    ``max(stored_total, api_total)`` raised ``TypeError: '>' not supported
+    between instances of 'str' and 'int'`` whenever fayun.org reported a string
+    total (verified against the live API). The per-item handler swallowed it and
+    dropped the whole row, so one malformed number silently deleted a course.
+    Anything that cannot be read as an integer is 0 -- never an exception.
+    """
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value == value and value not in (float("inf"), float("-inf")) else 0
+    if isinstance(value, str):
+        try:
+            return int(float(value.strip()))
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def keep_non_empty(new_value, old_value):
+    """
+    Returns `new_value` unless it is empty/None AND an existing value can be kept.
+
+    A transient upstream partial response ("name": null, "topic": "") used to
+    blank the curated c_name / topic / *_title fields of every course on every
+    scan. An empty fetch result is never an intentional erasure of curated text,
+    so the stored value wins; a non-empty fetched value still wins, because that
+    is the server genuinely correcting itself.
+    """
+    if new_value is None or (isinstance(new_value, str) and not new_value.strip()):
+        if old_value is not None and not (isinstance(old_value, str) and not old_value.strip()):
+            return old_value
+    return new_value
+
+
+def _normalize_id(raw_id):
+    """
+    Canonical identity for a course id.
+
+    Upstream ids are numeric, but a JSON ``7`` and a string ``"7"`` denote the
+    same course. They are normalised to the int so the two spellings cannot
+    become two rows that later collide (see the dedupe pass in run_scan).
+    """
+    if isinstance(raw_id, int) and not isinstance(raw_id, bool):
+        return raw_id
+    if isinstance(raw_id, float) and raw_id.is_integer():
+        return int(raw_id)
+    text = str(raw_id).strip()
+    if re.fullmatch(r"[+-]?\d+", text):
+        return int(text)
+    return text
+
+
+def parse_args(argv=None):
+    """
+    CLI flags. ``--allow-empty`` is the ONLY way to publish a catalog when
+    upstream returned nothing, so an outage can never erase the store by
+    accident; it exists for the deliberate case of bootstrapping a brand-new
+    install where an empty catalog really is the intended result.
+    """
+    parser = argparse.ArgumentParser(description="Scan fayun.org and refresh the course catalog.")
+    parser.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help="允許在完全抓不到任何項目時仍發佈空白目錄（僅供首次建置使用）",
+    )
+    return parser.parse_args(argv)
+
+
+def run_scan(allow_empty=False):
     log_message("🔄 === 開始連線 fayun.org 執行媒體同步與掃描 ===")
 
     # Tolerant load: a truncated or non-object catalog used to raise here, before
@@ -199,8 +281,8 @@ def run_scan():
                 if not isinstance(item, dict):
                     log_message(f"⚠️ Skipped non-object item in {main_menu}/{sub_menu}.")
                     continue
-                c_id = item.get("id")
-                if c_id is None:
+                c_id = _normalize_id(item.get("id"))
+                if c_id is None or (isinstance(c_id, str) and not c_id):
                     log_message(f"⚠️ Skipped item without id in {main_menu}/{sub_menu}.")
                     continue
                 c_name = (item.get("name") or "").strip()
@@ -213,6 +295,22 @@ def run_scan():
 
                 existing = existing_courses.get(str(c_id))
                 c_pdfs = existing.get("pdfs", []) if existing else []
+
+                # F6: an empty/None field in a partial upstream response must not
+                # clobber curated text. Preserve the stored value in that case.
+                if existing:
+                    c_name = keep_non_empty(c_name, existing.get("name"))
+                    topic = keep_non_empty(topic, existing.get("topic"))
+                    if not main_title:
+                        main_title = existing.get("main_menu_title") or main_title
+                    if not sub_title:
+                        sub_title = existing.get("sub_menu_title") or sub_title
+                    # topic_title is derived from the (now effective) topic, so
+                    # recompute it and only fall back to the stored title when the
+                    # topic itself is unknown and blank.
+                    topic_title = TOPIC_MAP.get(topic, topic) or "通用主題"
+                    if not topic:
+                        topic_title = keep_non_empty(existing.get("topic_title"), topic_title) or topic_title
 
                 audio_p = item.get("audio_path")
                 lecture_p = item.get("lecture_path_audio") or item.get("lecture_path_video")
@@ -249,12 +347,14 @@ def run_scan():
                     # (161 of 684 courses have no audio_path for the healer to
                     # recount from). Trust the API when it reports a larger count,
                     # otherwise keep the stored value, which may hold a manual
-                    # correction.
-                    api_total = item.get("total", 0) or 0
-                    stored_total = existing.get("total_episodes") or 0
+                    # correction. Both sides are coerced: the API returns a string
+                    # total for some rows, and max() then raised TypeError and the
+                    # whole row was skipped.
+                    api_total = coerce_int(item.get("total"))
+                    stored_total = coerce_int(existing.get("total_episodes"))
                     total_episodes = max(stored_total, api_total)
                 else:
-                    total_episodes = item.get("total", 0) or 0
+                    total_episodes = coerce_int(item.get("total"))
 
                 audio_p = normalize_media_path(audio_p)
                 video_p = normalize_media_path(video_p)
@@ -293,16 +393,86 @@ def run_scan():
                 # discarding it, and say which row failed so it can be fixed.
                 log_message(f"⚠️ Skipped item in {main_menu}/{sub_menu}: {e}")
 
-    # Preserve any existing courses in database that were not returned in current scan.
-    # Only well-formed rows are carried over; a row without an id or sort keys used
-    # to raise here, AFTER all the network work, discarding the entire scan.
-    scanned_ids = {c["id"] for c in scanned_courses if isinstance(c, dict) and "id" in c}
+    # ------------------------------------------------------------------ #
+    # Identity invariant (F7)
+    #
+    # INVARIANT: within the published catalog every course has a unique integer
+    # `id`, ids of existing courses are never changed, and two different courses
+    # never collapse onto one id.
+    #
+    # The old code deduped on str(id) but then renumbered ids to int, so an
+    # upstream id of "7" and a stored id of 7 produced two rows whose ids were
+    # "7" and 7 while the dedupe set still saw a single id. Ids are canonicalised
+    # once (_normalize_id) and deduped explicitly here: fetched rows keep their
+    # id, and any row that collides with a *different* course is kept as well
+    # under the next free integer instead of being silently discarded.
+    # ------------------------------------------------------------------ #
+    fetched_by_key = {}
+    extra_rows = []
+    for c in scanned_courses:
+        if not isinstance(c, dict) or "id" not in c:
+            continue
+        key = str(_normalize_id(c["id"]))
+        prev = fetched_by_key.get(key)
+        if prev is None:
+            fetched_by_key[key] = c
+        elif prev.get("name") == c.get("name"):
+            # The same course reported by two categories: keep the newest row but
+            # never lose the stored PDF list when the new one carries none.
+            if not c.get("pdfs") and prev.get("pdfs"):
+                c["pdfs"] = prev["pdfs"]
+            fetched_by_key[key] = c
+        else:
+            log_message(
+                f"⚠️ 上游以相同 ID {c['id']} 回報兩門不同課程（'{prev.get('name')}' / "
+                f"'{c.get('name')}'）；將保留兩門並另編新 ID。"
+            )
+            extra_rows.append(prev)
+            fetched_by_key[key] = c
+
+    # Carry over only the existing courses the scan did NOT return. A row whose
+    # id came back from upstream is superseded by the fetched row -- that is how
+    # a legitimate rename is applied, and re-adding the stored copy would both
+    # duplicate the course and give the stale copy a new id on every rename.
+    preserved_count = 0
     for old_c in existing_db.get("courses", []):
         if not isinstance(old_c, dict) or "id" not in old_c:
             log_message("⚠️ Dropped malformed existing course row (missing id).")
             continue
-        if old_c["id"] not in scanned_ids:
-            scanned_courses.append(old_c)
+        old_c = dict(old_c)
+        old_c["id"] = _normalize_id(old_c["id"])
+        key = str(old_c["id"])
+        if key not in fetched_by_key:
+            fetched_by_key[key] = old_c
+            preserved_count += 1
+
+    # Stable, collision-free integer ids. Existing integers win and are never
+    # renumbered, so ids stay stable across runs; only duplicates and non-integer
+    # ids consume the next free integer (iteration order is the deterministic
+    # menu/insertion order above).
+    used_ints = set()
+    next_free_id = 1
+
+    def _next_free_id():
+        nonlocal next_free_id
+        while next_free_id in used_ints:
+            next_free_id += 1
+        used_ints.add(next_free_id)
+        return next_free_id
+
+    final_courses = []
+    for c in list(fetched_by_key.values()) + extra_rows:
+        c_id = c.get("id")
+        if _is_int(c_id) and c_id not in used_ints:
+            used_ints.add(c_id)
+        else:
+            c["id"] = _next_free_id()
+        final_courses.append(c)
+    scanned_courses = final_courses
+    log_message(
+        f"ℹ️ 課程識別整理完成：保留既有 {preserved_count} 筆、"
+        f"另編新 ID {len(extra_rows)} 筆、共 {len(scanned_courses)} 筆。"
+    )
 
     def _sort_key(c):
         return (
@@ -325,20 +495,48 @@ def run_scan():
         "courses": scanned_courses
     })
 
-    # Never publish over a healthy catalog when upstream yielded nothing: a
-    # network outage or an API shape change would otherwise rewrite the database
-    # (and the bundled copy) with the preserved rows while reporting success.
-    if fetched_items_count == 0 and existing_courses:
-        log_message(
-            f"❌ Scan fetched 0 items across {len(MENU_TARGETS)} categories "
-            f"({categories_ok} responded); keeping the existing catalog unchanged."
-        )
-        return {
-            "total": len(existing_courses),
-            "new": 0,
-            "updated": 0,
-            "error": "scan fetched no items; catalog left unchanged",
-        }
+    # ------------------------------------------------------------------ #
+    # F1: an empty fetch result must never publish+mirror over data.
+    #
+    # The old guard was `if fetched_items_count == 0 and existing_courses:`.
+    # When the primary catalog was empty-but-valid AND upstream was completely
+    # down, `existing_courses` was falsy, the guard was skipped, and the script
+    # published an EMPTY catalog and mirrored it over the git-tracked
+    # src/data/courses_db.json, exiting 0. Reproduced: primary=0 src=684 ->
+    # primary=0 src=0.
+    #
+    # A publish is now refused whenever the fetch yielded nothing or the result
+    # would shrink a non-empty catalog to nothing -- unless the operator passes
+    # --allow-empty. Refusal is a failure (exit 1), and the bundled copy is left
+    # untouched because it is the recovery source.
+    # ------------------------------------------------------------------ #
+    existing_count = len(existing_courses)
+    published_count = len(scanned_courses)
+
+    if not allow_empty:
+        if fetched_items_count == 0:
+            log_message(
+                f"❌ Scan fetched 0 items across {len(MENU_TARGETS)} categories "
+                f"({categories_ok} responded); keeping the existing catalog unchanged. "
+                f"（若確定要發佈空白目錄，請使用 --allow-empty）"
+            )
+            return {
+                "total": existing_count,
+                "new": 0,
+                "updated": 0,
+                "error": "scan fetched no items; catalog left unchanged",
+            }
+        if published_count == 0 and existing_count > 0:
+            log_message(
+                f"❌ Scan produced 0 courses while the existing catalog holds "
+                f"{existing_count}; refusing to publish an empty catalog."
+            )
+            return {
+                "total": existing_count,
+                "new": 0,
+                "updated": 0,
+                "error": "scan produced an empty catalog; refusing to overwrite non-empty data",
+            }
 
     write_json_atomic(DB_PATH, new_db)
 
@@ -354,11 +552,12 @@ def run_scan():
     }
 
 
-def main():
+def main(argv=None):
     """Takes the shared catalog lock, then runs the scan."""
+    args = parse_args(argv)
     try:
         with mc.catalog_lock():
-            result = run_scan()
+            result = run_scan(allow_empty=args.allow_empty)
     except mc.CatalogBusy as e:
         log_message(f"⏭️ 略過掃描：{e}")
         return mc.EXIT_BUSY

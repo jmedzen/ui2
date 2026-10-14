@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import { Readable } from 'stream';
-import { getCacheFilePath, isCached, updateAccessTime, cacheRemoteMedia, fileLooksLikeHtml, invalidateCacheStats, markCacheFileInUse } from '@/lib/serverMediaCache';
+import { getCacheFilePath, isCached, updateAccessTime, cacheRemoteMedia, fileLooksLikeHtml, invalidateCacheStats, markCacheFileInUse, isDownloadInFlight } from '@/lib/serverMediaCache';
 import { authorizeTaskRequest } from '@/lib/serverTasks';
 
 const ALLOWED_HOSTS = ['www.fayun.org', 'fayun.org'];
@@ -112,6 +112,59 @@ function checkPreloadRateLimit(request: NextRequest): boolean {
     return true;
   }
   if (bucket.count >= PRELOAD_MAX_PER_WINDOW) return false;
+  bucket.count++;
+  return true;
+}
+
+/* ------------------------------------------------------------------ *
+ * Cache-miss download budget
+ * ------------------------------------------------------------------ */
+
+/**
+ * Upper bound on NEW background downloads started per minute per client.
+ *
+ * A plain media GET cannot be authorized — it is ordinary playback and every
+ * cache miss takes that path — but it must not be an unbounded disk-write
+ * primitive either. This budget is charged only when a request actually starts
+ * a download, so replaying or scrubbing cached media costs nothing.
+ *
+ * The default is deliberately generous enough for real browsing (seeking across
+ * an album, a lecture series preloading ahead) while still bounding mass abuse.
+ */
+const CACHE_MISS_WINDOW_MS = 60 * 1000;
+const CACHE_MISS_MAX_PER_WINDOW = Math.max(
+  1,
+  parseInt(process.env.PROXY_CACHE_MISS_MAX_PER_MINUTE || '', 10) || 120
+);
+
+const cacheMissBuckets = new Map<string, { count: number; resetAt: number }>();
+
+/** Reuses the preload bucket cap so neither map can grow without bound. */
+function pruneCacheMissBuckets(now: number): void {
+  for (const [key, bucket] of cacheMissBuckets) {
+    if (now >= bucket.resetAt) cacheMissBuckets.delete(key);
+  }
+  if (cacheMissBuckets.size < MAX_PRELOAD_BUCKETS) return;
+  const byExpiry = [...cacheMissBuckets.entries()].sort((a, b) => a[1].resetAt - b[1].resetAt);
+  for (const [key] of byExpiry) {
+    if (cacheMissBuckets.size < MAX_PRELOAD_BUCKETS) break;
+    cacheMissBuckets.delete(key);
+  }
+}
+
+/** Fixed-window limiter for downloads started by an ordinary media GET. */
+function checkCacheMissDownloadLimit(request: NextRequest): boolean {
+  const clientKey = clientKeyFor(request);
+  const now = Date.now();
+
+  pruneCacheMissBuckets(now);
+
+  const bucket = cacheMissBuckets.get(clientKey);
+  if (!bucket || now >= bucket.resetAt) {
+    cacheMissBuckets.set(clientKey, { count: 1, resetAt: now + CACHE_MISS_WINDOW_MS });
+    return true;
+  }
+  if (bucket.count >= CACHE_MISS_MAX_PER_WINDOW) return false;
   bucket.count++;
   return true;
 }
@@ -445,13 +498,11 @@ export async function GET(request: NextRequest) {
         applySecurityHeaders(resHeaders, contentType);
 
         if (parsed === 'unsatisfiable') {
-          return new NextResponse(null, {
-            status: 416,
-            headers: {
-              'Content-Range': `bytes */${fileSize}`,
-              'Accept-Ranges': 'bytes'
-            }
-          });
+          // Build on the already-hardened `resHeaders` instead of a fresh object.
+          // A fresh literal dropped every security header applied just above, so
+          // this one response path was unhardened while all its siblings were not.
+          resHeaders.set('Content-Range', `bytes */${fileSize}`);
+          return new NextResponse(null, { status: 416, headers: resHeaders });
         }
 
         if (parsed && parsed.kind === 'ok') {
@@ -491,8 +542,27 @@ export async function GET(request: NextRequest) {
     // -------------------------------------------------------------
     // CASE 2: CACHE MISS - Proxy to Client & Trigger Formal Disk Cache Download
     // -------------------------------------------------------------
-    // Trigger background download of full formal file (.mp4 / .mp3 / .pdf)
-    void cacheRemoteMedia(targetUrl, cacheFilePath);
+    // The background cache write is a state-changing, disk-consuming action, so
+    // it needs the same budget as an explicit preload. It was previously
+    // unguarded here — only `action=preload` was limited — so an anonymous
+    // caller could drive unbounded disk writes simply by GETing distinct media
+    // URLs (25 plain GETs produced zero throttling; 25 preloads produced 15 then
+    // 429s).
+    //
+    // A plain media GET cannot require authorization: it IS normal playback, and
+    // every cache miss takes this path. Instead the budget is charged only when
+    // this request actually STARTS a new download. Repeats, scrubs and already
+    // cached files consume nothing, so legitimate viewing is unaffected while
+    // mass distinct-file abuse is bounded.
+    const startingNewDownload = !isCached(cacheFilePath) && !isDownloadInFlight(cacheFilePath);
+    if (startingNewDownload) {
+      if (!checkCacheMissDownloadLimit(request)) {
+        // Playback still proceeds; only the background caching is skipped.
+        console.warn('[Proxy] Cache-miss download budget exhausted; serving without caching.');
+      } else {
+        void cacheRemoteMedia(targetUrl, cacheFilePath);
+      }
+    }
 
     const range = request.headers.get('range');
     if (range) {
@@ -525,9 +595,17 @@ export async function GET(request: NextRequest) {
     // Force anything that is not audio/video to download rather than render.
     applySecurityHeaders(resHeaders, effectiveType, true);
 
-    if (response.headers.get('content-length')) {
-      resHeaders.set('Content-Length', response.headers.get('content-length')!);
-    }
+    // Do NOT copy the upstream Content-Length.
+    //
+    // undici advertises `accept-encoding: gzip, deflate` and transparently
+    // DECOMPRESSES the body, while the upstream header still describes the
+    // COMPRESSED byte count. Forwarding it declared a length the response did
+    // not have — a live robots.txt declared 100 bytes and delivered 101 — which
+    // truncates or hangs clients and desynchronises keep-alive framing. The
+    // runtime sets the correct length for the body it actually sends.
+    // Content-Range is still forwarded: it describes the upstream range and is
+    // what a 206 response needs, and it is only sent for range requests that the
+    // upstream answered without content-coding.
     if (response.headers.get('content-range')) {
       resHeaders.set('Content-Range', response.headers.get('content-range')!);
     }

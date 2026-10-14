@@ -13,7 +13,8 @@ import {
   authorizeTaskRequest,
   acquireScanLock,
   isScanLocked,
-  getScanLockInfo,
+  getScanLockInfoPublic,
+  stripLockToken,
   appendLog,
   readRecentLogs,
   readRunResult,
@@ -37,7 +38,7 @@ export async function GET() {
       status: 'active',
       schedule: 'Web Trigger / Manual',
       isRunning: isScanLocked(),
-      lockHolder: getScanLockInfo(),
+      lockHolder: getScanLockInfoPublic(),
       lastScan: dbInfo.generated_at,
       totalCourses: dbInfo.total_courses,
       recentLogs: readRecentLogs(),
@@ -72,12 +73,13 @@ export async function POST(request: Request): Promise<NextResponse> {
           { status: 503 }
         );
       }
+      // `lock.holder` carries the ownership token; never return it over HTTP.
       const who = lock.holder ? `（程序 ${lock.holder.pid}，已執行 ${lock.holder.age}）` : '';
       return NextResponse.json(
         {
           error: `已有掃描或修復任務正在執行中${who}`,
           status: 'busy',
-          lockHolder: lock.holder
+          lockHolder: lock.holder ? stripLockToken(lock.holder) : null
         },
         { status: 409 }
       );

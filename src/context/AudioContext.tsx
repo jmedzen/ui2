@@ -39,6 +39,29 @@ interface AudioContextType {
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
 const STORAGE_KEY = 'fayun_last_played_track';
 
+/**
+ * Writes the chosen speed to a media element from one place.
+ *
+ * `defaultPlaybackRate` is the durable half of the pair: the HTML media load
+ * algorithm — which every `load()` and every `src` assignment runs — ends with
+ * "Set the playbackRate attribute to the value of the defaultPlaybackRate
+ * attribute". A rate written only to `playbackRate` is therefore discarded by
+ * the next load, and `defaultPlaybackRate` defaults to 1.0, so every track
+ * change and every auto-advance silently reverted to 1.0x while the UI still
+ * highlighted the chosen speed (React state was never changed).
+ *
+ * Module scope (unlike `applyElementVolume`) because it holds no React state,
+ * so the one-shot element-creation effect can call it without widening its
+ * dependency array.
+ */
+function applyElementPlaybackRate(el: HTMLMediaElement | null, rate: number) {
+  if (!el) return;
+  try {
+    el.defaultPlaybackRate = rate;
+    el.playbackRate = rate;
+  } catch {}
+}
+
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [currentTrack, setCurrentTrack] = useState<PlayingTrack | null>(null);
@@ -56,6 +79,16 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const currentTrackRef = useRef<PlayingTrack | null>(currentTrack);
   currentTrackRef.current = currentTrack;
+
+  /**
+   * The chosen speed, readable from the element-creation effect and the media
+   * event handlers. Those two run once and cannot depend on `playbackRate`
+   * without tearing the element (and its listeners) down on every speed change,
+   * so they read the current value through this ref instead. Kept up to date in
+   * an effect rather than during render, since the refs above already record
+   * state that way elsewhere in this file.
+   */
+  const playbackRateRef = useRef<number>(playbackRate);
 
   const playRequestIdRef = useRef<number>(0);
 
@@ -90,6 +123,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
+  // Mirror the chosen speed into the ref read by the one-shot media effects.
+  useEffect(() => {
+    playbackRateRef.current = playbackRate;
+  }, [playbackRate]);
+
   // Restore last played track from localStorage on mount
   useEffect(() => {
     try {
@@ -101,6 +139,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
           if (parsed.playlist) setPlaylist(parsed.playlist);
         }
       }
+      // `setRate()` writes the element directly, and the element does not exist
+      // yet on the first mount, so re-assert the chosen speed above the default
+      // 1.0x here.
+      applyElementPlaybackRate(audioRef.current, playbackRateRef.current);
     } catch (e) {
       console.warn('Failed to load last played track from localStorage:', e);
     }
@@ -182,6 +224,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     if (currentTrackRef.current) {
       audio.src = currentTrackRef.current.proxyUrl;
     }
+    // The element is created once, so this is the only place that can seed the
+    // rate for the restored track; without it a browser-initiated load (reload
+    // while a lecture was playing) starts at 1.0x.
+    applyElementPlaybackRate(audio, playbackRateRef.current);
 
     const handleTimeUpdate = () => {
       // Both values are NaN/Infinity in the window between assigning `src` (or
@@ -222,6 +268,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
             if (audioRef.current) {
               audioRef.current.src = routeRes.activeUrl;
+              applyElementPlaybackRate(audioRef.current, playbackRateRef.current);
               audioRef.current.load();
               audioRef.current
                 .play()
@@ -301,7 +348,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
       if (audioRef.current) {
         audioRef.current.src = routeRes.activeUrl;
-        audioRef.current.playbackRate = playbackRate;
+        applyElementPlaybackRate(audioRef.current, playbackRateRef.current);
         applyElementVolume(audioRef.current, volume, isMuted);
         audioRef.current.load();
 
@@ -314,7 +361,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
           });
       }
     });
-  }, [playbackRate, volume, isMuted, applyElementVolume]);
+  }, [volume, isMuted, applyElementVolume]);
 
   const togglePlay = useCallback(() => {
     if (!audioRef.current || !currentTrack) return;
@@ -324,6 +371,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     } else {
       if (!audioRef.current.src) {
         audioRef.current.src = currentTrack.proxyUrl;
+        // Assigning `src` runs the load algorithm, which resets the rate; a
+        // paused track that was never started reaches this branch and would
+        // otherwise play at 1.0x.
+        applyElementPlaybackRate(audioRef.current, playbackRateRef.current);
       }
       // Always trigger background cache on play
       triggerBackgroundServerCache(currentTrack.proxyUrl);
@@ -422,9 +473,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const setRate = useCallback((rate: number) => {
     setPlaybackRate(rate);
-    if (audioRef.current) {
-      audioRef.current.playbackRate = rate;
-    }
+    // Both attributes, so a later load() (a track change, auto-advance, or a
+    // browser-initiated reload) keeps the chosen speed instead of dropping
+    // back to defaultPlaybackRate's 1.0 default.
+    applyElementPlaybackRate(audioRef.current, rate);
   }, []);
 
   const setVol = useCallback((vol: number) => {
