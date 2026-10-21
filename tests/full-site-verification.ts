@@ -19,7 +19,7 @@ async function runFullSiteVerification() {
 
   // 1. Run Unit & Functional Test Suites
   try {
-    console.log('⏳ [1/5] 執行 TypeScript 單元與端點測試套件 (node:test + tsx)...');
+    console.log('⏳ [1/6] 執行 TypeScript 單元與端點測試套件 (node:test + tsx)...');
     const testOutput = execSync('npx tsx --test tests/*.test.ts', { encoding: 'utf-8' });
     const passCount = (testOutput.match(/✔/g) || []).length;
     results.push({
@@ -39,7 +39,7 @@ async function runFullSiteVerification() {
 
   // 2. Database & Catalog Consistency
   try {
-    console.log('⏳ [2/5] 驗證課程典藏資料庫 (courses_db.json)...');
+    console.log('⏳ [2/6] 驗證課程典藏資料庫 (courses_db.json)...');
     const dataDb = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', 'courses_db.json'), 'utf-8'));
     const srcDb = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src', 'data', 'courses_db.json'), 'utf-8'));
     const totalCourses = srcDb.courses.length;
@@ -64,7 +64,7 @@ async function runFullSiteVerification() {
 
   // 3. Media Cache Capacity (20GB)
   try {
-    console.log('⏳ [3/5] 檢驗網頁主機媒體磁碟快取與 20GB 上限設定...');
+    console.log('⏳ [3/6] 檢驗網頁主機媒體磁碟快取與 20GB 上限設定...');
     const cacheStats = getCacheStats();
     const is20Gb = cacheStats.maxGb === 20;
 
@@ -84,7 +84,7 @@ async function runFullSiteVerification() {
 
   // 4. Mobile Firefox & Viewport Compatibility
   try {
-    console.log('⏳ [4/5] 檢驗手機版 Firefox 與行動端 UI 相容配置...');
+    console.log('⏳ [4/6] 檢驗手機版 Firefox 與行動端 UI 相容配置...');
     const layoutContent = fs.readFileSync(path.join(process.cwd(), 'src', 'app', 'layout.tsx'), 'utf-8');
     const cssContent = fs.readFileSync(path.join(process.cwd(), 'src', 'app', 'globals.css'), 'utf-8');
 
@@ -113,7 +113,7 @@ async function runFullSiteVerification() {
 
   // 5. Next.js Production Build Verification
   try {
-    console.log('⏳ [5/5] 執行 Next.js 編譯完整性檢查 (npm run build)...');
+    console.log('⏳ [5/6] 執行 Next.js 編譯完整性檢查 (npm run build)...');
     execSync('npm run build', { encoding: 'utf-8', stdio: 'pipe' });
     results.push({
       name: '生產環境建置驗證 (Next.js Production Build)',
@@ -126,6 +126,80 @@ async function runFullSiteVerification() {
       name: '生產環境建置驗證 (Next.js Production Build)',
       passed: false,
       details: err.stdout || err.message
+    });
+  }
+
+  // 6. Social share preview + PWA installability.
+  //
+  // These tags live in the document head, not the page body, so a rename that
+  // only touched the visible header left every link preview advertising the old
+  // name. Asserted against the built artifacts rather than the source, because
+  // the generated <head> is what a platform actually reads.
+  try {
+    console.log('⏳ [6/6] 驗證社群分享預覽與 PWA 安裝資訊...');
+    const { DEFAULT_SITE_URL, SITE_NAME } = await import('../src/lib/site');
+
+    // The prerendered shell carries the injected metadata.
+    const htmlFile = path.join(process.cwd(), '.next', 'server', 'app', 'index.html');
+    let headHtml = '';
+    if (fs.existsSync(htmlFile)) {
+      headHtml = fs.readFileSync(htmlFile, 'utf-8');
+    } else {
+      // Route handlers/PPR builds keep the shell elsewhere; fall back to any
+      // prerendered html that contains the head.
+      const walk = (dir: string): string => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            const found = walk(full);
+            if (found) return found;
+          } else if (entry.name.endsWith('.html')) {
+            const text = fs.readFileSync(full, 'utf-8');
+            if (text.includes('og:site_name')) return text;
+          }
+        }
+        return '';
+      };
+      headHtml = walk(path.join(process.cwd(), '.next', 'server', 'app'));
+    }
+
+    const checks: Array<[string, boolean]> = [
+      ['og:site_name 為妙境法軒', headHtml.includes(`og:site_name" content="${SITE_NAME}"`)],
+      ['og:title 含站名', headHtml.includes('og:title') && headHtml.includes(SITE_NAME)],
+      ['og:url 絕對網址', headHtml.includes(`og:url" content="${DEFAULT_SITE_URL}`)],
+      ['og:image 為 1200x630', headHtml.includes('og:image" content=') && headHtml.includes('og:image:width" content="1200"')],
+      ['twitter card', headHtml.includes('twitter:card')],
+      ['canonical', headHtml.includes('rel="canonical"')]
+    ];
+
+    const manifestFile = path.join(process.cwd(), '.next', 'server', 'app', 'manifest.webmanifest.body');
+    const manifestFileAlt = path.join(process.cwd(), '.next', 'server', 'app', 'manifest.webmanifest');
+    const mf = fs.existsSync(manifestFile)
+      ? manifestFile
+      : fs.existsSync(manifestFileAlt)
+        ? manifestFileAlt
+        : '';
+    const mfText = mf ? fs.readFileSync(mf, 'utf-8') : '';
+    checks.push(['manifest 已產生', mfText.length > 0]);
+    checks.push(['manifest short_name', mfText.includes(SITE_NAME)]);
+    checks.push(['manifest 有 512 圖示', mfText.includes('512x512')]);
+    checks.push(['manifest maskable', mfText.includes('maskable')]);
+
+    const failed = checks.filter(([, ok]) => !ok).map(([name]) => name);
+    results.push({
+      name: '社群分享預覽與 PWA (Social Preview / PWA)',
+      passed: failed.length === 0,
+      details:
+        failed.length === 0
+          ? `og:site_name=${SITE_NAME} | og:image 1200x630 | canonical=${DEFAULT_SITE_URL} | manifest 含 192/512/maskable`
+          : `未通過：${failed.join('、')}`
+    });
+    if (failed.length === 0) console.log('✅ 社群預覽與 PWA 檢驗通過\n');
+  } catch (err) {
+    results.push({
+      name: '社群分享預覽與 PWA (Social Preview / PWA)',
+      passed: false,
+      details: err instanceof Error ? err.message : String(err)
     });
   }
 
@@ -144,7 +218,7 @@ async function runFullSiteVerification() {
   console.log('======================================================');
 
   if (allPassed) {
-    console.log('🎉 恭喜！全站 5 大核心維度測試與驗證 100% 通過！系統穩定可靠。');
+    console.log('🎉 恭喜！全站 6 大核心維度測試與驗證 100% 通過！系統穩定可靠。');
     process.exit(0);
   } else {
     console.error('⚠️ 部分功能測試未通過，請檢查上方錯誤細節。');

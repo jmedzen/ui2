@@ -43,6 +43,10 @@ services:
       - NODE_ENV=production
       - PORT=8410
       - HOSTNAME=0.0.0.0
+      # Canonical origin used for og:url, canonical links and the share image.
+      # Link previews need an absolute URL and the app cannot infer the public
+      # host from behind a proxy, so this must match the domain Caddy serves.
+      - SITE_URL=${SITE_URL:-https://ui2.mahabodhi.co}
       - MEDIA_CACHE_MAX_BYTES=21474836480 # 20 GB Disk Cache Limit
       - MEDIA_CACHE_MAX_CONCURRENCY=3 # Cap simultaneous background downloads
       - PROXY_PRELOAD_MAX_PER_MINUTE=20 # Per-client preload budget

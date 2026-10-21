@@ -1,13 +1,22 @@
 # Caddyfile for Automatic HTTPS Reverse Proxy
-# Supports both self-signed local SSL and Let's Encrypt production SSL certificates.
+#
+# Two modes, sharing one proxy snippet:
+#
+#   * Local / LAN  — self-signed certificate on :443 and :8443 (the default
+#                    below). Browsers warn until you trust the local CA.
+#   * Public domain — automatic Let's Encrypt certificate. Uncomment the
+#                    domain block, comment out the local one, and make sure the
+#                    DNS A/AAAA record points here before starting Caddy
+#                    (ACME validation needs the record to resolve).
 #
 # The upstream must match the compose service/container name, which is "ui2".
-#
 # Override with UPSTREAM if the container is renamed or the proxy runs on a
 # different network:  UPSTREAM=my-service:8410 caddy run
+#
+# SITE_URL must name the same domain, because og:url and the share image need an
+# absolute origin and the app cannot infer it from behind the proxy.
 
-:443, :8443 {
-    tls internal
+(ui2_proxy) {
     reverse_proxy {$UPSTREAM:ui2:8410} {
         # The app trusts these headers only because compose sets TRUST_PROXY=1
         # and binds 8410 to loopback. Overwrite them explicitly at the trust
@@ -18,3 +27,18 @@
         header_up X-Forwarded-Host {hostport}
     }
 }
+
+# --- Local / self-signed (default) -------------------------------------------
+:443, :8443 {
+    tls internal
+    import ui2_proxy
+}
+
+# --- Public domain (Let's Encrypt) -------------------------------------------
+# Comment out the block above and uncomment this one. Caddy obtains and renews
+# the certificate automatically; no `tls` directive is needed (and adding
+# `tls internal` here would serve the self-signed cert to the public).
+#
+# ui2.mahabodhi.co {
+#     import ui2_proxy
+# }

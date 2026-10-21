@@ -176,6 +176,7 @@ docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name ui2 ui2:latest
 | 變數 | 預設值 | 說明 |
 | --- | --- | --- |
 | `TASK_API_TOKEN` | （未設定） | **僅供排程／CI／腳本**使用的自動化權杖。設定後，`/api/scan` 與 `/api/health-check` 的 POST 可帶 `x-task-token` 或 `Authorization: Bearer`，也可用於讀取受保護的日誌／鎖定資訊。人工操作請使用管理員密碼登入；瀏覽器不再需要、也不會保存此權杖。 |
+| `SITE_URL` | `https://ui2.mahabodhi.co` | 對外正式網址（含協定，不含結尾斜線）。用於產生 `og:url`、`canonical` 與社群分享圖的絕對網址；社群平台**無法**從代理後端推斷公開主機，因此必須與 Caddy 服務的網域一致。部署到測試網域時設為該網域即可，同一份建置不需重編。 |
 | `ADMIN_PASSWORD_FILE` | `<cwd>/data/admin.json` | 管理員密碼雜湊檔（JSON，權限 `0600`）。由 `npm run admin:password` 或容器內 CLI 建立；檔案內容永遠不含明文密碼。這是唯一可由網頁「變更密碼」寫入的來源。 |
 | `ADMIN_PASSWORD_HASH` | （未設定） | 直接提供 scrypt 雜湊（格式 `scrypt:N:r:p:keylen:salt:hash`）。優先於所有檔案來源，適合唯讀／CI 部署。 |
 | `ADMIN_PASSWORD_HASH_FILE` | （未設定） | 僅含 scrypt 雜湊的檔案路徑；優先於 `ADMIN_PASSWORD_FILE`，適合 Docker secret。 |
@@ -268,6 +269,69 @@ curl -X POST https://your.host/api/scan \
 - **代理回應強化**：`/api/proxy` 不套用頁面的 framing 規則，因此同源 PDF iframe 與影音播放不受影響。代理的媒體／檔案回應帶 `X-Content-Type-Options: nosniff`、`Referrer-Policy: no-referrer` 與 `Cross-Origin-Resource-Policy: same-origin`；音訊、影片與 PDF（以及 `application/octet-stream`）刻意以 `inline` 提供且不套用 `sandbox` CSP，否則瀏覽器內建的 PDF 檢視器會被擋下。其餘非影音類型套用 `Content-Security-Policy: default-src 'none'; sandbox`，快取未命中時並強制 `Content-Disposition: attachment`；`text/html`、SVG、XML 等可執行文件類型一律拒絕。
 - **容器非特權執行**：應用程式以 `node` 使用者執行，並於 compose 設定 `no-new-privileges`；容器僅保留 `CHOWN`/`DAC_OVERRIDE`/`SETUID`/`SETGID` 用於啟動時修正 `./data` 權限，隨後即降權。
 - **連接埠僅綁定 loopback**：compose 將 `8410` 綁在 `127.0.0.1`，外部流量一律須經 Caddy。這可同時避免有人直連繞過代理，以及讓 `X-Forwarded-For` 失去可信度。
+
+---
+
+## 🌐 自訂網域與社群分享預覽 (Custom Domain & Link Previews)
+
+正式網域為 **`https://ui2.mahabodhi.co`**，由 Caddy 反向代理到容器的 `127.0.0.1:8410`。
+
+### 設定步驟
+
+1. **DNS**：將 `ui2.mahabodhi.co` 的 `A`（或 `AAAA`）記錄指向主機 IP。
+2. **Caddy**：`Caddyfile` 預設以 `:443`／`:8443` 搭配 `tls internal` 提供自簽憑證（僅適合本機／內網）。對外站台請改成網域站點，Caddy 會自動申請並續訂 Let's Encrypt 憑證：
+
+   ```caddyfile
+   (ui2_proxy) {
+       reverse_proxy {$UPSTREAM:ui2:8410} {
+           header_up X-Forwarded-For {remote_host}
+           header_up X-Forwarded-Proto {scheme}
+           header_up X-Forwarded-Host {hostport}
+       }
+   }
+
+   ui2.mahabodhi.co {
+       import ui2_proxy
+   }
+   ```
+
+   倉庫內的 `Caddyfile` 已備好這兩種模式（預設本機、另一段註解即正式網域），切換時**註解掉 `:443, :8443` 區塊**。切勿在網域站點保留 `tls internal`，否則會把自簽憑證發給公網訪客。
+
+3. **`SITE_URL`**：compose 已預設 `https://ui2.mahabodhi.co`；若實際網域不同，設 `SITE_URL=https://your.domain docker compose up -d` 即可，**不需要重新編譯**。
+
+### 為什麼需要 `SITE_URL`
+
+`og:url`、`canonical` 與 `og:image` 都必須是**絕對網址**。應用程式位於反向代理之後，無法可靠得知對外主機（`Host` 標頭可被偽造），因此以 `SITE_URL` 明示。若未設定，會退回內建的 `https://ui2.mahabodhi.co`，而不是猜測。
+
+### 驗證分享卡片
+
+改完網域後，先確認標籤正確：
+
+```bash
+curl -s https://ui2.mahabodhi.co/ | grep -E 'og:|twitter:|canonical'
+```
+
+應可看到 `og:site_name` 為 `妙境法軒`、`og:image` 指向 `https://ui2.mahabodhi.co/og-image.png`（1200x630）。
+
+社群平台會**快取**預覽圖，換圖或改名後需要用官方工具強制重新抓取：
+
+- Facebook／Messenger：[Sharing Debugger](https://developers.facebook.com/tools/debug/) → 貼上網址 → **Scrape Again**
+- X／Twitter：撰寫推文時會自動重抓；必要時在網址後加 `?v=2` 破快取
+- LINE：貼到 `LINE` 聊天室即可預覽，舊圖有快取，通常數小時後更新
+- Telegram：`@WebpageBot` 貼上網址可強制更新
+
+### PWA 安裝
+
+`/manifest.webmanifest` 由 `src/app/manifest.ts` 產生，圖示為 `public/` 下的 PNG：
+
+| 檔案 | 尺寸 | 用途 |
+| --- | --- | --- |
+| `icon-32.png`／`favicon-48.png` | 32／48 | 瀏覽器分頁圖示 |
+| `apple-touch-icon.png` | 180 | iOS 加入主畫面 |
+| `icon-192.png`／`icon-512.png` | 192／512 | Android／桌面安裝（另宣告 `maskable`） |
+| `og-image.png` | 1200x630 | 社群分享卡片 |
+
+圖示由 `scripts/make-icons.py` 產生（蓮花標記、米金底、金框），修改配色或樣式後重跑該腳本即可。
 
 ---
 
