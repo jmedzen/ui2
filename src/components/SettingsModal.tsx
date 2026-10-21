@@ -2,8 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ThemeType } from '@/types/course';
-import { getStoredTaskToken, setStoredTaskToken, taskTokenHeaders } from '@/lib/taskToken';
+import AdminSecurityPanel from './AdminSecurityPanel';
 import packageInfo from '../../package.json';
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -53,17 +57,21 @@ export default function SettingsModal({
   // poll overwrote (the server tail does not contain it) -- and appending the
   // server tail to it instead made the same lines accumulate on every poll.
   const [localNotice, setLocalNotice] = useState<string>('');
-  // The task endpoints now REQUIRE a credential (see authorizeTaskRequest).
-  // Without TASK_API_TOKEN the server generates one per boot and prints it to the
-  // log, so the operator pastes it here once.
-  //
-  // This state is for DISPLAY only. Requests read the token straight from
-  // localStorage (see `safeFetchJson`), so there is no effect and no extra render
-  // just to publish a value the network layer can read for itself.
-  const [taskToken, setTaskToken] = useState<string>(() =>
-    typeof window === 'undefined' ? '' : getStoredTaskToken()
-  );
-  const [needsTaskToken, setNeedsTaskToken] = useState<boolean>(false);
+  // Admin authentication. Password login is for humans; TASK_API_TOKEN remains
+  // available for cron/CI but is never stored in the browser any more.
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
+  const [adminConfigured, setAdminConfigured] = useState<boolean | null>(null);
+  const [adminExpiresAt, setAdminExpiresAt] = useState<number | null>(null);
+  const [automationTokenConfigured, setAutomationTokenConfigured] = useState<boolean>(false);
+  const [adminPassword, setAdminPassword] = useState<string>('');
+  const [adminLoginError, setAdminLoginError] = useState<string>('');
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+  const [logsRestricted, setLogsRestricted] = useState<boolean>(true);
+  const [adminPasswordChangeable, setAdminPasswordChangeable] = useState<boolean>(false);
+  const [adminTotpEnabled, setAdminTotpEnabled] = useState<boolean>(false);
+  const [adminTotpManageable, setAdminTotpManageable] = useState<boolean>(false);
+  const [loginTotpRequired, setLoginTotpRequired] = useState<boolean>(false);
+  const [adminTotpCode, setAdminTotpCode] = useState<string>('');
 
   // Resizable Width & Log Scroll References
   const [modalWidth, setModalWidth] = useState<number>(820);
@@ -73,14 +81,26 @@ export default function SettingsModal({
 
   // Restore saved custom modal width
   useEffect(() => {
-    try {
-      const savedWidth = localStorage.getItem('fayun_settings_modal_width');
-      if (savedWidth) {
-        const parsed = parseInt(savedWidth, 10);
-        if (!isNaN(parsed) && parsed >= 500) {
-          setModalWidth(parsed);
+    const timer = setTimeout(() => {
+      try {
+        const savedWidth = localStorage.getItem('fayun_settings_modal_width');
+        if (savedWidth) {
+          const parsed = parseInt(savedWidth, 10);
+          if (!isNaN(parsed) && parsed >= 500) {
+            setModalWidth(parsed);
+          }
         }
-      }
+      } catch {}
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // The old UI kept the boot-generated task token in localStorage. That flow is
+  // gone (and the server no longer generates a token), so remove the stale key
+  // instead of leaving a dead secret on the user's machine.
+  useEffect(() => {
+    try {
+      localStorage.removeItem('fayun_task_token');
     } catch {}
   }, []);
 
@@ -103,34 +123,69 @@ export default function SettingsModal({
 
   const safeFetchJson = useCallback(async (url: string, options?: RequestInit) => {
     try {
-      // Read the token at call time rather than closing over React state, so
-      // this callback has no dependency on it and never goes stale after the
-      // operator pastes a token.
-      const opts: RequestInit = { ...options, headers: { ...taskTokenHeaders(), ...(options?.headers as Record<string, string> | undefined) } };
+      const opts: RequestInit = {
+        credentials: 'same-origin',
+        ...options,
+        headers: {
+          ...(options?.headers as Record<string, string> | undefined)
+        }
+      };
       const res = await fetch(url, opts);
       const text = await res.text();
       try {
-        const json = JSON.parse(text);
-        if (res.status === 401 || res.status === 403) {
-          // Surface the "token required/invalid" case as a prompt rather than as
-          // a generic failure, so the fix (paste the token) is obvious.
-          setNeedsTaskToken(true);
-        }
-        return { ok: res.ok, status: res.status, data: json };
+        return { ok: res.ok, status: res.status, data: JSON.parse(text) };
       } catch {
         return { ok: false, status: res.status, data: { error: text ? text.slice(0, 200) : '伺服器未傳回 JSON 格式' } };
       }
-    } catch (err: any) {
-      return { ok: false, status: 0, data: { error: err.message || '網路連線失敗' } };
+    } catch (err: unknown) {
+      return { ok: false, status: 0, data: { error: errorMessage(err) || '網路連線失敗' } };
     }
   }, []);
+
+  /**
+   * Same-origin helper for state-changing admin calls.
+   *
+   * The custom header is part of the CSRF defense: a cross-site form cannot set
+   * it, and a cross-site fetch would need a CORS preflight this app never grants.
+   */
+  const adminFetchJson = useCallback(
+    (url: string, options?: RequestInit) => {
+      return safeFetchJson(url, {
+        ...options,
+        headers: {
+          'X-Admin-Request': '1',
+          ...(options?.headers as Record<string, string> | undefined)
+        }
+      });
+    },
+    [safeFetchJson]
+  );
+
+  const fetchAdminSession = useCallback(async () => {
+    const { ok, data } = await safeFetchJson('/api/admin/session');
+    if (!ok) return;
+    setIsAdminAuthenticated(Boolean(data.authenticated));
+    setAdminConfigured(Boolean(data.configured));
+    setAdminExpiresAt(typeof data.expiresAt === 'number' ? data.expiresAt : null);
+    setAutomationTokenConfigured(Boolean(data.tokenConfigured));
+    setAdminPasswordChangeable(Boolean(data.passwordChangeable));
+    setAdminTotpEnabled(Boolean(data.totpEnabled));
+    setAdminTotpManageable(Boolean(data.totpManageable));
+  }, [safeFetchJson]);
 
   const fetchLogs = useCallback(async (): Promise<string | null> => {
     try {
       setIsFetchingLogs(true);
       const { ok, data } = await safeFetchJson('/api/scan');
       if (ok) {
-        setLogs(data.recentLogs || '無系統紀錄');
+        const restricted = Boolean(data.logsRestricted);
+        setLogsRestricted(restricted);
+        if (restricted) {
+          setIsAdminAuthenticated(false);
+          setLogs('🔒 管理員登入後即可查看掃描與修復日誌。');
+        } else {
+          setLogs(data.recentLogs || '無系統紀錄');
+        }
         setLastScan(data.lastScan || '未知');
         setTotalCourses(data.totalCourses || 0);
         if (data.cacheStats) {
@@ -139,13 +194,13 @@ export default function SettingsModal({
         if (data.lastRun) setLastRun(data.lastRun);
         // Carried by the same payload, so the poll below needs only one request.
         setIsTaskRunning(Boolean(data.isRunning));
-        return data.recentLogs || '';
+        return restricted ? '' : (data.recentLogs || '');
       } else {
         setLogs(`⚠️ 無法讀取媒體同步日誌檔 (${data.error || 'HTTP Error'})`);
         return null;
       }
-    } catch (e: any) {
-      setLogs(`⚠️ 讀取日誌失敗: ${e.message}`);
+    } catch (e: unknown) {
+      setLogs(`⚠️ 讀取日誌失敗: ${errorMessage(e)}`);
       return null;
     } finally {
       setIsFetchingLogs(false);
@@ -156,10 +211,15 @@ export default function SettingsModal({
   }, [setLastRun, safeFetchJson]);
 
   useEffect(() => {
-    if (isOpen) {
-      fetchLogs();
-    }
-  }, [isOpen, fetchLogs]);
+    if (!isOpen) return;
+    // Defer the first status read out of the effect body; both helpers set
+    // state, and synchronous setState in an effect causes a cascading render.
+    const timer = setTimeout(() => {
+      void fetchAdminSession();
+      void fetchLogs();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [isOpen, fetchAdminSession, fetchLogs]);
 
   // Keep the log window and the running indicator fresh while the log tab is
   // open, no matter who started the task.
@@ -170,7 +230,10 @@ export default function SettingsModal({
   // from another browser, by the 24h daemon, or by curl -- the window kept
   // showing whatever it had loaded when the modal opened, forever.
   useEffect(() => {
-    if (!isOpen || activeTab !== 'logs') return;
+    // Anonymous visitors have no log window and no stat cards to fill, so
+    // polling would only hammer /api/scan for a payload the server has already
+    // stripped. The login form is the only thing shown in that state.
+    if (!isOpen || activeTab !== 'logs' || !isAdminAuthenticated) return;
     let cancelled = false;
 
     // One request per tick: fetchLogs writes the log text, the stat cards and
@@ -188,7 +251,7 @@ export default function SettingsModal({
     };
     // fetchLogs is a stable useCallback, so this effect is not restarted by
     // unrelated re-renders and the interval survives while the tab stays open.
-  }, [isOpen, activeTab, fetchLogs]);
+  }, [isOpen, activeTab, isAdminAuthenticated, fetchLogs]);
 
   // Auto scroll to bottom when logs update or the tab switches, unless the user
   // has scrolled up to read earlier output.
@@ -199,6 +262,103 @@ export default function SettingsModal({
     return () => clearTimeout(timer);
   }, [logs, activeTab, scrollToBottom]);
 
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminPassword) {
+      setAdminLoginError('請輸入管理員密碼。');
+      return;
+    }
+    if (loginTotpRequired && !adminTotpCode.trim()) {
+      setAdminLoginError('請輸入驗證器目前的 6 位數驗證碼。');
+      return;
+    }
+
+    setIsLoggingIn(true);
+    setAdminLoginError('');
+    try {
+      const { ok, status, data } = await adminFetchJson('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPassword,
+          ...(adminTotpCode.trim() ? { code: adminTotpCode.trim() } : {})
+        })
+      });
+
+      if (ok) {
+        setAdminPassword('');
+        setAdminTotpCode('');
+        setLoginTotpRequired(false);
+        setIsAdminAuthenticated(true);
+        setAdminConfigured(true);
+        setAdminExpiresAt(typeof data.expiresAt === 'number' ? data.expiresAt : null);
+        setLogsRestricted(false);
+        if (data.expiresAt) {
+          setLocalNotice(`✅ 管理員登入成功，工作階段有效至 ${new Date(data.expiresAt).toLocaleString('zh-TW', { hour12: false })}。`);
+        }
+        await fetchAdminSession();
+        await fetchLogs();
+        return;
+      }
+
+      if (status === 503 && data.code === 'ADMIN_NOT_CONFIGURED') {
+        setAdminConfigured(false);
+      }
+
+      if (status === 401 && data.code === 'ADMIN_TOTP_REQUIRED') {
+        // Keep the password in state so the user only has to add the code.
+        setLoginTotpRequired(true);
+        setAdminTotpCode('');
+        setAdminLoginError('此帳號已啟用雙因素驗證，請輸入驗證器目前的 6 位數驗證碼。');
+        return;
+      }
+
+      if (
+        status === 401 &&
+        (data.code === 'ADMIN_BAD_TOTP' || data.code === 'ADMIN_TOTP_REPLAY')
+      ) {
+        setLoginTotpRequired(true);
+        setAdminTotpCode('');
+        setAdminLoginError(
+          data.code === 'ADMIN_TOTP_REPLAY'
+            ? '此驗證碼已使用過，請等待下一個驗證碼。'
+            : '驗證碼不正確，請重新輸入。'
+        );
+        return;
+      }
+
+      setAdminPassword('');
+      setAdminTotpCode('');
+      setLoginTotpRequired(false);
+      setAdminLoginError(
+        status === 429
+          ? '登入嘗試次數過多，請稍後再試。'
+          : status === 403
+            ? '登入請求遭到拒絕（來源或 CSRF 驗證失敗），請重新整理頁面後再試。'
+            : data.error || `登入失敗（HTTP ${status || '網路錯誤'}）。`
+      );
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleAdminLogout = async () => {
+    await adminFetchJson('/api/admin/logout', { method: 'POST' });
+    setIsAdminAuthenticated(false);
+    setAdminExpiresAt(null);
+    setAdminPassword('');
+    setAdminTotpCode('');
+    setLoginTotpRequired(false);
+    setAdminLoginError('');
+    setLogsRestricted(true);
+    // Do not leave a restricted log buffer from the previous session visible
+    // after logout.
+    setLogs('');
+    setLocalNotice('已登出管理員工作階段。');
+    await fetchAdminSession();
+    await fetchLogs();
+  };
+
   const handleTriggerScan = async () => {
     try {
       setIsTriggeringScan(true);
@@ -206,7 +366,7 @@ export default function SettingsModal({
       const timestamp = new Date().toLocaleTimeString('zh-TW', { hour12: false });
       setLocalNotice(`⏳ 已觸發：連線 fayun.org 執行媒體同步與掃描中…（${timestamp}）`);
 
-      const { ok, data } = await safeFetchJson('/api/scan', { method: 'POST' });
+      const { ok, status, data } = await adminFetchJson('/api/scan', { method: 'POST' });
       if (ok) {
         // The trigger message lives in the banner above, so the log buffer is
         // simply the server tail. Appending it here (or prepending to it) either
@@ -226,6 +386,16 @@ export default function SettingsModal({
           await onRefreshCourses();
         }
       } else {
+        if (status === 401) {
+          setIsAdminAuthenticated(false);
+          setLogsRestricted(true);
+          setAdminLoginError('管理員工作階段已過期，請重新登入。');
+          setLocalNotice('🔒 需要管理員登入才能執行同步。');
+          return;
+        }
+        if (data.code === 'ADMIN_NOT_CONFIGURED') {
+          setAdminConfigured(false);
+        }
         // Surface an actionable cause. The server distinguishes genuine
         // contention (409) from an unusable data directory (503); the latter
         // used to be reported as "already running", which sent users looking
@@ -235,11 +405,13 @@ export default function SettingsModal({
             ? '（資料目錄無法寫入，請確認 ./data 掛載權限）'
             : data.status === 'busy'
               ? '（請稍候，或檢查是否有殘留的掃描程序）'
-              : '';
+              : status === 403
+                ? '（來源或 CSRF 驗證失敗，請重新整理頁面）'
+                : '';
         setLocalNotice(`❌ 媒體同步失敗：${data.error || '未知錯誤'}${hint}`);
       }
-    } catch (e: any) {
-      const errorMsg = `[${new Date().toLocaleTimeString('zh-TW', { hour12: false })}] ❌ [系統錯誤] 執行同步出錯: ${e.message}`;
+    } catch (e: unknown) {
+      const errorMsg = `[${new Date().toLocaleTimeString('zh-TW', { hour12: false })}] ❌ [系統錯誤] 執行同步出錯: ${errorMessage(e)}`;
       setLogs((prev) => `${prev}\n${errorMsg}`);
     } finally {
       if (isMountedRef.current) setIsTriggeringScan(false);
@@ -254,7 +426,7 @@ export default function SettingsModal({
       const countLabel = totalCourses || 684;
       setLocalNotice(`⏳ 已觸發：全站 ${countLabel} 門課程巡檢與自我修復中…（${timestamp}）`);
 
-      const { ok, data } = await safeFetchJson('/api/health-check', { method: 'POST' });
+      const { ok, status, data } = await adminFetchJson('/api/health-check', { method: 'POST' });
       if (ok) {
         // See handleTriggerScan: the trigger message is shown in the banner.
         if (data.recentLogs) setLogs(data.recentLogs);
@@ -269,17 +441,29 @@ export default function SettingsModal({
           await onRefreshCourses();
         }
       } else {
+        if (status === 401) {
+          setIsAdminAuthenticated(false);
+          setLogsRestricted(true);
+          setAdminLoginError('管理員工作階段已過期，請重新登入。');
+          setLocalNotice('🔒 需要管理員登入才能執行巡檢修復。');
+          return;
+        }
+        if (data.code === 'ADMIN_NOT_CONFIGURED') {
+          setAdminConfigured(false);
+        }
         const hint =
           data.status === 'unavailable'
             ? '（資料目錄無法寫入，請確認 ./data 掛載權限）'
             : data.status === 'busy'
               ? '（請稍候，或檢查是否有殘留的掃描程序）'
-              : '';
+              : status === 403
+                ? '（來源或 CSRF 驗證失敗，請重新整理頁面）'
+                : '';
         const errorMsg = `[${timestamp}] ❌ [系統錯誤] 巡檢修復失敗: ${data.error || '未知錯誤'}${hint}`;
-        setLogs((prev) => `${prev}\n${errorMsg}`);
+        setLocalNotice(errorMsg);
       }
-    } catch (e: any) {
-      const errorMsg = `[${new Date().toLocaleTimeString('zh-TW', { hour12: false })}] ❌ [系統錯誤] 執行巡檢修復出錯: ${e.message}`;
+    } catch (e: unknown) {
+      const errorMsg = `[${new Date().toLocaleTimeString('zh-TW', { hour12: false })}] ❌ [系統錯誤] 執行巡檢修復出錯: ${errorMessage(e)}`;
       setLogs((prev) => `${prev}\n${errorMsg}`);
     } finally {
       if (isMountedRef.current) setIsTriggeringHeal(false);
@@ -434,7 +618,8 @@ export default function SettingsModal({
               className={`settings-tab-btn ${activeTab === 'logs' ? 'active' : ''}`}
               onClick={() => {
                 setActiveTab('logs');
-                fetchLogs();
+                void fetchAdminSession();
+                void fetchLogs();
               }}
             >
               📜 媒體同步與掃描紀錄
@@ -606,117 +791,191 @@ export default function SettingsModal({
           ) : (
             /* Log Tab Content */
             <div className="settings-section logs-section">
-              {/* Stat Summary Header Cards */}
-              <div className="log-stats-bar">
-                <div className="stat-card">
-                  <span className="stat-label">🕒 最近同步時間</span>
-                  <span className="stat-value">{lastScan}</span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-label">📚 收錄課程總數</span>
-                  <span className="stat-value">{totalCourses ? `${totalCourses} 門` : '---'}</span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-label">🧾 最近維護結果</span>
-                  <span className="stat-value">
-                    {isTaskRunning
-                      ? '執行中…'
-                      : lastRun
-                        ? `${lastRun.ok ? '✅ 成功' : '❌ 失敗'}（${lastRun.task || '-'}）`
-                        : '---'}
-                  </span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-label">💾 媒體快取容量</span>
-                  <span className="stat-value">
-                    {cacheStats ? `${cacheStats.maxGb} GB` : '20 GB'}
-                  </span>
-                </div>
-                <div className="stat-card">
-                  <span className="stat-label">⚡ 自動巡檢狀態</span>
-                  <span className="stat-value active">連線運作中</span>
-                </div>
-              </div>
-
-              {/* Task-trigger credential.
-                  The scan/heal endpoints spawn Python processes that rewrite
-                  the catalog, so they require a token. When TASK_API_TOKEN is
-                  unset the server generates one per boot and prints it to
-                  scanner.log, so this panel appears exactly when the operator
-                  still needs to paste it. */}
-              {(needsTaskToken || taskToken) && (
-                <div className="task-token-row">
-                  <label className="task-token-label" htmlFor="task-token-input">
-                    🔑 任務授權碼
-                  </label>
-                  <input
-                    id="task-token-input"
-                    className="task-token-input"
-                    type="password"
-                    value={taskToken}
-                    placeholder="貼上啟動日誌中的 X-Task-Token"
-                    onChange={(e) => {
-                      const next = e.target.value.trim();
-                      setTaskToken(next);
-                      setStoredTaskToken(next);
-                      if (next) setNeedsTaskToken(false);
-                    }}
-                  />
-                  {needsTaskToken && (
-                    <span className="task-token-hint">
-                      伺服器要求授權碼才能執行掃描／修復。未設定 <code>TASK_API_TOKEN</code> 時，
-                      啟動時會自動產生一組並寫入日誌，請複製貼上。
+              {/* Stat Summary Header Cards — operational detail, admin only. */}
+              {isAdminAuthenticated && (
+                <div className="log-stats-bar">
+                  <div className="stat-card">
+                    <span className="stat-label">🕒 最近同步時間</span>
+                    <span className="stat-value">{lastScan}</span>
+                  </div>
+                  <div className="stat-card">
+                    <span className="stat-label">📚 收錄課程總數</span>
+                    <span className="stat-value">{totalCourses ? `${totalCourses} 門` : '---'}</span>
+                  </div>
+                  <div className="stat-card">
+                    <span className="stat-label">🧾 最近維護結果</span>
+                    <span className="stat-value">
+                      {isTaskRunning
+                        ? '執行中…'
+                        : lastRun
+                          ? `${lastRun.ok ? '✅ 成功' : '❌ 失敗'}（${lastRun.task || '-'}）`
+                          : '---'}
                     </span>
-                  )}
+                  </div>
+                  <div className="stat-card">
+                    <span className="stat-label">💾 媒體快取容量</span>
+                    <span className="stat-value">
+                      {cacheStats ? `${cacheStats.maxGb} GB` : '20 GB'}
+                    </span>
+                  </div>
+                  <div className="stat-card">
+                    <span className="stat-label">⚡ 自動巡檢狀態</span>
+                    <span className="stat-value active">連線運作中</span>
+                  </div>
                 </div>
               )}
 
-              {/* Action Toolbar with Tooltips */}
-              <div className="log-action-toolbar">
-                <div className="tooltip-action-wrapper" data-tooltip="連線 fayun.org 掃描新上架之佛法經論、禪修開示與音訊影音媒體資源">
-                  <button
-                    className="log-sync-btn"
-                    onClick={handleTriggerScan}
-                    disabled={isTriggeringScan || isTriggeringHeal || isFetchingLogs || isTaskRunning}
-                    title="連線 fayun.org 掃描新上架之佛法經論、禪修開示與音訊影音媒體資源"
-                  >
-                    {isTriggeringScan ? '⏳ 正在掃描同步中...' : '🔄 同步新媒體'}
-                  </button>
-                </div>
-
-                <div className="tooltip-action-wrapper" data-tooltip="自動檢測全站所有課程之音訊、影音與 PDF 講義鏈結，發現無效網址自動校正修復">
-                  <button
-                    className="log-heal-btn"
-                    onClick={handleTriggerAutoHeal}
-                    disabled={isTriggeringHeal || isTriggeringScan || isFetchingLogs || isTaskRunning}
-                    title="自動檢測全站所有課程之音訊、影音與 PDF 講義鏈結，發現無效網址自動校正修復"
-                  >
-                    {isTriggeringHeal ? '🚑 正在巡檢修復中...' : '🚑 自我巡檢自動修復'}
-                  </button>
-                </div>
-
-                <div className="tooltip-action-wrapper" data-tooltip="將當前呈現的媒體掃描與修復日誌複製到系統剪貼簿">
-                  <button
-                    className="log-copy-btn"
-                    onClick={handleCopyLogs}
-                    disabled={!logs}
-                    title="將當前呈現的媒體掃描與修復日誌複製到系統剪貼簿"
-                  >
-                    {copyToast ? '✅ 已複製紀錄！' : '📋 複製日誌紀錄'}
-                  </button>
-                </div>
-
-                <div className="tooltip-action-wrapper" data-tooltip="從網頁伺服器重新載入最新 scanner.log 內容">
-                  <button
-                    className="log-refresh-btn"
-                    onClick={fetchLogs}
-                    disabled={isFetchingLogs || isTriggeringScan || isTriggeringHeal || isTaskRunning}
-                    title="從網頁伺服器重新載入最新 scanner.log 內容"
-                  >
-                    🔄 重新整理日誌
-                  </button>
-                </div>
+              {/* Admin authentication.
+                  Human scan/heal actions require a password-backed session.
+                  TASK_API_TOKEN remains for cron/CI and is never stored here. */}
+              <div className="admin-auth-card">
+                {adminConfigured === false ? (
+                  <div className="admin-auth-message" role="status">
+                    <strong>🔒 尚未設定或無法讀取管理員密碼</strong>
+                    <span>
+                      請在伺服器執行 <code>node scripts/admin-password.mjs</code> 設定密碼後重新整理；
+                      若已設定，請檢查啟動日誌中的管理員憑證錯誤。
+                      Docker 環境請使用 <code>docker compose exec -it -u node ui2 node scripts/admin-password.mjs</code>。
+                    </span>
+                    {automationTokenConfigured && (
+                      <span className="admin-auth-note">
+                        目前已設定 <code>TASK_API_TOKEN</code>，但該權杖僅供排程／腳本使用，不能用於瀏覽器登入。
+                      </span>
+                    )}
+                  </div>
+                ) : isAdminAuthenticated ? (
+                  <>
+                    <div className="admin-session-row">
+                      <span className="admin-session-label">✅ 管理員已登入</span>
+                      {adminExpiresAt && (
+                        <span className="admin-session-expiry">
+                          有效至 {new Date(adminExpiresAt).toLocaleString('zh-TW', { hour12: false })}
+                        </span>
+                      )}
+                      <button type="button" className="admin-logout-btn" onClick={handleAdminLogout}>
+                        登出
+                      </button>
+                    </div>
+                    <AdminSecurityPanel
+                      passwordChangeable={adminPasswordChangeable}
+                      totpEnabled={adminTotpEnabled}
+                      totpManageable={adminTotpManageable}
+                      fetcher={adminFetchJson}
+                      onSessionChanged={async () => {
+                        await fetchAdminSession();
+                        await fetchLogs();
+                      }}
+                      onNotice={setLocalNotice}
+                    />
+                  </>
+                ) : (
+                  <form className="admin-login-form" onSubmit={handleAdminLogin}>
+                    <label className="admin-login-label" htmlFor="admin-password-input">
+                      🔑 管理員登入
+                    </label>
+                    <input
+                      id="admin-password-input"
+                      className="admin-login-input"
+                      type="password"
+                      autoComplete="current-password"
+                      maxLength={256}
+                      value={adminPassword}
+                      placeholder={adminConfigured === null ? '檢查登入狀態…' : '輸入管理員密碼'}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      disabled={isLoggingIn}
+                    />
+                    {loginTotpRequired && (
+                      <input
+                        id="admin-totp-input"
+                        className="admin-login-input admin-code-input"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        value={adminTotpCode}
+                        placeholder="6 位數驗證碼"
+                        aria-label="TOTP 驗證碼"
+                        onChange={(e) => setAdminTotpCode(e.target.value.replace(/\D/g, ''))}
+                        disabled={isLoggingIn}
+                        autoFocus
+                      />
+                    )}
+                    <button
+                      type="submit"
+                      className="admin-login-btn"
+                      disabled={
+                        isLoggingIn ||
+                        !adminPassword ||
+                        (loginTotpRequired && adminTotpCode.trim().length !== 6)
+                      }
+                    >
+                      {isLoggingIn ? '登入中…' : '登入'}
+                    </button>
+                    {adminLoginError && (
+                      <div className="admin-login-error" role="alert">
+                        {adminLoginError}
+                      </div>
+                    )}
+                    {automationTokenConfigured && (
+                      <span className="admin-auth-note">
+                        已啟用 <code>TASK_API_TOKEN</code> 供排程使用；瀏覽器操作仍需管理員密碼。
+                      </span>
+                    )}
+                  </form>
+                )}
               </div>
+
+              {/* Admin-only action toolbar.
+                  Rendered only for an authenticated admin: a greyed-out button
+                  still advertises the feature and its tooltip, and invites
+                  clicking. Anonymous visitors get the login card instead. */}
+              {isAdminAuthenticated && (
+                <div className="log-action-toolbar">
+                  <div className="tooltip-action-wrapper" data-tooltip="連線 fayun.org 掃描新上架之佛法經論、禪修開示與音訊影音媒體資源">
+                    <button
+                      className="log-sync-btn"
+                      onClick={handleTriggerScan}
+                      disabled={isTriggeringScan || isTriggeringHeal || isFetchingLogs || isTaskRunning}
+                      title="連線 fayun.org 掃描新上架之佛法經論、禪修開示與音訊影音媒體資源"
+                    >
+                      {isTriggeringScan ? '⏳ 正在掃描同步中...' : '🔄 同步新媒體'}
+                    </button>
+                  </div>
+
+                  <div className="tooltip-action-wrapper" data-tooltip="自動檢測全站所有課程之音訊、影音與 PDF 講義鏈結，發現無效網址自動校正修復">
+                    <button
+                      className="log-heal-btn"
+                      onClick={handleTriggerAutoHeal}
+                      disabled={isTriggeringHeal || isTriggeringScan || isFetchingLogs || isTaskRunning}
+                      title="自動檢測全站所有課程之音訊、影音與 PDF 講義鏈結，發現無效網址自動校正修復"
+                    >
+                      {isTriggeringHeal ? '🚑 正在巡檢修復中...' : '🚑 自我巡檢自動修復'}
+                    </button>
+                  </div>
+
+                  <div className="tooltip-action-wrapper" data-tooltip="將當前呈現的媒體掃描與修復日誌複製到系統剪貼簿">
+                    <button
+                      className="log-copy-btn"
+                      onClick={handleCopyLogs}
+                      disabled={logsRestricted || !logs}
+                      title="將當前呈現的媒體掃描與修復日誌複製到系統剪貼簿"
+                    >
+                      {copyToast ? '✅ 已複製紀錄！' : '📋 複製日誌紀錄'}
+                    </button>
+                  </div>
+
+                  <div className="tooltip-action-wrapper" data-tooltip="從網頁伺服器重新載入最新 scanner.log 內容">
+                    <button
+                      className="log-refresh-btn"
+                      onClick={fetchLogs}
+                      disabled={isFetchingLogs || isTriggeringScan || isTriggeringHeal || isTaskRunning}
+                      title="從網頁伺服器重新載入最新 scanner.log 內容"
+                    >
+                      🔄 重新整理日誌
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Transient trigger/error notice: kept out of the log text so a
                   poll cannot erase it and repeated polls cannot duplicate it. */}
@@ -734,18 +993,22 @@ export default function SettingsModal({
                 </div>
               )}
 
-              {/* Log Display Window */}
-              <div className="log-window-wrapper">
-                <div className="log-window-header">
-                  <span className="log-file-tag">📄 scanner.log</span>
-                  <span className="log-hint">
-                    紀錄 fayun.org 媒體掃描、新上架與路徑自我修復歷史資訊（每 3 秒自動更新，自動跳至最新）
-                  </span>
+              {/* Log Display Window — only for an authenticated admin. The
+                  server already withholds recentLogs from anonymous callers, so
+                  rendering an empty pane would just show a placeholder frame. */}
+              {isAdminAuthenticated && !logsRestricted && (
+                <div className="log-window-wrapper">
+                  <div className="log-window-header">
+                    <span className="log-file-tag">📄 scanner.log</span>
+                    <span className="log-hint">
+                      紀錄 fayun.org 媒體掃描、新上架與路徑自我修復歷史資訊（每 3 秒自動更新，自動跳至最新）
+                    </span>
+                  </div>
+                  <pre className="log-window-body" ref={logBodyRef} onScroll={handleLogScroll}>
+                    {logs}
+                  </pre>
                 </div>
-                <pre className="log-window-body" ref={logBodyRef} onScroll={handleLogScroll}>
-                  {logs}
-                </pre>
-              </div>
+              )}
             </div>
           )}
         </div>

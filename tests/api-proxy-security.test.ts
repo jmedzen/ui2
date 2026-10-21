@@ -6,9 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import { NextRequest } from 'next/server';
-import { GET } from '@/app/api/proxy/route';
+import { GET, POST } from '@/app/api/proxy/route';
 import { ensureCacheDir, getCacheFilePath } from '@/lib/serverMediaCache';
-import { getTaskToken } from '@/lib/serverTasks';
 
 const HOST = 'http://localhost:8410';
 
@@ -93,11 +92,23 @@ test('S2 — upstream allowlist pins protocol and port', async (t) => {
  * ------------------------------------------------------------------ */
 
 test('S1 — preload is authorized and rate limited', async (t) => {
-  await t.test('rejects cross-site preload triggers', async () => {
+  await t.test('GET preload is rejected with 405 and Allow: POST', async () => {
+    // A state-changing cache write must not be triggerable by a link, image or
+    // prefetch. Ordinary playback still uses GET.
     const req = new NextRequest(`${HOST}/api/proxy?path=/media/audio/x.mp3&action=preload`, {
-      headers: { 'sec-fetch-site': 'cross-site' }
+      headers: { origin: HOST }
     });
     const res = await GET(req);
+    assert.strictEqual(res.status, 405);
+    assert.strictEqual(res.headers.get('allow'), 'POST');
+  });
+
+  await t.test('rejects cross-site preload triggers', async () => {
+    const req = new NextRequest(`${HOST}/api/proxy?path=/media/audio/x.mp3&action=preload`, {
+      method: 'POST',
+      headers: { 'sec-fetch-site': 'cross-site' }
+    });
+    const res = await POST(req);
     assert.strictEqual(res.status, 403, 'Cross-site preload must be rejected');
   });
 
@@ -105,20 +116,22 @@ test('S1 — preload is authorized and rate limited', async (t) => {
     // A preload writes to cache disk, so it now requires the task token.
     // Regression: an anonymous caller could drive unbounded disk writes.
     const req = new NextRequest(`${HOST}/api/proxy?path=/media/audio/x.mp3&action=preload`, {
+      method: 'POST',
       headers: { origin: 'https://evil.example.com' }
     });
-    const res = await GET(req);
+    const res = await POST(req);
     assert.strictEqual(res.status, 401, 'An unauthenticated preload must be rejected');
   });
 
-  await t.test('accepts a preload carrying the task token', async () => {
+  await t.test('accepts a same-origin preload trigger', async () => {
     const restore = stubFetch(htmlUpstream);
     try {
       const req = new NextRequest(`${HOST}/api/proxy?path=/media/audio/__auth_ok__.mp3&action=preload`, {
-        headers: { 'x-task-token': getTaskToken() }
+        method: 'POST',
+        headers: { origin: HOST }
       });
-      const res = await GET(req);
-      assert.strictEqual(res.status, 200, 'A correctly authenticated preload must be accepted');
+      const res = await POST(req);
+      assert.strictEqual(res.status, 200, 'A same-origin preload must be accepted');
       await settle();
     } finally {
       restore();
@@ -133,9 +146,9 @@ test('S1 — preload is authorized and rate limited', async (t) => {
       for (let i = 0; i < 40; i++) {
         const req = new NextRequest(
           `${HOST}/api/proxy?path=${encodeURIComponent(`/media/__rl_${i}__.mp3`)}&action=preload`,
-          { headers: { 'x-forwarded-for': '203.0.113.77', 'x-task-token': getTaskToken() } }
+          { method: 'POST', headers: { 'x-forwarded-for': '203.0.113.77', origin: HOST } }
         );
-        const res = await GET(req);
+        const res = await POST(req);
         if (res.status === 429) {
           sawLimited = true;
           assert.strictEqual(res.headers.get('retry-after'), '60');

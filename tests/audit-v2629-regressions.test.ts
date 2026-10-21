@@ -27,18 +27,38 @@ test('audit v2.6.29 — task triggers fail closed', async (t) => {
     assert.doesNotMatch(src, /function normalizeAuthority/);
   });
 
-  await t.test('a token is required, generated per boot when unset', () => {
-    const src = read('src/lib/serverTasks.ts');
-    assert.match(src, /export function getTaskToken\(\): string/);
-    assert.match(src, /generatedTaskToken = crypto\.randomBytes\(24\)\.toString\('hex'\)/);
-    assert.match(src, /buffer\.length !== b\.length|a\.length !== b\.length/);
+  await t.test('admin endpoints do not accept a same-origin request as a credential', () => {
+    const src = read('src/lib/adminAuth.ts');
+    // Origin/Host/Sec-Fetch are request-supplied; only a server-side session or
+    // the explicit automation token may authorize admin actions.
+    assert.match(src, /export function authorizeAdminRequest/);
+    assert.match(src, /presentedTaskToken\(request\)/);
+    assert.match(src, /getAdminSession\(/);
+    assert.doesNotMatch(src, /if \(isSameOrigin\(request\)\) return \{ ok: true \}/);
   });
 
-  await t.test('the boot log advertises the generated token', () => {
+  await t.test('no boot-generated token remains', () => {
+    const src = read('src/lib/serverTasks.ts');
+    assert.doesNotMatch(src, /generatedTaskToken/);
+    assert.match(src, /export function getTaskToken\(\): string \{\n  return \(process\.env\.TASK_API_TOKEN \|\| ''\)\.trim\(\);\n\}/);
+    assert.match(src, /export function isValidTaskToken/);
+  });
+
+  await t.test('the boot log reports credential state without printing a secret', () => {
     const src = read('src/instrumentation.ts');
-    // Without this the zero-config deployment would be locked out entirely.
-    assert.match(src, /getTaskToken\(\)/);
+    assert.match(src, /readAdminCredential/);
     assert.match(src, /TASK_API_TOKEN/);
+    assert.doesNotMatch(src, /getTaskToken\(\)/);
+  });
+
+  await t.test('public status keeps logs and lock-holder behind auth', () => {
+    for (const route of ['src/app/api/scan/route.ts', 'src/app/api/health-check/route.ts']) {
+      const src = read(route);
+      assert.match(src, /getOptionalAdminAuth\(request\)/);
+      assert.match(src, /logsRestricted: !admin/);
+      assert.match(src, /recentLogs: admin \? readRecentLogs\(\) : undefined/);
+      assert.match(src, /lockHolder: admin \? getScanLockInfoPublic\(\) : undefined/);
+    }
   });
 
   await t.test('the ownership token is never returned over HTTP', () => {

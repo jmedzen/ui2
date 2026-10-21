@@ -6,8 +6,7 @@ import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
 import { NextRequest } from 'next/server';
-import { GET } from '@/app/api/proxy/route';
-import { getTaskToken } from '@/lib/serverTasks';
+import { GET, POST } from '@/app/api/proxy/route';
 import {
   getCacheDir,
   getCacheFilePath,
@@ -232,9 +231,10 @@ test('S1 — preload budget cannot be escaped by spoofing X-Forwarded-For', asyn
     try {
       let limited = false;
       for (let i = 0; i < 60; i++) {
-        const res = await GET(
+        const res = await POST(
           new NextRequest(`${HOST}/api/proxy?path=${encodeURIComponent(`/media/__spoof_${i}__.mp3`)}&action=preload`, {
-            headers: { 'x-forwarded-for': `203.0.113.${i % 256}`, 'x-task-token': getTaskToken() }
+            method: 'POST',
+            headers: { 'x-forwarded-for': `203.0.113.${i % 256}`, origin: HOST }
           })
         );
         if (res.status === 429) {

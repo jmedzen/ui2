@@ -3055,56 +3055,262 @@ html, body {
   flex-wrap: wrap;
 }
 
-/* Task-trigger credential row. Only rendered when the server demands a token,
-   so it must read as an instruction rather than as permanent chrome. */
-.task-token-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+/* Admin login/session card. Human scan/heal actions require a password-backed
+   session; the old boot-token input is gone. */
+.admin-auth-card {
   margin: 10px 0;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border: 1px solid rgba(212, 175, 55, 0.45);
   border-radius: 8px;
   background: rgba(212, 175, 55, 0.08);
 }
 
-.task-token-label {
+.admin-auth-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: calc(12px * var(--font-scale));
+  line-height: 1.55;
+}
+
+.admin-auth-message code,
+.admin-auth-note code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  overflow-wrap: anywhere;
+}
+
+.admin-auth-note {
+  font-size: calc(11px * var(--font-scale));
+  opacity: 0.8;
+  line-height: 1.5;
+}
+
+.admin-session-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-session-label {
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 600;
+  color: var(--gold-accent, #d4af37);
+}
+
+.admin-session-expiry {
+  font-size: calc(11px * var(--font-scale));
+  opacity: 0.75;
+}
+
+.admin-logout-btn {
+  margin-left: auto;
+  padding: 5px 12px;
+  border: 1px solid rgba(212, 175, 55, 0.6);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: calc(12px * var(--font-scale));
+  cursor: pointer;
+}
+
+.admin-logout-btn:hover {
+  background: rgba(212, 175, 55, 0.15);
+}
+
+.admin-login-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-login-label {
   font-size: calc(13px * var(--font-scale));
   font-weight: 600;
   color: var(--gold-accent, #d4af37);
   white-space: nowrap;
 }
 
-.task-token-input {
-  flex: 1 1 240px;
+.admin-login-input {
+  flex: 1 1 220px;
   min-width: 0;
   padding: 6px 10px;
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.25);
   color: inherit;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: calc(12px * var(--font-scale));
 }
 
-.task-token-input:focus {
+.admin-login-input:focus {
   outline: none;
   border-color: var(--gold-accent, #d4af37);
 }
 
-.task-token-hint {
+.admin-login-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  background: var(--gold-accent, #d4af37);
+  color: #fff;
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-login-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-login-error {
   flex: 1 1 100%;
   font-size: calc(11px * var(--font-scale));
-  opacity: 0.8;
+  color: #ff8a80;
   line-height: 1.5;
 }
 
-.task-token-hint code {
+.admin-code-input {
+  flex: 0 0 130px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  padding: 0 4px;
-  border-radius: 4px;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+
+/* Password rotation and TOTP enrollment inside the logged-in admin card. */
+.admin-security-panel {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(212, 175, 55, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-security-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: calc(13px * var(--font-scale));
+  font-weight: 600;
+  color: var(--gold-accent, #d4af37);
+}
+
+.admin-security-hint {
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.admin-security-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: calc(12px * var(--font-scale));
+}
+
+.admin-security-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 2px 0;
+}
+
+.admin-secondary-btn {
+  padding: 5px 10px;
+  border: 1px solid rgba(212, 175, 55, 0.55);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font-size: calc(11px * var(--font-scale));
+  cursor: pointer;
+}
+
+.admin-secondary-btn:hover:not(:disabled) {
+  background: rgba(212, 175, 55, 0.15);
+}
+
+.admin-secondary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-password-form,
+.admin-totp-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.admin-password-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 9px;
+}
+
+.admin-password-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: calc(11px * var(--font-scale));
+  color: var(--text-secondary, inherit);
+}
+
+.admin-password-field .admin-login-input {
+  flex: 0 1 auto;
+  width: 100%;
+}
+
+.admin-password-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-totp-secret {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(11px * var(--font-scale));
+}
+
+.admin-totp-secret code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  padding: 4px 7px;
+  border-radius: 5px;
   background: rgba(0, 0, 0, 0.3);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.admin-success-note {
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: rgba(46, 204, 113, 0.12);
+  border: 1px solid rgba(46, 204, 113, 0.35);
+  font-size: calc(11px * var(--font-scale));
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .admin-totp-secret {
+    grid-template-columns: 1fr auto;
+  }
+
+  .admin-totp-secret > span:first-child {
+    grid-column: 1 / -1;
+  }
 }
 
 .log-sync-btn {

@@ -1,15 +1,6 @@
 import { NextResponse } from 'next/server';
-
-/**
- * These endpoints report live process state (a lock file, a log tail, a run
- * record). They are dynamic, but a GET with no cache directive at all is still
- * eligible for heuristic caching in some intermediaries, which would leave the
- * UI polling a frozen body. Being explicit removes the ambiguity.
- */
-const NO_STORE = { 'Cache-Control': 'no-store, max-age=0' } as const;
 import {
   HEAL_TASK,
-  authorizeTaskRequest,
   acquireScanLock,
   isScanLocked,
   getScanLockInfoPublic,
@@ -20,6 +11,17 @@ import {
   readDbInfo,
   runTaskScript
 } from '@/lib/serverTasks';
+import { authorizeAdminRequest, getOptionalAdminAuth } from '@/lib/adminAuth';
+import { appendAdminAudit } from '@/lib/adminAudit';
+import { clientKeyFor } from '@/lib/clientIp';
+
+/**
+ * These endpoints report live process state (a lock file, a log tail, a run
+ * record). They are dynamic, but a GET with no cache directive at all is still
+ * eligible for heuristic caching in some intermediaries, which would leave the
+ * UI polling a frozen body. Being explicit removes the ambiguity.
+ */
+const NO_STORE = { 'Cache-Control': 'no-store, max-age=0' } as const;
 
 /** Generates the id echoed back so the UI can detect THIS run completing. */
 function newRunId(): string {
@@ -28,21 +30,24 @@ function newRunId(): string {
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const dbInfo = readDbInfo();
+    // See /api/scan: public status, admin-only operational detail.
+    const admin = getOptionalAdminAuth(request);
 
     return NextResponse.json({
       status: 'active',
       isRunning: isScanLocked(),
-      lockHolder: getScanLockInfoPublic(),
+      lockHolder: admin ? getScanLockInfoPublic() : undefined,
       lastAutoHeal: dbInfo.last_auto_healed_at,
       totalCourses: dbInfo.total_courses,
       totalRepaired: dbInfo.total_repaired,
       lastRun: readRunResult(),
-      recentLogs: readRecentLogs()
+      recentLogs: admin ? readRecentLogs() : undefined,
+      logsRestricted: !admin
     }, { headers: NO_STORE });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[API/Health-Check] Error in GET handler:', error);
     return NextResponse.json({ error: 'Failed to read audit status' }, { status: 500 });
   }
@@ -50,10 +55,17 @@ export async function GET() {
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const auth = authorizeTaskRequest(request);
+    const auth = authorizeAdminRequest(request);
     if (!auth.ok) {
-      return NextResponse.json({ error: auth.message }, { status: auth.status });
+      return NextResponse.json({ error: auth.message, code: auth.code }, { status: auth.status });
     }
+
+    appendAdminAudit('admin_action', {
+      action: 'heal',
+      via: auth.via,
+      ip: clientKeyFor(request),
+      result: 'authorized'
+    });
 
     const lock = acquireScanLock();
     if (!lock.ok) {
@@ -93,7 +105,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       running: HEAL_TASK,
       recentLogs: readRecentLogs()
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[API/Health-Check] Error in POST handler:', error);
     return NextResponse.json({ error: 'Failed to launch audit' }, { status: 500 });
   }

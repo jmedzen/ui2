@@ -1,14 +1,20 @@
 # Caddyfile for Automatic HTTPS Reverse Proxy
 # Supports both self-signed local SSL and Let's Encrypt production SSL certificates.
 #
-# The upstream must match the compose service/container name, which is "ui2",
-# not "fyweb" — the previous value pointed at a hostname that does not resolve,
-# so every request through the proxy failed with a 502.
+# The upstream must match the compose service/container name, which is "ui2".
 #
 # Override with UPSTREAM if the container is renamed or the proxy runs on a
 # different network:  UPSTREAM=my-service:8410 caddy run
 
 :443, :8443 {
     tls internal
-    reverse_proxy {$UPSTREAM:ui2:8410}
+    reverse_proxy {$UPSTREAM:ui2:8410} {
+        # The app trusts these headers only because compose sets TRUST_PROXY=1
+        # and binds 8410 to loopback. Overwrite them explicitly at the trust
+        # boundary so a client-supplied value can never be mistaken for the
+        # real client address or scheme.
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {hostport}
+    }
 }

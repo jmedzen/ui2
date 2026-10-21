@@ -1,7 +1,5 @@
 'use client';
 
-import { taskTokenHeaders } from './taskToken';
-
 export interface SpeedTestResult {
   route: 'direct' | 'proxy';
   directSpeedKbps: number;
@@ -108,10 +106,16 @@ export function triggerBackgroundServerCache(pathOrUrl: string): void {
       ? `/api/proxy?url=${encodeURIComponent(cleanPath)}&action=preload`
       : `/api/proxy?path=${encodeURIComponent(cleanPath)}&action=preload`;
 
-    // The server treats a preload as an expensive, state-changing action, so it
-    // requires the task token. Without it the warm-up is rejected (by design);
-    // playback still works, it just will not be pre-cached.
-    fetch(proxyPreloadUrl, { method: 'GET', cache: 'no-store', headers: taskTokenHeaders() }).catch(() => {});
+    // Preload is intentionally independent of admin login: ordinary playback
+    // must be able to warm the cache. It is a state-changing POST so link
+    // prefetchers and cross-site navigations cannot trigger disk writes; the
+    // server authorizes same-origin browser requests (or an explicit
+    // automation token for non-browser callers).
+    fetch(proxyPreloadUrl, {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store'
+    }).catch(() => {});
   } catch (e) {
     console.warn('Failed to trigger background server cache:', e);
   }

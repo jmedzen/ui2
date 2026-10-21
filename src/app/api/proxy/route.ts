@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import { Readable } from 'stream';
 import { getCacheFilePath, isCached, updateAccessTime, cacheRemoteMedia, fileLooksLikeHtml, invalidateCacheStats, markCacheFileInUse, isDownloadInFlight } from '@/lib/serverMediaCache';
-import { authorizeTaskRequest } from '@/lib/serverTasks';
+import { authorizePreloadRequest } from '@/lib/serverTasks';
+import { clientKeyFor } from '@/lib/clientIp';
 
 const ALLOWED_HOSTS = ['www.fayun.org', 'fayun.org'];
 const ALLOWED_PROTOCOLS = ['https:'];
@@ -66,39 +67,11 @@ function prunePreloadBuckets(now: number) {
 }
 
 /**
- * Whether `X-Forwarded-For` may be believed.
- *
- * The header is client-controlled unless a reverse proxy overwrites it. Caddy
- * does overwrite it by default, but the app is also published directly on
- * :8410 by compose, so a request reaching that port can name any client it
- * likes and mint a fresh rate-limit bucket per call.
- *
- * Trust is therefore opt-in and explicit: set TRUST_PROXY=1 only when every
- * path into this process passes through a proxy that rewrites the header.
- * The default is off, so an unconfigured deployment fails safe: all callers
- * share one budget rather than each being able to mint their own.
- */
-const TRUST_PROXY = process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true';
-
-function clientKeyFor(request: NextRequest): string {
-  if (TRUST_PROXY) {
-    const forwarded = request.headers.get('x-forwarded-for');
-    const first = (forwarded ? forwarded.split(',')[0].trim() : '');
-    if (first) return first;
-  }
-  // No trustworthy peer identifier is exposed by NextRequest, so fall back to a
-  // single shared bucket. This is deliberately conservative: it degrades the
-  // limit to "20 preloads per minute for the whole instance" instead of letting
-  // a caller escape the limit by inventing a new client address per request.
-  return 'local';
-}
-
-/**
  * Fixed-window limiter keyed by client address.
  *
- * Note: `x-forwarded-for` is only trustworthy behind a reverse proxy that
- * overwrites it. It is used here as a best-effort bucket key, not as an
- * authorization decision — authorization is handled separately.
+ * `X-Forwarded-For` is only trustworthy behind a reverse proxy that overwrites
+ * it; the shared clientKeyFor() helper owns that policy. The key is a
+ * best-effort bucket only, never an authorization decision.
  */
 function checkPreloadRateLimit(request: NextRequest): boolean {
   const clientKey = clientKeyFor(request);
@@ -278,6 +251,103 @@ function sanitizePath(rawPath: string): string {
   return cleaned;
 }
 
+type ResolvedProxyTarget =
+  | { ok: true; targetUrl: string; cacheFilePath: string; ext: string }
+  | { ok: false; response: NextResponse };
+
+/**
+ * Parses and validates the target for both GET media requests and POST preload.
+ *
+ * Keeping this in one place means the POST path cannot accidentally use a less
+ * strict URL/path validator than ordinary playback.
+ */
+function resolveProxyTarget(searchParams: URLSearchParams): ResolvedProxyTarget {
+  const url = searchParams.get('url');
+  const rawPath = searchParams.get('path');
+
+  let targetUrl = '';
+  if (url) {
+    const cleanUrl = sanitizePath(url);
+    try {
+      const parsed = new URL(cleanUrl);
+      if (!ALLOWED_HOSTS.includes(parsed.hostname.toLowerCase())) {
+        return {
+          ok: false,
+          response: new NextResponse(
+            'Forbidden: Proxying to external domains is strictly prohibited.',
+            { status: 403 }
+          )
+        };
+      }
+      // S2: pin the protocol and port. The hostname allowlist alone accepted
+      // any port, turning the proxy into a probe for non-HTTP services on the
+      // upstream host (e.g. :22, :6379, :9200).
+      if (!ALLOWED_PROTOCOLS.includes(parsed.protocol)) {
+        return {
+          ok: false,
+          response: new NextResponse(
+            'Forbidden: Only HTTPS upstreams are permitted.',
+            { status: 403 }
+          )
+        };
+      }
+      const port = parsed.port || '443';
+      if (port !== '443') {
+        return {
+          ok: false,
+          response: new NextResponse(
+            'Forbidden: Non-standard upstream ports are prohibited.',
+            { status: 403 }
+          )
+        };
+      }
+      targetUrl = parsed.toString();
+    } catch {
+      return {
+        ok: false,
+        response: new NextResponse('Invalid target URL format', { status: 400 })
+      };
+    }
+  } else if (rawPath) {
+    const cleanPath = sanitizePath(rawPath);
+    if (cleanPath.includes('..')) {
+      return {
+        ok: false,
+        response: new NextResponse('Forbidden: Invalid path sequence', { status: 400 })
+      };
+    }
+    const formattedPath = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
+    targetUrl = `https://www.fayun.org/ftpadmin${encodeURI(formattedPath)}`;
+  } else {
+    return {
+      ok: false,
+      response: new NextResponse('Missing url or path parameter', { status: 400 })
+    };
+  }
+
+  const urlObj = new URL(targetUrl);
+  const ext = urlObj.pathname.split('.').pop()?.toLowerCase() || '';
+  return {
+    ok: true,
+    targetUrl,
+    cacheFilePath: getCacheFilePath(targetUrl, ext),
+    ext
+  };
+}
+
+function methodNotAllowed(message: string, allow: string): NextResponse {
+  return NextResponse.json(
+    { error: message },
+    {
+      status: 405,
+      headers: {
+        Allow: allow,
+        'Cache-Control': 'no-store, max-age=0'
+      }
+    }
+  );
+}
+
 interface ParsedRange {
   kind: 'ok' | 'unsatisfiable';
   start: number;
@@ -341,54 +411,91 @@ function parseSingleRange(header: string | null, fileSize: number): ParsedRange 
   return { kind: 'ok', start, end };
 }
 
+/**
+ * POST-only cache preload.
+ *
+ * The request body is intentionally empty; target selection stays in the query
+ * string so the existing URL validation (and its tests) applies unchanged.
+ */
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  let cacheFilePathForLog = '';
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const action = searchParams.get('action');
+    if (action !== 'preload') {
+      return methodNotAllowed('POST only supports action=preload', 'GET');
+    }
+
+    const resolved = resolveProxyTarget(searchParams);
+    if (!resolved.ok) return resolved.response;
+    const { targetUrl, cacheFilePath } = resolved;
+    cacheFilePathForLog = cacheFilePath;
+
+    const auth = authorizePreloadRequest(request);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: auth.message },
+        { status: auth.status, headers: { 'Cache-Control': 'no-store, max-age=0' } }
+      );
+    }
+
+    if (!checkPreloadRateLimit(request)) {
+      return NextResponse.json(
+        { error: 'Too many preload requests, please slow down' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': '60',
+            'Cache-Control': 'no-store, max-age=0'
+          }
+        }
+      );
+    }
+
+    if (!isCached(cacheFilePath)) {
+      void cacheRemoteMedia(targetUrl, cacheFilePath);
+    }
+
+    return NextResponse.json(
+      { status: 'preloading' },
+      {
+        headers: {
+          'Cache-Control': 'no-store, max-age=0',
+          'X-Robots-Tag': 'noindex'
+        }
+      }
+    );
+  } catch (error: unknown) {
+    console.error(
+      `[Proxy] Unhandled preload error for ${cacheFilePathForLog || '(unknown target)'}:`,
+      error
+    );
+    return NextResponse.json(
+      { error: 'Proxy error: preload failed' },
+      { status: 502, headers: { 'Cache-Control': 'no-store, max-age=0' } }
+    );
+  }
+}
+
 export async function GET(request: NextRequest) {
   let cacheFilePathForLog = '';
   try {
     const searchParams = request.nextUrl.searchParams;
-    const url = searchParams.get('url');
-    const rawPath = searchParams.get('path');
     const action = searchParams.get('action');
 
-    let targetUrl = '';
-    if (url) {
-      const cleanUrl = sanitizePath(url);
-      try {
-        const parsed = new URL(cleanUrl);
-        if (!ALLOWED_HOSTS.includes(parsed.hostname.toLowerCase())) {
-          return new NextResponse('Forbidden: Proxying to external domains is strictly prohibited.', { status: 403 });
-        }
-        // S2: pin the protocol and port. The hostname allowlist alone accepted
-        // any port, turning the proxy into a probe for non-HTTP services on the
-        // upstream host (e.g. :22, :6379, :9200).
-        if (!ALLOWED_PROTOCOLS.includes(parsed.protocol)) {
-          return new NextResponse('Forbidden: Only HTTPS upstreams are permitted.', { status: 403 });
-        }
-        const port = parsed.port || '443';
-        if (port !== '443') {
-          return new NextResponse('Forbidden: Non-standard upstream ports are prohibited.', { status: 403 });
-        }
-        targetUrl = parsed.toString();
-      } catch {
-        return new NextResponse('Invalid target URL format', { status: 400 });
-      }
-    } else if (rawPath) {
-      const cleanPath = sanitizePath(rawPath);
-      if (cleanPath.includes('..')) {
-        return new NextResponse('Forbidden: Invalid path sequence', { status: 400 });
-      }
-      const formattedPath = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
-      targetUrl = `https://www.fayun.org/ftpadmin${encodeURI(formattedPath)}`;
-    } else {
-      return new NextResponse('Missing url or path parameter', { status: 400 });
+    // Preload mutates server-side cache state. It used to be a GET, which made
+    // it reachable by prefetchers, image tags, link scanners and cross-site
+    // navigations. Require POST so only an explicit same-origin fetch can
+    // trigger disk writes; ordinary media playback remains GET.
+    if (action === 'preload') {
+      return methodNotAllowed('Preload must use POST', 'POST');
     }
 
-    // Extract file extension cleanly without query strings
-    const urlObj = new URL(targetUrl);
-    const pathname = urlObj.pathname;
-    const ext = pathname.split('.').pop()?.toLowerCase() || '';
-
-    const cacheFilePath = getCacheFilePath(targetUrl, ext);
+    const resolved = resolveProxyTarget(searchParams);
+    if (!resolved.ok) return resolved.response;
+    const { targetUrl, cacheFilePath, ext } = resolved;
     cacheFilePathForLog = cacheFilePath;
+
     const reqHeaders: HeadersInit = {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Referer': 'https://www.fayun.org/',
@@ -415,31 +522,6 @@ export async function GET(request: NextRequest) {
         targetUrl
       }, {
         headers: { 'Cache-Control': 'no-store' }
-      });
-    }
-
-    // Action: Preload background cache without blocking client
-    //
-    // S1: this makes the server fetch and persist an arbitrary remote file, so it
-    // is an expensive, state-changing action. It requires same-origin/token
-    // authorization and a per-client rate limit; otherwise anyone could drive
-    // unbounded disk writes using the media paths published by /api/courses.
-    if (action === 'preload') {
-      const auth = authorizeTaskRequest(request);
-      if (!auth.ok) {
-        return NextResponse.json({ error: auth.message }, { status: auth.status });
-      }
-      if (!checkPreloadRateLimit(request)) {
-        return NextResponse.json(
-          { error: 'Too many preload requests, please slow down' },
-          { status: 429, headers: { 'Retry-After': '60' } }
-        );
-      }
-      if (!isCached(cacheFilePath)) {
-        void cacheRemoteMedia(targetUrl, cacheFilePath);
-      }
-      return NextResponse.json({ status: 'preloading' }, {
-        headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' }
       });
     }
 
@@ -520,7 +602,7 @@ export async function GET(request: NextRequest) {
           resHeaders.set('Content-Range', `bytes ${start}-${end}/${fileSize}`);
           resHeaders.set('Content-Length', String(chunksize));
 
-          return new NextResponse(Readable.from(fileStream) as any, {
+          return new NextResponse(Readable.from(fileStream) as unknown as BodyInit, {
             status: 206,
             headers: resHeaders
           });
@@ -532,7 +614,7 @@ export async function GET(request: NextRequest) {
         fileStream.once('close', releaseInUse);
         fileStream.once('error', releaseInUse);
 
-        return new NextResponse(Readable.from(fileStream) as any, {
+        return new NextResponse(Readable.from(fileStream) as unknown as BodyInit, {
           status: 200,
           headers: resHeaders
         });
@@ -613,7 +695,7 @@ export async function GET(request: NextRequest) {
       resHeaders.set('Accept-Ranges', response.headers.get('accept-ranges')!);
     }
 
-    return new NextResponse(response.body as any, {
+    return new NextResponse(response.body as unknown as BodyInit, {
       status: response.status,
       headers: resHeaders
     });

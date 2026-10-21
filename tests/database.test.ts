@@ -49,7 +49,9 @@ test('Database Integrity Suite - courses_db.json validation', async (t) => {
     const db = JSON.parse(fs.readFileSync(srcDbPath, 'utf-8'));
     const videoCourses = db.courses.filter((c: any) => c.video_path && c.video_path.trim() !== '');
 
-    assert.strictEqual(videoCourses.length, 478, 'Must have exactly 478 courses with video_path');
+    // 478 until the 2026-10-21 scan, which found a real video page for
+    // id 293 (如何消除煩惱) at /media/隨緣化導/如何消除煩惱LA/video.
+    assert.strictEqual(videoCourses.length, 479, 'Must have exactly 479 courses with video_path');
 
     for (const course of videoCourses) {
       assert.ok(

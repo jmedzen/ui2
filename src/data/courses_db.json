@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-01 20:01:32",
+  "generated_at": "2026-10-21 07:13:42",
   "total_courses": 684,
   "menu_schema": {
     "dharma": {
@@ -15736,10 +15736,10 @@
       "topic_title": "法會與專題開示",
       "location": "美國洛杉磯",
       "time": "2002",
-      "total_episodes": 1,
+      "total_episodes": 2,
       "audio_path": "/media",
-      "video_path": null,
-      "lecture_path": null,
+      "video_path": "/media/隨緣化導/如何消除煩惱LA/video",
+      "lecture_path": "/media/隨緣化導/如何消除煩惱LA/bilu",
       "poster_path": null,
       "comment": null,
       "pdfs": []
@@ -23278,7 +23278,7 @@
       "topic_title": "禪修止觀",
       "location": "三峽西蓮淨苑",
       "time": "1997",
-      "total_episodes": 1,
+      "total_episodes": 2,
       "audio_path": "/media/止觀坐禪/修四念住是中國佛教的希望/audio",
       "video_path": "/media/止觀坐禪/修四念住是中國佛教的希望/video",
       "lecture_path": "/media/止觀坐禪/修四念住是中國佛教的希望/bilu",
@@ -23478,7 +23478,7 @@
       "topic_title": "禪修止觀",
       "location": "美國法雲寺禪學院",
       "time": "2000",
-      "total_episodes": 1,
+      "total_episodes": 2,
       "audio_path": "/media/止觀坐禪/學禪者應具五法/audio",
       "video_path": "/media/止觀坐禪/學禪者應具五法/video",
       "lecture_path": "/media/止觀坐禪/學禪者應具五法/bilu",

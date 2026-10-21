@@ -1,6 +1,6 @@
 {
-  "name": "fyweb",
-  "version": "2.6.30",
+  "name": "ui2",
+  "version": "2.7.0",
   "private": true,
   "engines": {
     "node": ">=24 <25",
@@ -15,7 +15,8 @@
     "lint": "eslint",
     "pretest": "node -e \"const fs=require('fs');fs.mkdirSync('data',{recursive:true});if(!fs.existsSync('data/courses_db.json')&&fs.existsSync('src/data/courses_db.json'))fs.copyFileSync('src/data/courses_db.json','data/courses_db.json')\"",
     "test": "tsx --test tests/*.test.ts",
-    "verify": "tsx tests/full-site-verification.ts"
+    "verify": "tsx tests/full-site-verification.ts",
+    "admin:password": "node scripts/admin-password.mjs"
   },
   "dependencies": {
     "next": "^16.3.8",

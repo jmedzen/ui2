@@ -151,7 +151,7 @@ test('Tree Navigation Hierarchy & Filtering Suite', async (t) => {
   await t.test('media filters correctly partition courses', () => {
     const videoTree = buildTreeData(courses, 'video', '');
     const videoCount = videoTree.reduce((acc, node) => acc + (node.count || 0), 0);
-    assert.strictEqual(videoCount, 478, 'Video filter must return exactly 478 courses');
+    assert.strictEqual(videoCount, 479, 'Video filter must return exactly 479 courses');
 
     const pdfTree = buildTreeData(courses, 'pdf', '');
     const pdfCount = pdfTree.reduce((acc, node) => acc + (node.count || 0), 0);

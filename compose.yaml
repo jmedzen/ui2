@@ -1,7 +1,7 @@
 # Docker Compose Configuration
 # Usage: docker compose up -d
 
-name: fyui2
+name: ui2
 
 services:
   ui2:
@@ -35,8 +35,9 @@ services:
     ports:
       # Bind to loopback only. Publishing 0.0.0.0:8410 let clients reach the
       # app directly and bypass Caddy, which is what made X-Forwarded-For
-      # spoofable and the preload rate limit escapable. Caddy reaches the
-      # service over the compose network and does not need a published port.
+      # spoofable and the preload rate limit escapable. A host-installed Caddy
+      # reaches the service through this loopback port; a Caddy container can
+      # use the compose network instead.
       - "127.0.0.1:8410:8410"
     environment:
       - NODE_ENV=production
@@ -45,14 +46,25 @@ services:
       - MEDIA_CACHE_MAX_BYTES=21474836480 # 20 GB Disk Cache Limit
       - MEDIA_CACHE_MAX_CONCURRENCY=3 # Cap simultaneous background downloads
       - PROXY_PRELOAD_MAX_PER_MINUTE=20 # Per-client preload budget
-      # Trust X-Forwarded-For for rate-limit bucketing. Enable ONLY when every
-      # path into this container passes through a proxy that overwrites the
-      # header (the Caddyfile below does). While unset, all callers share a
-      # single preload budget.
-      # - TRUST_PROXY=1
-      # Set TASK_API_TOKEN to require a bearer token for scan/heal triggers.
-      # When unset, only same-origin browser requests are accepted.
+      # Trust X-Forwarded-For / X-Forwarded-Proto. The published port is bound
+      # to loopback and every external request goes through Caddy, which
+      # overwrites these headers. Without this, admin login sees the upstream
+      # HTTP hop and (correctly) refuses to accept a password in production.
+      - TRUST_PROXY=1
+      # Optional automation credential for cron/CI. Human admin actions use the
+      # password file in ./data/admin.json; this token is never entered in the
+      # browser UI.
       # - TASK_API_TOKEN=change-me
+      # Optional admin tuning:
+      # - ADMIN_SESSION_TTL_MINUTES=720
+      # - ADMIN_ALLOWED_ORIGINS=https://your.domain.example
+      # - ADMIN_ALLOW_INSECURE_HTTP=1  # only for a trusted, isolated LAN
+      # Audit rotation (defaults: 1 MB, five numbered backups):
+      # - ADMIN_AUDIT_MAX_BYTES=1048576
+      # - ADMIN_AUDIT_MAX_FILES=5
+      # Optional fixed TOTP secret. When set it overrides ./data/admin.json
+      # and the web UI cannot manage TOTP; prefer the UI or a Docker secret.
+      # - ADMIN_TOTP_SECRET=CHANGE_ME_BASE32
     volumes:
       - ./data:/app/data
     healthcheck:

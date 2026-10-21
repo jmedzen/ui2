@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import { cleanMediaPath, getOptimalMediaRoute } from '@/lib/speedTester';
+import {
+  cleanMediaPath,
+  getOptimalMediaRoute,
+  triggerBackgroundServerCache
+} from '@/lib/speedTester';
 
 test('Dual-Path Speed Tester & Routing Logic Suite', async (t) => {
   await t.test('cleanMediaPath strips proxy wrappers cleanly', () => {
@@ -32,6 +36,25 @@ test('Dual-Path Speed Tester & Routing Logic Suite', async (t) => {
 
     const rawPercent = '/media/100%講記/a.mp3';
     assert.strictEqual(cleanMediaPath(rawPercent), rawPercent);
+  });
+
+  await t.test('preload warm-up uses POST rather than a prefetchable GET', async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ url: string; method: string }> = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), method: String(init?.method || 'GET') });
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      triggerBackgroundServerCache('/audio/preload-post.mp3');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.strictEqual(calls.length, 1);
+      assert.strictEqual(calls[0].method, 'POST');
+      assert.match(calls[0].url, /action=preload/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 
   await t.test('probe buffers only a bounded chunk and never the whole body', async (t) => {

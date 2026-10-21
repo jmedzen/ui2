@@ -19,23 +19,35 @@ export async function register(): Promise<void> {
   // Only meaningful on the Node.js server; the Edge runtime has no filesystem.
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 
-  const { reclaimOrphanedLock, checkLogDirWritable, getTaskToken, isTaskTokenExplicit } = await import('@/lib/serverTasks');
+  const { reclaimOrphanedLock, checkLogDirWritable, isTaskTokenExplicit } = await import('@/lib/serverTasks');
+  const { readAdminCredential } = await import('@/lib/adminPassword');
 
-  // Report how the task-trigger endpoints are gated. These endpoints spawn
-  // Python processes that rewrite the catalog, so the server now REQUIRES a
-  // token instead of trusting browser-only headers that any HTTP client can
-  // omit. Printing the generated token is what keeps a zero-config deployment
-  // usable: the operator copies it from the boot log, or sets TASK_API_TOKEN.
-  if (isTaskTokenExplicit()) {
-    console.log('[Boot] Task triggers require the configured TASK_API_TOKEN.');
-  } else {
+  // Report the admin authentication state without printing any secret. Human
+  // admin actions (scan/repair) use a password-backed session; TASK_API_TOKEN is
+  // only an optional credential for cron/CI/scripts.
+  const credential = readAdminCredential();
+  if (credential.ok) {
+    console.log(`[Boot] Admin password authentication is enabled (source: ${credential.source}).`);
+    if (credential.updatedAt) {
+      console.log(`[Boot] Admin credential updated at ${credential.updatedAt}.`);
+    }
+    if (credential.warning) {
+      console.warn(`[Boot] ${credential.warning}`);
+    }
+  } else if (credential.reason === 'missing') {
     console.warn(
-      `[Boot] No TASK_API_TOKEN set. Task triggers (scan/repair) are locked behind a ` +
-        `token generated for this boot: ${getTaskToken()}\n` +
-        '       Send it as the X-Task-Token header to use those endpoints. Set TASK_API_TOKEN ' +
-        'to choose a stable value. This limit is deliberate: Fetch Metadata and Origin are ' +
-        'browser-only, so they cannot stop a non-browser client from triggering tasks.'
+      '[Boot] No admin password is configured. Scan/repair actions are disabled until you run ' +
+        '"node scripts/admin-password.mjs" (inside Docker: docker compose exec -it -u node ui2 node scripts/admin-password.mjs) ' +
+        'or set ADMIN_PASSWORD_HASH. Viewing the catalog is unaffected.'
     );
+  } else {
+    console.error(`[Boot] Admin credentials are unavailable or invalid (${credential.reason}): ${credential.message}`);
+  }
+
+  if (isTaskTokenExplicit()) {
+    console.log('[Boot] Automation token is enabled for scripted scan/repair calls (TASK_API_TOKEN).');
+  } else {
+    console.log('[Boot] No automation token configured (TASK_API_TOKEN unset). The admin UI uses password login.');
   }
 
   const probe = checkLogDirWritable();

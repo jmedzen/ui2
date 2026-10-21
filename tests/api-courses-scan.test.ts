@@ -26,13 +26,15 @@ test('API Courses & Scan Endpoints Suite', async (t) => {
     assert.strictEqual(revalRes.status, 304, 'Must return 304 Not Modified when ETag matches');
   });
 
-  await t.test('/api/scan returns scanner status and 20GB cache stats', async () => {
-    const res = await getScan();
+  await t.test('/api/scan returns public status and 20GB cache stats without logs', async () => {
+    const res = await getScan(new Request('http://localhost:8410/api/scan'));
     assert.strictEqual(res.status, 200, 'Must return 200 OK');
 
     const data = await res.json();
     assert.strictEqual(data.status, 'active', 'Scanner status must be active');
-    assert.strictEqual(typeof data.recentLogs, 'string', 'recentLogs must be string');
+    assert.strictEqual(data.logsRestricted, true, 'Anonymous status must not expose logs');
+    assert.strictEqual(typeof data.recentLogs, 'undefined', 'recentLogs must be gated behind admin auth');
+    assert.strictEqual(typeof data.lockHolder, 'undefined', 'lockHolder must be gated behind admin auth');
     assert.strictEqual(data.totalCourses, 684, 'Scanner totalCourses must be 684');
 
     assert.ok(data.cacheStats, 'Must return cacheStats object');

@@ -213,87 +213,176 @@ export function appendLog(line: string): void {
 }
 
 /* ------------------------------------------------------------------ *
- * Authorization for task-triggering endpoints
+ * Automation token and low-privilege preload authorization
  * ------------------------------------------------------------------ */
 
 /**
- * The credential required by every endpoint that spawns a maintenance task.
+ * The optional automation credential (`TASK_API_TOKEN`).
  *
- * Resolution order:
- *  1. `TASK_API_TOKEN`, when the operator sets it (the documented path).
- *  2. Otherwise a random token generated once per boot and printed to the log.
+ * This is for cron/CI/scripts, NOT for the human admin UI. There is no longer a
+ * per-boot generated token: a secret that has to be copied out of a container
+ * log and pasted into a browser is operationally fragile and hard to rotate.
+ * Admin users authenticate with the password/session flow in adminAuth.ts.
  *
- * Falling back to a *generated* token rather than to "no token" is the whole
- * point. The previous behaviour allowed any request that merely omitted Origin
- * and Sec-Fetch-* headers — which a plain `curl -X POST` does — so an anonymous
- * caller could spawn scan_fayun.py / auto_heal_catalog.py and rewrite the
- * catalog. Fetch Metadata cannot repair that: it is a browser feature, and a
- * non-browser client simply does not send it. Origin/Host are equally
- * client-supplied and were being used to *validate themselves*.
- *
- * Keeping the gate on a secret means a public deployment fails closed, and the
- * operator enables the UI deliberately by setting TASK_API_TOKEN.
+ * When the variable is unset, `getTaskToken()` returns an empty string and no
+ * token can authorize anything. Admin endpoints then fail closed unless an
+ * admin password has been configured.
  */
-let generatedTaskToken: string | null = null;
-
-/** True when the operator configured an explicit token. */
 export function isTaskTokenExplicit(): boolean {
   return (process.env.TASK_API_TOKEN || '').trim().length > 0;
 }
 
-/** The token task endpoints require; generated once per boot when unset. */
+/** The explicitly configured automation token, or an empty string. */
 export function getTaskToken(): string {
-  const configured = (process.env.TASK_API_TOKEN || '').trim();
-  if (configured) return configured;
-  if (!generatedTaskToken) {
-    generatedTaskToken = crypto.randomBytes(24).toString('hex');
-  }
-  return generatedTaskToken;
+  return (process.env.TASK_API_TOKEN || '').trim();
 }
 
-/** Test hook: forget a generated token so resolution starts clean. */
-export function resetGeneratedTaskToken(): void {
-  generatedTaskToken = null;
+/**
+ * Constant-time validation of a presented automation token.
+ *
+ * An empty configured token never matches, even if the caller sends an empty
+ * `X-Task-Token` header.
+ */
+export function isValidTaskToken(provided: string): boolean {
+  const expected = getTaskToken();
+  if (!expected || !provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  // Length is compared first because timingSafeEqual throws on a mismatch; the
+  // length itself is not secret.
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 /** A token value from either the dedicated header or `Authorization: Bearer`. */
-function presentedTaskToken(request: Request): string {
+export function presentedTaskToken(request: Request): string {
   const direct = (request.headers.get('x-task-token') || '').trim();
   if (direct) return direct;
   return (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
 }
 
-export function authorizeTaskRequest(request: Request): { ok: true } | { ok: false; status: number; message: string } {
-  // Cheap defence-in-depth first: a browser tells us when a request is
-  // cross-site, and there is never a legitimate cross-site task trigger.
+function isLoopback(host: string): boolean {
+  const bareHost = host.split(':')[0];
+  return bareHost === 'localhost' || bareHost === '127.0.0.1' || bareHost === '::1';
+}
+
+function loopbackPort(host: string): string {
+  const parts = host.split(':');
+  return parts.length > 1 ? parts[1] : '';
+}
+
+/**
+ * Determines whether a request looks like a same-origin browser request.
+ *
+ * This is used ONLY for the low-privilege `action=preload` path. It is not an
+ * authentication primitive for admin endpoints: Origin/Host are request-supplied
+ * and a non-browser client can reproduce them. Admin authorization lives in
+ * adminAuth.ts and requires a session or the automation token.
+ *
+ * Browsers strictly prohibit scripts from spoofing `Sec-Fetch-Site` and
+ * `Origin`, which is sufficient for the rate-limited preload path.
+ */
+export function isSameOrigin(request: Request): boolean {
   const fetchSite = (request.headers.get('sec-fetch-site') || '').toLowerCase();
   if (fetchSite === 'cross-site') {
-    return { ok: false, status: 403, message: 'Cross-site task trigger rejected' };
+    return false;
   }
 
-  const expected = getTaskToken();
+  let reqUrlHost = '';
+  try {
+    reqUrlHost = new URL(request.url).host.toLowerCase();
+  } catch {}
+
+  const origin = request.headers.get('origin');
+  const referer = request.headers.get('referer');
+
+  // If neither Origin nor Referer nor Sec-Fetch-Site is present, it's not a browser request
+  if (!origin && !referer && fetchSite !== 'same-origin') {
+    return false;
+  }
+
+  const candidateOrigins: string[] = [];
+  if (origin) candidateOrigins.push(origin);
+  if (referer) candidateOrigins.push(referer);
+
+  for (const cand of candidateOrigins) {
+    try {
+      const parsed = new URL(cand);
+      const candHost = parsed.host.toLowerCase();
+
+      // Check against request.url host
+      if (reqUrlHost && candHost === reqUrlHost) {
+        return true;
+      }
+
+      // Check loopback equivalence (localhost:8410 vs 127.0.0.1:8410)
+      if (
+        reqUrlHost &&
+        isLoopback(candHost) &&
+        isLoopback(reqUrlHost) &&
+        loopbackPort(candHost) === loopbackPort(reqUrlHost)
+      ) {
+        return true;
+      }
+
+      // Check against x-forwarded-host if present
+      const fwdHost = request.headers.get('x-forwarded-host');
+      if (fwdHost) {
+        const firstFwd = fwdHost.split(',')[0].trim().toLowerCase();
+        if (candHost === firstFwd) {
+          return true;
+        }
+      }
+    } catch {}
+  }
+
+  // If fetchSite is explicitly same-origin and there is no conflicting Origin
+  if (fetchSite === 'same-origin' && !origin) {
+    return true;
+  }
+
+  return false;
+}
+
+export type PreloadAuthResult =
+  | { ok: true }
+  | { ok: false; status: number; message: string };
+
+/**
+ * Authorizes the disk-writing `action=preload` path.
+ *
+ * Preload is triggered automatically by ordinary playback, so it must NOT
+ * depend on an admin login. It is gated by:
+ *  - a browser-declared same-origin check (spoofable by non-browsers, but the
+ *    operation is limited to the fayun.org allowlist and rate-limited), and
+ *  - the optional automation token for non-browser callers.
+ *
+ * Note: an explicitly configured TASK_API_TOKEN does NOT make a token mandatory
+ * for same-origin browsers. Requiring one here broke background cache warm-up
+ * for every viewer once the UI stopped storing the operator token.
+ */
+export function authorizePreloadRequest(request: Request): PreloadAuthResult {
+  // A legitimate cross-site preload does not exist. Check this before accepting
+  // either credential.
+  const fetchSite = (request.headers.get('sec-fetch-site') || '').toLowerCase();
+  if (fetchSite === 'cross-site') {
+    return { ok: false, status: 403, message: 'Cross-site preload rejected' };
+  }
+
   const provided = presentedTaskToken(request);
-
-  if (!provided) {
-    return {
-      ok: false,
-      status: 401,
-      message: isTaskTokenExplicit()
-        ? 'Missing task token'
-        : 'Missing task token. No TASK_API_TOKEN is configured, so this server generated one at ' +
-          'startup — read it from the boot log and send it as the X-Task-Token header. Set ' +
-          'TASK_API_TOKEN to choose your own.'
-    };
+  if (provided) {
+    if (isValidTaskToken(provided)) return { ok: true };
+    return { ok: false, status: 403, message: 'Invalid automation token' };
   }
 
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  // Length is compared first because timingSafeEqual throws on a mismatch; the
-  // length itself is not secret.
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    return { ok: false, status: 403, message: 'Invalid task token' };
-  }
-  return { ok: true };
+  if (isSameOrigin(request)) return { ok: true };
+
+  return {
+    ok: false,
+    status: 401,
+    message:
+      'Preload requires a same-origin browser request or a valid automation token. ' +
+      'Set TASK_API_TOKEN only for non-browser callers.'
+  };
 }
 
 /** Metadata describing who currently holds the maintenance lock. */

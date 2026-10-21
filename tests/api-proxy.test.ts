@@ -1,8 +1,48 @@
+import './helpers/isolated-media-cache';
+
 import test from 'node:test';
 import assert from 'node:assert';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { NextRequest } from 'next/server';
-import { GET } from '@/app/api/proxy/route';
-import { getTaskToken } from '@/lib/serverTasks';
+import { GET, POST } from '@/app/api/proxy/route';
+
+/**
+ * One case below asserts the *unconfigured* admin state (503
+ * ADMIN_NOT_CONFIGURED). It used to inherit whatever the developer's
+ * `data/admin.json` contained, so simply initialising a real admin password
+ * turned the expected 503 into a 401 and failed this suite for an unrelated
+ * reason. The credential sources are now pinned to a path that does not exist.
+ */
+const CREDENTIAL_ENV = [
+  'ADMIN_PASSWORD_HASH',
+  'ADMIN_PASSWORD_HASH_FILE',
+  'ADMIN_PASSWORD_FILE',
+  'ADMIN_TOTP_SECRET',
+  'TASK_API_TOKEN',
+  'ADMIN_AUDIT_LOG'
+] as const;
+
+const savedEnv = Object.fromEntries(CREDENTIAL_ENV.map((key) => [key, process.env[key]]));
+const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'ui2-proxy-unconfigured-'));
+
+// Point the credential loader at a path that definitely does not exist. This is
+// an explicitly configured source, so the loader fails closed instead of
+// reading the developer's real data/admin.json.
+for (const key of CREDENTIAL_ENV) delete (process.env as Record<string, string | undefined>)[key];
+process.env.ADMIN_PASSWORD_FILE = path.join(sandbox, 'absent-admin.json');
+process.env.ADMIN_AUDIT_LOG = 'off';
+
+test.after(() => {
+  const env = process.env as Record<string, string | undefined>;
+  for (const key of CREDENTIAL_ENV) {
+    const value = savedEnv[key];
+    if (value === undefined) delete env[key];
+    else env[key] = value;
+  }
+  fs.rmSync(sandbox, { recursive: true, force: true });
+});
 
 test('API Proxy Security & Routing Suite', async (t) => {
   await t.test('blocks external domains to prevent SSRF (Forbidden 403)', async () => {
@@ -51,15 +91,23 @@ test('API Proxy Security & Routing Suite', async (t) => {
     assert.strictEqual(data.isCached, false, 'Non-existent file must report isCached=false');
   });
 
-  await t.test('action=preload triggers non-blocking cache request', async () => {
-    // A preload persists a remote file to disk, so it requires the task token
-    // (authorizeTaskRequest is fail-closed). Sending it is what the browser does
-    // once the operator has pasted the boot token into Settings.
-    const req = new NextRequest('http://localhost:8410/api/proxy?path=/audio/test_preload.mp3&action=preload', {
-      headers: { 'x-task-token': getTaskToken() }
+  await t.test('action=preload requires POST and triggers cache request', async () => {
+    // Preload is intentionally independent of admin login: ordinary playback
+    // warms the cache. A browser-declared same-origin request is sufficient,
+    // but it must be an explicit POST rather than a prefetchable GET.
+    const getReq = new NextRequest('http://localhost:8410/api/proxy?path=/audio/test_preload.mp3&action=preload', {
+      headers: { origin: 'http://localhost:8410' }
     });
-    const res = await GET(req);
-    assert.strictEqual(res.status, 200, 'action=preload must return 200 JSON');
+    const getRes = await GET(getReq);
+    assert.strictEqual(getRes.status, 405, 'GET preload must be rejected');
+    assert.strictEqual(getRes.headers.get('allow'), 'POST');
+
+    const req = new NextRequest('http://localhost:8410/api/proxy?path=/audio/test_preload.mp3&action=preload', {
+      method: 'POST',
+      headers: { origin: 'http://localhost:8410' }
+    });
+    const res = await POST(req);
+    assert.strictEqual(res.status, 200, 'POST preload must return 200 JSON');
     const data = await res.json();
     assert.strictEqual(data.status, 'preloading', 'Preload status must be preloading');
   });
@@ -100,16 +148,22 @@ test('API Proxy Security & Routing Suite', async (t) => {
     assert.strictEqual(scanRes.status, 403, 'Cross-site scan trigger must be rejected');
 
     // A foreign Origin is no longer a trust signal: Origin and Host are both
-    // client-supplied, so they cannot validate each other. Such a request is
-    // refused for the real reason -- it presents no credential (401) -- rather
-    // than because its Origin looked wrong (403). Asserting 403 here would
-    // re-encode the old, forgeable check as if it were a security boundary.
+    // client-supplied, so they cannot validate each other. The endpoint must
+    // fail closed for an unauthenticated caller.
+    //
+    // The credential source is pinned to an explicitly configured path that
+    // does not exist. That yields a deterministic 503 regardless of whether the
+    // developer has run `scripts/admin-password.mjs` against data/admin.json --
+    // the previous version asserted ADMIN_NOT_CONFIGURED, which silently became
+    // a 401 the moment a real password was deployed. An explicit-but-missing
+    // source must fail closed rather than fall through to some other source.
     const healReq = new Request('http://localhost:8410/api/health-check', {
       method: 'POST',
       headers: { origin: 'https://evil.example.com' }
     });
     const healRes = await healPost(healReq);
-    assert.strictEqual(healRes.status, 401, 'An unauthenticated heal trigger must be rejected');
+    assert.strictEqual(healRes.status, 503, 'An unauthenticated heal trigger must be rejected');
+    assert.strictEqual((await healRes.json()).code, 'ADMIN_UNAVAILABLE');
 
     // A wrong-but-present credential is distinguished from a missing one, and
     // this path spawns no subprocess (it is rejected before the task starts).
