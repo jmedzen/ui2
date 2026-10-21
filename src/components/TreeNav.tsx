@@ -289,7 +289,7 @@ export default function TreeNav({
           onClick={handleBrandClick}
           role="button"
           tabIndex={0}
-          title="點擊回到法雲資訊網首頁"
+          title="點擊回到妙境法軒首頁"
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
@@ -299,7 +299,7 @@ export default function TreeNav({
         >
           <div className="logo-icon">🌸</div>
           <div>
-            <h1 className="brand-title">法雲資訊網</h1>
+            <h1 className="brand-title">妙境法軒</h1>
             <p className="brand-subtitle">玅境長老經典講記講述</p>
           </div>
         </div>

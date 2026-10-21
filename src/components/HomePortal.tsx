@@ -144,7 +144,7 @@ export default function HomePortal({
         <section className="home-hero-card">
           <div className="home-hero-badge">
             <span className="home-hero-flower">🌸</span>
-            <span className="home-hero-tag">法雲資訊網 · 典藏總覽</span>
+            <span className="home-hero-tag">妙境法軒 · 典藏總覽</span>
           </div>
           <h1 className="home-hero-title">課程資料庫尚未載入</h1>
           <p className="home-hero-intro">
@@ -158,7 +158,7 @@ export default function HomePortal({
       <section className="home-hero-card">
         <div className="home-hero-badge">
           <span className="home-hero-flower">🌸</span>
-          <span className="home-hero-tag">法雲資訊網 · 典藏總覽</span>
+          <span className="home-hero-tag">妙境法軒 · 典藏總覽</span>
         </div>
 
         <h1 className="home-hero-title">玅境長老經典講記典藏庫</h1>

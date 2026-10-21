@@ -1015,7 +1015,7 @@ export default function SettingsModal({
 
         <div className="settings-modal-footer">
           <div className="settings-version-tag">
-            <span className="settings-version-label">法雲資訊網典藏系統</span>
+            <span className="settings-version-label">妙境法軒典藏系統</span>
             <span className="settings-version-badge">v{packageInfo.version}</span>
           </div>
           <button className="settings-save-btn" onClick={onClose}>

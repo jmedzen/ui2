@@ -1,4 +1,4 @@
-# 🌸 法雲資訊網 — 典藏課程 Web 平台 (Fayun Web UI)
+# 🌸 妙境法軒 — 典藏課程 Web 平台
 
 一個基於 **Node.js + Next.js App Router + React + TypeScript** 打造的高效能、美觀且功能完備的現代化 Web 瀏覽平台，完整收錄 `fayun.org` 玅境長老一生講述之佛法經論、禪修止觀、戒律與專題開示資料。
 

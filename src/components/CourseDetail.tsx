@@ -867,7 +867,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
               onClick={onGoHome}
               role="button"
               tabIndex={0}
-              title="點擊回到法雲資訊網首頁"
+              title="點擊回到妙境法軒首頁"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
@@ -875,7 +875,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
                 }
               }}
             >
-              法雲資訊網
+              妙境法軒
             </span>
             <span>/</span>
             <span>{course.main_menu_title}</span>

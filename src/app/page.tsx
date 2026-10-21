@@ -110,7 +110,7 @@ function MainLayout({
         {isLoading ? (
           <div className="global-loading">
             <span className="loading-spinner">🌸</span>
-            <p>正在載入法雲資訊網典藏數據庫...</p>
+            <p>正在載入妙境法軒典藏數據庫...</p>
           </div>
         ) : error ? (
           <div className="global-error">
@@ -417,7 +417,7 @@ export default function Home() {
             onClick={handleGoHome}
             role="button"
             tabIndex={0}
-            title="點擊回到法雲資訊網首頁"
+            title="點擊回到妙境法軒首頁"
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
@@ -425,7 +425,7 @@ export default function Home() {
               }
             }}
           >
-            法雲資訊網
+            妙境法軒
           </span>
           <button
             className="settings-open-btn mobile-settings-btn"
