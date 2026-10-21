@@ -3277,6 +3277,27 @@ html, body {
   flex-wrap: wrap;
 }
 
+/* Canonical URL panel: shows the origin that og:url and <link rel=canonical>
+   are built from. Monospace and selectable so it can be copied verbatim. */
+.admin-site-url-value {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: calc(12px * var(--font-scale));
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.admin-site-url-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
 .admin-totp-secret {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

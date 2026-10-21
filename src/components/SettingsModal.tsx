@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ThemeType } from '@/types/course';
 import AdminSecurityPanel from './AdminSecurityPanel';
+import SiteUrlPanel from './SiteUrlPanel';
 import packageInfo from '../../package.json';
 
 function errorMessage(error: unknown): string {
@@ -70,6 +71,9 @@ export default function SettingsModal({
   const [adminPasswordChangeable, setAdminPasswordChangeable] = useState<boolean>(false);
   const [adminTotpEnabled, setAdminTotpEnabled] = useState<boolean>(false);
   const [adminTotpManageable, setAdminTotpManageable] = useState<boolean>(false);
+  const [siteUrl, setSiteUrl] = useState<string>('');
+  const [siteUrlSource, setSiteUrlSource] = useState<'environment' | 'settings' | 'default'>('default');
+  const [siteUrlLocked, setSiteUrlLocked] = useState<boolean>(false);
   const [loginTotpRequired, setLoginTotpRequired] = useState<boolean>(false);
   const [adminTotpCode, setAdminTotpCode] = useState<string>('');
 
@@ -171,6 +175,11 @@ export default function SettingsModal({
     setAdminPasswordChangeable(Boolean(data.passwordChangeable));
     setAdminTotpEnabled(Boolean(data.totpEnabled));
     setAdminTotpManageable(Boolean(data.totpManageable));
+    if (typeof data.siteUrl === 'string') setSiteUrl(data.siteUrl);
+    if (data.siteUrlSource === 'environment' || data.siteUrlSource === 'settings' || data.siteUrlSource === 'default') {
+      setSiteUrlSource(data.siteUrlSource);
+    }
+    setSiteUrlLocked(Boolean(data.siteUrlLocked));
   }, [safeFetchJson]);
 
   const fetchLogs = useCallback(async (): Promise<string | null> => {
@@ -835,7 +844,7 @@ export default function SettingsModal({
                     <span>
                       請在伺服器執行 <code>node scripts/admin-password.mjs</code> 設定密碼後重新整理；
                       若已設定，請檢查啟動日誌中的管理員憑證錯誤。
-                      Docker 環境請使用 <code>docker compose exec -it -u node ui2 node scripts/admin-password.mjs</code>。
+                      Docker 環境請使用 <code>docker compose exec ui2 node scripts/admin-password.mjs</code>。
                     </span>
                     {automationTokenConfigured && (
                       <span className="admin-auth-note">
@@ -864,6 +873,18 @@ export default function SettingsModal({
                       onSessionChanged={async () => {
                         await fetchAdminSession();
                         await fetchLogs();
+                      }}
+                      onNotice={setLocalNotice}
+                    />
+                    <SiteUrlPanel
+                      siteUrl={siteUrl}
+                      source={siteUrlSource}
+                      locked={siteUrlLocked}
+                      fetcher={adminFetchJson}
+                      onSaved={(nextUrl, nextSource) => {
+                        setSiteUrl(nextUrl);
+                        setSiteUrlSource(nextSource);
+                        setSiteUrlLocked(nextSource === 'environment');
                       }}
                       onNotice={setLocalNotice}
                     />

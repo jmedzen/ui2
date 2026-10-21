@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import manifest from '@/app/manifest';
-import { DEFAULT_SITE_URL, SITE_NAME, absoluteUrl, siteUrl } from '@/lib/site';
+import { DEFAULT_SITE_URL, SITE_NAME, absoluteUrl } from '@/lib/site';
 
 /**
  * `layout.tsx` imports globals.css, which the test runner cannot parse, so the
@@ -28,28 +28,12 @@ const LAYOUT_SRC = fs.readFileSync(
 
 const PUBLIC = path.join(process.cwd(), 'public');
 
-test('site identity — the canonical origin is ui2.mahabodhi.co', (t) => {
-  const saved = process.env.SITE_URL;
-  t.after(() => {
-    if (saved === undefined) delete process.env.SITE_URL;
-    else process.env.SITE_URL = saved;
-  });
-
-  delete process.env.SITE_URL;
-  assert.strictEqual(siteUrl(), DEFAULT_SITE_URL);
+test('site identity — the canonical origin defaults to ui2.mahabodhi.co', () => {
   assert.strictEqual(DEFAULT_SITE_URL, 'https://ui2.mahabodhi.co');
 
-  // A bare host is accepted, and a trailing slash or path is normalised away so
-  // og:url never gains a double slash.
-  process.env.SITE_URL = 'example.test';
-  assert.strictEqual(siteUrl(), 'https://example.test');
-  process.env.SITE_URL = 'https://example.test/';
-  assert.strictEqual(siteUrl(), 'https://example.test');
-  process.env.SITE_URL = 'https://example.test/some/path';
-  assert.strictEqual(siteUrl(), 'https://example.test');
-  process.env.SITE_URL = '   ';
-  assert.strictEqual(siteUrl(), DEFAULT_SITE_URL, 'a blank value must fall back');
-
+  // Precedence (env vs the admin-editable file) lives in
+  // tests/site-url-settings.test.ts so it can use a scratch directory; this
+  // file only pins the default and the URL composition rules.
   assert.strictEqual(absoluteUrl('/'), `${DEFAULT_SITE_URL}/`);
   assert.strictEqual(absoluteUrl('/courses'), `${DEFAULT_SITE_URL}/courses`);
 });
@@ -64,7 +48,7 @@ test('site identity — share previews name 妙境法軒, not the upstream archi
   assert.match(LAYOUT_SRC, /url:\s*'\/og-image\.png'/, 'the share image must be declared');
   assert.match(LAYOUT_SRC, /width:\s*1200/);
   assert.match(LAYOUT_SRC, /height:\s*630/, 'a 1.91:1 card avoids letterboxing');
-  assert.match(LAYOUT_SRC, /metadataBase:\s*new URL\(siteUrl\(\)\)/,
+  assert.match(LAYOUT_SRC, /metadataBase:\s*new URL\(origin\)/,
     'without metadataBase the image URL is emitted relative and platforms cannot resolve it');
 
   assert.strictEqual(SITE_NAME, '妙境法軒');
@@ -76,7 +60,11 @@ test('site identity — share previews name 妙境法軒, not the upstream archi
 });
 
 test('site identity — canonical and icon declarations are present', () => {
-  assert.match(LAYOUT_SRC, /canonical:\s*'\/'/, 'a canonical URL prevents duplicate-content previews');
+  assert.match(
+    LAYOUT_SRC,
+    /canonical:\s*absoluteUrl\('\/'\)/,
+    'the canonical URL must be absolute so a domain change cannot leave it relative'
+  );
   assert.match(LAYOUT_SRC, /apple-touch-icon\.png/);
   assert.match(LAYOUT_SRC, /icon-512\.png|icon-192\.png/);
   assert.match(LAYOUT_SRC, /themeColor:\s*'#f7f2e8'/, 'the install banner uses the themed colour');

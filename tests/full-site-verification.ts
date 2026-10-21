@@ -1,4 +1,5 @@
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
+import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import { getCacheStats } from '../src/lib/serverMediaCache';
@@ -129,6 +130,15 @@ async function runFullSiteVerification() {
     });
   }
 
+  /** Path of the generated manifest body, whichever layout this build uses. */
+  const manifestFile = (): string => {
+    const candidates = [
+      path.join(process.cwd(), '.next', 'server', 'app', 'manifest.webmanifest.body'),
+      path.join(process.cwd(), '.next', 'server', 'app', 'manifest.webmanifest')
+    ];
+    return candidates.find((candidate) => fs.existsSync(candidate)) || '';
+  };
+
   // 6. Social share preview + PWA installability.
   //
   // These tags live in the document head, not the page body, so a rename that
@@ -139,47 +149,57 @@ async function runFullSiteVerification() {
     console.log('⏳ [6/6] 驗證社群分享預覽與 PWA 安裝資訊...');
     const { DEFAULT_SITE_URL, SITE_NAME } = await import('../src/lib/site');
 
-    // The prerendered shell carries the injected metadata.
-    const htmlFile = path.join(process.cwd(), '.next', 'server', 'app', 'index.html');
+    // `/` is request-rendered now (the canonical origin is admin-editable), so
+    // it no longer produces .next/server/app/index.html. Verify against a real
+    // server response instead: that is exactly what a crawler receives.
+    const port = 8137;
+    const base = `http://127.0.0.1:${port}`;
+    const server = spawn('npx', ['next', 'start', '-p', String(port)], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        ADMIN_PASSWORD_FILE: path.join(os.tmpdir(), 'ui2-verify-absent-admin.json'),
+        ADMIN_AUDIT_LOG: 'off',
+        SITE_SETTINGS_FILE: path.join(os.tmpdir(), 'ui2-verify-site.json'),
+        // This probe talks plain HTTP over loopback; the app would otherwise
+        // reject it on the same rule that protects real admin logins.
+        ADMIN_ALLOW_INSECURE_HTTP: '1'
+      },
+      stdio: 'ignore',
+      detached: false
+    });
+
     let headHtml = '';
-    if (fs.existsSync(htmlFile)) {
-      headHtml = fs.readFileSync(htmlFile, 'utf-8');
-    } else {
-      // Route handlers/PPR builds keep the shell elsewhere; fall back to any
-      // prerendered html that contains the head.
-      const walk = (dir: string): string => {
-        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-          const full = path.join(dir, entry.name);
-          if (entry.isDirectory()) {
-            const found = walk(full);
-            if (found) return found;
-          } else if (entry.name.endsWith('.html')) {
-            const text = fs.readFileSync(full, 'utf-8');
-            if (text.includes('og:site_name')) return text;
+    try {
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        try {
+          const response = await fetch(base, { signal: AbortSignal.timeout(3000) });
+          if (response.ok) {
+            headHtml = await response.text();
+            break;
           }
+        } catch {
+          // Server not listening yet.
         }
-        return '';
-      };
-      headHtml = walk(path.join(process.cwd(), '.next', 'server', 'app'));
+      }
+    } finally {
+      server.kill('SIGTERM');
     }
 
     const checks: Array<[string, boolean]> = [
+      ['伺服器回應 HTML', headHtml.length > 0],
       ['og:site_name 為妙境法軒', headHtml.includes(`og:site_name" content="${SITE_NAME}"`)],
       ['og:title 含站名', headHtml.includes('og:title') && headHtml.includes(SITE_NAME)],
       ['og:url 絕對網址', headHtml.includes(`og:url" content="${DEFAULT_SITE_URL}`)],
+      ['canonical 絕對網址', headHtml.includes(`rel="canonical" href="${DEFAULT_SITE_URL}`)],
       ['og:image 為 1200x630', headHtml.includes('og:image" content=') && headHtml.includes('og:image:width" content="1200"')],
-      ['twitter card', headHtml.includes('twitter:card')],
-      ['canonical', headHtml.includes('rel="canonical"')]
+      ['twitter card', headHtml.includes('twitter:card')]
     ];
 
-    const manifestFile = path.join(process.cwd(), '.next', 'server', 'app', 'manifest.webmanifest.body');
-    const manifestFileAlt = path.join(process.cwd(), '.next', 'server', 'app', 'manifest.webmanifest');
-    const mf = fs.existsSync(manifestFile)
-      ? manifestFile
-      : fs.existsSync(manifestFileAlt)
-        ? manifestFileAlt
-        : '';
-    const mfText = mf ? fs.readFileSync(mf, 'utf-8') : '';
+    const mfText = fs.existsSync(manifestFile())
+      ? fs.readFileSync(manifestFile(), 'utf-8')
+      : '';
     checks.push(['manifest 已產生', mfText.length > 0]);
     checks.push(['manifest short_name', mfText.includes(SITE_NAME)]);
     checks.push(['manifest 有 512 圖示', mfText.includes('512x512')]);

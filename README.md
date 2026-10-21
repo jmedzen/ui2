@@ -176,7 +176,8 @@ docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name ui2 ui2:latest
 | 變數 | 預設值 | 說明 |
 | --- | --- | --- |
 | `TASK_API_TOKEN` | （未設定） | **僅供排程／CI／腳本**使用的自動化權杖。設定後，`/api/scan` 與 `/api/health-check` 的 POST 可帶 `x-task-token` 或 `Authorization: Bearer`，也可用於讀取受保護的日誌／鎖定資訊。人工操作請使用管理員密碼登入；瀏覽器不再需要、也不會保存此權杖。 |
-| `SITE_URL` | `https://ui2.mahabodhi.co` | 對外正式網址（含協定，不含結尾斜線）。用於產生 `og:url`、`canonical` 與社群分享圖的絕對網址；社群平台**無法**從代理後端推斷公開主機，因此必須與 Caddy 服務的網域一致。部署到測試網域時設為該網域即可，同一份建置不需重編。 |
+| `SITE_URL` | （未設定） | 選填，用來**鎖定**對外正式網址。未設定時，網址由網頁「⚙️ 設定 → 🌐 網站網址」管理，儲存於 `data/site.json`；兩者皆無時使用內建預設 `https://ui2.mahabodhi.co`。**一旦設定此變數即優先於網頁設定**，且網頁欄位會變為唯讀——適合 CI 或唯讀檔案系統的部署。 |
+| `SITE_SETTINGS_FILE` | `<cwd>/data/site.json` | 網頁設定（canonical 網址）的儲存位置。容器內為 `./data` 綁定掛載，重啟後仍保留。 |
 | `ADMIN_PASSWORD_FILE` | `<cwd>/data/admin.json` | 管理員密碼雜湊檔（JSON，權限 `0600`）。由 `npm run admin:password` 或容器內 CLI 建立；檔案內容永遠不含明文密碼。這是唯一可由網頁「變更密碼」寫入的來源。 |
 | `ADMIN_PASSWORD_HASH` | （未設定） | 直接提供 scrypt 雜湊（格式 `scrypt:N:r:p:keylen:salt:hash`）。優先於所有檔案來源，適合唯讀／CI 部署。 |
 | `ADMIN_PASSWORD_HASH_FILE` | （未設定） | 僅含 scrypt 雜湊的檔案路徑；優先於 `ADMIN_PASSWORD_FILE`，適合 Docker secret。 |
@@ -297,11 +298,23 @@ curl -X POST https://your.host/api/scan \
 
    倉庫內的 `Caddyfile` 已備好這兩種模式（預設本機、另一段註解即正式網域），切換時**註解掉 `:443, :8443` 區塊**。切勿在網域站點保留 `tls internal`，否則會把自簽憑證發給公網訪客。
 
-3. **`SITE_URL`**：compose 已預設 `https://ui2.mahabodhi.co`；若實際網域不同，設 `SITE_URL=https://your.domain docker compose up -d` 即可，**不需要重新編譯**。
+3. **設定網址**：登入管理員後，於「⚙️ 設定 → 🔐 帳號安全」下方的 **🌐 網站網址** 填入正式網址即可，**不需要重啟、也不需要重新編譯**。值儲存於 `data/site.json`（權限 `0600`）。
 
-### 為什麼需要 `SITE_URL`
+   若要以環境變數強制鎖定（例如 CI 或唯讀部署），改設 `SITE_URL=https://your.domain`；此時網頁欄位會變為唯讀並標示來源。
 
-`og:url`、`canonical` 與 `og:image` 都必須是**絕對網址**。應用程式位於反向代理之後，無法可靠得知對外主機（`Host` 標頭可被偽造），因此以 `SITE_URL` 明示。若未設定，會退回內建的 `https://ui2.mahabodhi.co`，而不是猜測。
+### 網址優先順序
+
+| 順位 | 來源 | 說明 |
+| --- | --- | --- |
+| 1 | 環境變數 `SITE_URL` | 有設定就勝出，網頁欄位唯讀 |
+| 2 | `data/site.json` | 由管理員網頁設定 |
+| 3 | 內建預設 `https://ui2.mahabodhi.co` | 兩者皆無時使用 |
+
+### 為什麼不能自動推斷
+
+`og:url`、`canonical` 與 `og:image` 都必須是**絕對網址**。應用程式在反向代理之後，`Host` 標頭可由客戶端偽造，因此不能拿來當 canonical；必須由管理員明示。
+
+修改後 `<link rel="canonical">` 與 `og:url` 會在**下一次請求**立即反映（`/` 因此改為請求時渲染）。但社群平台端仍有快取，需依下方說明重新抓取。
 
 ### 驗證分享卡片
 

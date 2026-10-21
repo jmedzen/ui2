@@ -15,6 +15,7 @@ import {
   presentedTaskToken
 } from './serverTasks';
 import { isTrustedProxy } from './clientIp';
+import { resolveSiteUrl } from './site';
 
 /**
  * Authorization for administrative endpoints.
@@ -278,6 +279,15 @@ export interface AdminAuthStatus {
   totpEnabled: boolean;
   /** False for environment-managed TOTP and read-only password sources. */
   totpManageable: boolean;
+  /**
+   * Canonical origin behind og:url and <link rel="canonical">, surfaced here so
+   * the settings panel renders from one already-fetched payload instead of
+   * opening its own request/effect.
+   */
+  siteUrl: string;
+  siteUrlSource: 'environment' | 'settings' | 'default';
+  /** True when SITE_URL pins the origin and the panel must be read-only. */
+  siteUrlLocked: boolean;
   error?: 'invalid' | 'unavailable';
 }
 
@@ -285,6 +295,7 @@ export interface AdminAuthStatus {
 export function getAdminAuthStatus(request: Request): AdminAuthStatus {
   const credential = readAdminCredential();
   const tokenConfigured = isTaskTokenExplicit();
+  const siteUrlValue = resolveSiteUrl();
 
   if (!credential.ok) {
     return {
@@ -295,6 +306,9 @@ export function getAdminAuthStatus(request: Request): AdminAuthStatus {
       passwordChangeable: false,
       totpEnabled: false,
       totpManageable: false,
+      siteUrl: siteUrlValue.origin,
+      siteUrlSource: siteUrlValue.source,
+      siteUrlLocked: siteUrlValue.source === 'environment',
       ...(credential.reason === 'missing' ? {} : { error: credential.reason })
     };
   }
@@ -311,7 +325,10 @@ export function getAdminAuthStatus(request: Request): AdminAuthStatus {
     totpManageable:
       authenticated &&
       credential.source === 'ADMIN_PASSWORD_FILE' &&
-      !isAdminTotpEnvConfigured()
+      !isAdminTotpEnvConfigured(),
+    siteUrl: siteUrlValue.origin,
+    siteUrlSource: siteUrlValue.source,
+    siteUrlLocked: siteUrlValue.source === 'environment'
   };
 }
 
