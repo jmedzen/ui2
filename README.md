@@ -208,9 +208,17 @@ docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name ui2 ui2:latest
 # 原始碼環境
 npm run admin:password
 
-# Docker（務必以 node 使用者執行，否則 0600 檔案會無法被應用程式讀取）
-docker compose exec -it -u node ui2 node scripts/admin-password.mjs
+# Docker：直接執行即可
+docker compose exec ui2 node scripts/admin-password.mjs
 ```
+
+> **容器內不需要 `-u node`。** 映像檔刻意不設 `USER node`：entrypoint 需要 root 來校正 bind mount 的 `./data` 擁有者，之後才用 su-exec 降權執行應用程式。因此 `docker compose exec` 進去的 shell 本來就是 root。
+>
+> 以 root 執行時，腳本寫完 `0600` 檔案後會自動 `chown` 給應用程式實際使用的使用者（預設 `node`，uid 1000），所以檔案一定讀得到。若容器內沒有 `node` 帳號，可用 `ADMIN_FILE_OWNER=uid:gid` 指定，或先 `chown` 後再登入。
+>
+> 舊版腳本會直接以「Refusing to write as root」中止，並叫你回主機改用 `-u node` 重跑 —— 但人在容器內時這條指令無效，等於無法初始化密碼。現已修正。
+>
+> 若你已經用舊版寫出 root 擁有的 `data/admin.json`，`docker compose restart ui2` 就會由 entrypoint 自動修正擁有者。
 
 腳本會隱藏輸入並要求確認，只把 scrypt 雜湊寫入 `data/admin.json`（權限 `0600`）。變更密碼後，既有工作階段會因雜湊指紋不符而立即失效。若要以唯讀環境變數部署，可用 `npm run admin:password -- --hash` 產生 `ADMIN_PASSWORD_HASH` 的值。
 
@@ -225,10 +233,10 @@ docker compose exec -it -u node ui2 node scripts/admin-password.mjs
 ```bash
 # Docker：先停用 TOTP，再重新登入網頁
 # （若設定了 ADMIN_TOTP_SECRET，請先從部署環境移除，否則環境值仍會覆寫檔案）
-docker compose exec -it -u node ui2 node scripts/admin-password.mjs --disable-totp
+docker compose exec ui2 node scripts/admin-password.mjs --disable-totp
 
 # 也可重新產生一組密鑰
-docker compose exec -it -u node ui2 node scripts/admin-password.mjs --enable-totp
+docker compose exec ui2 node scripts/admin-password.mjs --enable-totp
 ```
 
 5. 自動化排程仍可使用 `TASK_API_TOKEN`：

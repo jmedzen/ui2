@@ -65,6 +65,13 @@ services:
       # Optional fixed TOTP secret. When set it overrides ./data/admin.json
       # and the web UI cannot manage TOTP; prefer the UI or a Docker secret.
       # - ADMIN_TOTP_SECRET=CHANGE_ME_BASE32
+      # Account the password CLI hands ./data/admin.json to when it runs as
+      # root. There is no `user:` above and the image has no USER node, so
+      # `docker compose exec` gives you a root shell; the CLI then chowns the
+      # 0600 credential to this account so the unprivileged app can read it.
+      # Defaults to the image's "node" user (uid 1000). Override only if your
+      # setup runs the app as a different uid.
+      # - ADMIN_FILE_OWNER=1000:1000
     volumes:
       - ./data:/app/data
     healthcheck:

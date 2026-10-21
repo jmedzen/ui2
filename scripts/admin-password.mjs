@@ -14,14 +14,18 @@
  *   printf '%s\n' 'correct horse battery staple' | node scripts/admin-password.mjs --stdin
  *   node scripts/admin-password.mjs --delete
  *
- * Inside Docker, run as the app user so the 0600 file remains readable:
- *   docker compose exec -it -u node ui2 node scripts/admin-password.mjs
+ * Inside Docker, just run it:
+ *   docker compose exec ui2 node scripts/admin-password.mjs
+ * The shell is root (the image has no USER node), so the script hands the
+ * 0600 file to the app account (node, uid 1000) after writing it.
  */
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+
+import { resolveCredentialOwner } from './credential-owner.mjs';
 
 const DEFAULT_N = 32768;
 const DEFAULT_R = 8;
@@ -64,6 +68,8 @@ Environment (read precedence, highest first):
   ADMIN_PASSWORD_HASH_FILE   A file containing only the raw hash
   ADMIN_PASSWORD_FILE        Credential JSON path (default: data/admin.json)
   ADMIN_TOTP_SECRET          Optional base32 TOTP secret; overrides the file
+  ADMIN_FILE_OWNER           Account to own the file when run as root
+                             (default: the "node" account; e.g. 1000:1000)
 
 Do not pass a password as a command-line argument; it would be visible in the
 process list and shell history.
@@ -411,17 +417,106 @@ function fileModeWarning(file) {
   return null;
 }
 
-function writeCredentialFile(file, hash, totpSecret = null, totpUpdatedAt = null) {
-  if (typeof process.getuid === 'function' && process.getuid() === 0) {
-    throw new Error(
-      'Refusing to write as root: the app runs as the unprivileged node user and ' +
-        'would not be able to read a root-owned 0600 file. Re-run with ' +
-        '"docker compose exec -it -u node ui2 node scripts/admin-password.mjs" ' +
-        'or as the application user.'
+/**
+ * Hand the credential file (and the data directory, if this run created it) to
+ * the account the app actually runs as.
+ *
+ * Running as root is legitimate here: the image has no `USER node`, so
+ * `docker compose exec` opens a root shell, and root is the only identity that
+ * can give the file to uid 1000. What is NOT acceptable is leaving a
+ * root-owned 0600 file behind, because the unprivileged app then cannot read
+ * it and every login fails with ADMIN_UNAVAILABLE.
+ */
+function transferOwnership(file, dir, createdDir) {
+  if (typeof process.getuid !== 'function' || process.getuid() !== 0) return null;
+
+  let passwdText = '';
+  try {
+    passwdText = fs.readFileSync('/etc/passwd', 'utf8');
+  } catch {
+    /* Non-POSIX platform: fall through to the warning below. */
+  }
+
+  const owner = resolveCredentialOwner({
+    env: process.env,
+    passwdText
+  });
+  if (!owner) {
+    return (
+      'could not find an account to own the file (no "node" user in /etc/passwd). ' +
+      'Set ADMIN_FILE_OWNER=uid:gid, or chown the file to the app uid manually.'
     );
   }
 
+  try {
+    fs.chownSync(file, owner.uid, owner.gid);
+  } catch (e) {
+    return (
+      `could not chown the file to uid ${owner.uid} / gid ${owner.gid}: ${e.message}. ` +
+      `Run as: chown ${owner.uid}:${owner.gid} <file>`
+    );
+  }
+
+  // Only when this invocation created the directory; an existing data/ is owned
+  // by the entrypoint and may be shared with the catalog and logs.
+  if (createdDir) {
+    try {
+      fs.chownSync(dir, owner.uid, owner.gid);
+    } catch {
+      /* The file itself is what matters; the directory already exists. */
+    }
+  }
+
+  return { owner };
+}
+
+/**
+ * Warn when the credential is readable by whoever ran this check but NOT by the
+ * account the app runs as.
+ *
+ * Only meaningful as root: a normal user cannot inspect a 0600 file it does not
+ * own, and there the app and the operator are the same account.
+ */
+function appReadabilityWarning(file) {
+  if (typeof process.getuid !== 'function' || process.getuid() !== 0) return null;
+
+  let passwdText = '';
+  try {
+    passwdText = fs.readFileSync('/etc/passwd', 'utf8');
+  } catch {
+    return null;
+  }
+  const owner = resolveCredentialOwner({ env: process.env, passwdText });
+  if (!owner) return null;
+
+  let stat;
+  try {
+    stat = fs.statSync(file);
+  } catch {
+    return null;
+  }
+  if (stat.uid === owner.uid) return null;
+
+  // The credential is written 0600, so only the owning uid can read it. Group
+  // and other bits are checked anyway in case an operator loosened them.
+  const mode = stat.mode & 0o777;
+  const appCanRead =
+    stat.uid === owner.uid ||
+    (stat.gid === owner.gid && (mode & 0o040) !== 0) ||
+    (mode & 0o004) !== 0;
+  if (appCanRead) return null;
+
+  return (
+    `${file} is owned by uid ${stat.uid} (mode ${mode.toString(8)}) but the app runs as ` +
+    `${owner.name} (uid ${owner.uid}), which cannot read it — logins will fail with ` +
+    `ADMIN_UNAVAILABLE. Fix with: chown ${owner.uid}:${owner.gid} ${file} ` +
+    '(or re-run this password command, which now does it automatically).'
+  );
+}
+
+function writeCredentialFile(file, hash, totpSecret = null, totpUpdatedAt = null) {
   const dir = path.dirname(file);
+  const createdDir = !fs.existsSync(dir);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 
   const payload = JSON.stringify(
@@ -451,10 +546,31 @@ function writeCredentialFile(file, hash, totpSecret = null, totpUpdatedAt = null
   }
 
   fs.chmodSync(temp, 0o600);
+  // chown BEFORE the rename so the file is never briefly root-owned at its
+  // final path, where the app could read it during a concurrent request.
+  const ownership = transferOwnership(temp, dir, createdDir);
   fs.renameSync(temp, file);
   try {
     fs.chmodSync(file, 0o600);
   } catch {}
+
+  reportOwnership(file, ownership);
+  return ownership;
+}
+
+/**
+ * Tell the operator what happened to the file's owner, and say so loudly when
+ * running as root left it unreadable by the app.
+ */
+function reportOwnership(file, ownership) {
+  if (ownership === null) return;
+  if (typeof ownership === 'object' && ownership.owner) {
+    const { name, uid, gid } = ownership.owner;
+    console.log(`   Owner set to ${name} (${uid}:${gid}) so the app can read it.`);
+    return;
+  }
+  console.warn(`⚠️  ${file} was written as root. ${ownership}`);
+  console.warn('   The app runs unprivileged and may fail to read it (ADMIN_UNAVAILABLE).');
 }
 
 async function main() {
@@ -478,6 +594,13 @@ async function main() {
       const warning = fileModeWarning(credential.file);
       if (warning) console.warn(`⚠️  ${credential.file}: ${warning}`);
       else console.log(`   ${credential.file} has restrictive permissions.`);
+
+      // A credential that is valid here can still be unreadable by the app: as
+      // root every file is readable, so --check would report success on a file
+      // the unprivileged app cannot open. That mismatch is exactly what makes
+      // the UI answer ADMIN_UNAVAILABLE right after a "successful" setup.
+      const ownerWarning = appReadabilityWarning(credential.file);
+      if (ownerWarning) console.warn(`⚠️  ${ownerWarning}`);
     }
     return;
   }

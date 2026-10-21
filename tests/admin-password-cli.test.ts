@@ -101,3 +101,73 @@ test('admin-password CLI — TOTP enrollment survives password changes and can b
   const afterDisable = JSON.parse(fs.readFileSync(file, 'utf-8'));
   assert.strictEqual(afterDisable.totpSecret, undefined);
 });
+
+/**
+ * Running as root inside the container.
+ *
+ * The image has no `USER node` (the entrypoint needs root to align the
+ * bind-mounted ./data volume), so `docker compose exec` opens a ROOT shell. The
+ * CLI used to refuse outright, and its message told the operator to re-run from
+ * the host with `-u node` — useless advice when they are already inside the
+ * container. Root is now allowed, but it must hand the 0600 file to the account
+ * the app actually runs as, otherwise every login fails with ADMIN_UNAVAILABLE.
+ */
+test('admin-password CLI — root resolution picks an account the app can read as', async () => {
+  const { resolveCredentialOwner } = await import('../scripts/credential-owner.mjs');
+
+  const alpine = [
+    'root:x:0:0:root:/root:/bin/ash',
+    'bin:x:1:1:bin:/bin:/sbin/nologin',
+    'node:x:1000:1000:Linux User,,,:/home/node:/bin/sh'
+  ].join('\n');
+
+  assert.deepStrictEqual(resolveCredentialOwner({ env: {}, passwdText: alpine }), {
+    uid: 1000,
+    gid: 1000,
+    name: 'node'
+  });
+
+  // Explicit overrides win, and a bare uid reuses it as the gid.
+  assert.deepStrictEqual(
+    resolveCredentialOwner({ env: { ADMIN_FILE_OWNER: '1000:1000' }, passwdText: alpine }),
+    { uid: 1000, gid: 1000, name: '1000:1000' }
+  );
+  assert.deepStrictEqual(
+    resolveCredentialOwner({ env: { ADMIN_FILE_OWNER: '1001' }, passwdText: alpine }),
+    { uid: 1001, gid: 1001, name: '1001' }
+  );
+  assert.deepStrictEqual(
+    resolveCredentialOwner({ env: { ADMIN_FILE_OWNER: 'node' }, passwdText: alpine }),
+    { uid: 1000, gid: 1000, name: 'node' }
+  );
+
+  // No "node" account (a plain host or a differently-named image user): the
+  // caller must warn rather than guess an owner.
+  assert.strictEqual(
+    resolveCredentialOwner({ env: {}, passwdText: 'root:x:0:0:root:/root:/bin/sh' }),
+    null
+  );
+  // An override naming a missing account is also null, never a silent no-op.
+  assert.strictEqual(
+    resolveCredentialOwner({ env: { ADMIN_FILE_OWNER: 'nosuch' }, passwdText: alpine }),
+    null
+  );
+});
+
+test('admin-password CLI — writing as root is no longer refused outright', () => {
+  const src = fs.readFileSync(SCRIPT, 'utf-8');
+  // The old guard aborted before writing anything when uid was 0.
+  assert.doesNotMatch(
+    src,
+    /Refusing to write as root/,
+    'root must be allowed so the file can be handed to the app account'
+  );
+  // It must still transfer ownership, not merely "allow root".
+  assert.match(src, /function transferOwnership/, 'root writes must chown the file');
+  assert.match(src, /resolveCredentialOwner\(/, 'the target account must be resolved');
+  assert.match(
+    src,
+    /const ownership = transferOwnership\(temp, dir, createdDir\);\s*\n\s*fs\.renameSync\(temp, file\);/,
+    'chown must happen before the atomic rename, so the file is never root-owned at its final path'
+  );
+});
