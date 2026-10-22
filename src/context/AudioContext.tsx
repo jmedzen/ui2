@@ -2,6 +2,19 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import { triggerBackgroundServerCache, getOptimalMediaRoute, fetchCacheStatus } from '@/lib/speedTester';
+import {
+  readProgressMap,
+  saveProgressMap,
+  setEpisodeProgress as recordEpisodeProgress,
+  getEpisodeProgress,
+  resumeTimeFor,
+  readPlayerPrefs,
+  savePlayerPrefs,
+  nextRepeatMode as computeNextRepeatMode,
+  type ProgressMap,
+  type RepeatMode,
+  type SleepTimerState
+} from '@/lib/playbackStore';
 
 export interface PlayingTrack {
   courseId: number;
@@ -24,7 +37,19 @@ interface AudioContextType {
   volume: number;
   isMuted: boolean;
   isExpanded: boolean;
-  playTrack: (courseTitle: string, courseId: number, tracks: { filename: string; proxyUrl: string; url: string; index: number }[], trackIndex: number) => void;
+  /** Reserved resume point for the current episode, 0 when none. */
+  resumeAt: number;
+  /** Clears the stored position for the current episode. */
+  clearResume: () => void;
+  repeatMode: RepeatMode;
+  cycleRepeatMode: () => void;
+  sleepTimer: SleepTimerState;
+  /** Arms a stop at `minutes` from now; 0 disarms. */
+  setSleepMinutes: (minutes: number) => void;
+  /** Arms a stop at the end of the current episode. */
+  setSleepEndOfEpisode: () => void;
+  cancelSleepTimer: () => void;
+  playTrack: (courseTitle: string, courseId: number, tracks: { filename: string; proxyUrl: string; url: string; index: number }[], trackIndex: number, startAt?: number) => void;
   togglePlay: () => void;
   playNext: () => void;
   playPrev: () => void;
@@ -74,11 +99,63 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
 
-  const playlistRef = useRef<PlayingTrack[]>(playlist);
-  playlistRef.current = playlist;
+  /**
+   * Listening progress, repeat mode and the sleep timer.
+   *
+   * All three are seeded with defaults and hydrated in a mount effect rather
+   * than a `useState` initialiser: this provider is server-rendered, so reading
+   * `localStorage` during render would produce a hydration mismatch between the
+   * server's defaults and the client's stored values.
+   */
+  const [resumeAt, setResumeAt] = useState<number>(0);
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>('all');
+  const [sleepTimer, setSleepTimer] = useState<SleepTimerState>({ endsAt: null, endOfEpisode: false });
 
+  /**
+   * The progress map is never rendered — it is read only when a track starts
+   * and written on a throttled interval — so it lives in a ref rather than in
+   * state. Holding it in state re-rendered this provider and every audio
+   * consumer once every five seconds during playback, for no visual change.
+   */
+  const progressMapRef = useRef<ProgressMap>({});
+
+  /**
+   * Ref mirrors for the two settings the one-shot `ended` handler reads.
+   *
+   * That handler is registered once on the element and cannot depend on React
+   * state without re-attaching every listener on each change, so both values
+   * are mirrored here and read at call time.
+   */
+  const repeatModeRef = useRef<RepeatMode>(repeatMode);
+  const sleepTimerRef = useRef<SleepTimerState>(sleepTimer);
+  useEffect(() => {
+    repeatModeRef.current = repeatMode;
+  }, [repeatMode]);
+  useEffect(() => {
+    sleepTimerRef.current = sleepTimer;
+  }, [sleepTimer]);
+
+  /**
+   * Mirrors of `playlist` / `currentTrack` for the callbacks that must not
+   * depend on them.
+   *
+   * Written from an effect rather than during render: assigning a ref while
+   * rendering is unsafe under concurrent rendering (a render that is thrown away
+   * would still have mutated the ref) and is rejected by the hooks lint rules.
+   *
+   * The effects sit above the hydration effect on purpose — effects run in
+   * declaration order, so these values are already current when it reads them.
+   */
+  const playlistRef = useRef<PlayingTrack[]>(playlist);
   const currentTrackRef = useRef<PlayingTrack | null>(currentTrack);
-  currentTrackRef.current = currentTrack;
+
+  useEffect(() => {
+    playlistRef.current = playlist;
+  }, [playlist]);
+
+  useEffect(() => {
+    currentTrackRef.current = currentTrack;
+  }, [currentTrack]);
 
   /**
    * The chosen speed, readable from the element-creation effect and the media
@@ -130,12 +207,20 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   // Restore last played track from localStorage on mount
   useEffect(() => {
+    let restoredTrack: PlayingTrack | null = null;
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.currentTrack) {
-          setCurrentTrack(parsed.currentTrack);
+          restoredTrack = parsed.currentTrack as PlayingTrack;
+          // State writes in an effect are correct here: the value lives in
+          // localStorage, which is an external system that cannot be read during
+          // render without a hydration mismatch. This is the documented
+          // "synchronise with an external store" case, not a render cascade, and
+          // the effect runs once on mount.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setCurrentTrack(restoredTrack);
           if (parsed.playlist) setPlaylist(parsed.playlist);
         }
       }
@@ -146,7 +231,110 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.warn('Failed to load last played track from localStorage:', e);
     }
-  }, []);
+
+    // Listening progress, speed/volume and the repeat mode are hydrated here
+    // (not in a useState initialiser) so the server-rendered markup and the
+    // first client render agree. A stored speed is applied to the element as
+    // soon as it exists, for the same reason as the line above.
+    const storedPrefs = readPlayerPrefs();
+    setPlaybackRate(storedPrefs.rate);
+    setVolume(storedPrefs.volume);
+    setIsMuted(storedPrefs.muted);
+    setRepeatMode(storedPrefs.repeat);
+    applyElementPlaybackRate(audioRef.current, storedPrefs.rate);
+    applyElementVolume(audioRef.current, storedPrefs.volume, storedPrefs.muted);
+
+    const storedProgress = readProgressMap();
+    progressMapRef.current = storedProgress;
+
+    // Offer to resume the episode that was last played, so a reload lands on
+    // the right spot instead of the top of a 40-minute lecture.
+    //
+    // Reads the track parsed above, not `currentTrackRef`: the ref is now
+    // updated by an effect that runs *after* this one, and `setCurrentTrack` in
+    // this same effect has not rendered yet either, so the ref still held null
+    // here and the resume hint never appeared on a fresh load.
+    const restored = restoredTrack;
+    if (restored) {
+      const entry = getEpisodeProgress(storedProgress, restored.courseId, restored.filename);
+      setResumeAt(resumeTimeFor(entry));
+    }
+  }, [applyElementVolume]);
+
+  /**
+   * Persists the playhead for the current episode.
+   *
+   * Called from a throttled interval rather than on every `timeupdate` event:
+   * the event fires ~4x/second and each write is a synchronous JSON
+   * serialisation of the whole map plus a `localStorage` write on the main
+   * thread, which is exactly the kind of work that causes dropouts during
+   * playback on a low-end phone.
+   */
+  useEffect(() => {
+    const track = currentTrackRef.current;
+    if (!track) return;
+    let lastSaved = 0;
+
+    const persist = (force = false) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      const position = audio.currentTime;
+      const total = audio.duration;
+      if (!Number.isFinite(position) || position <= 0) return;
+
+      const now = Date.now();
+      if (!force && now - lastSaved < 5000) return;
+      lastSaved = now;
+
+      const prev = progressMapRef.current;
+      const next = recordEpisodeProgress(
+        prev,
+        track.courseId,
+        track.filename,
+        position,
+        Number.isFinite(total) ? total : 0,
+        now
+      );
+      if (next === prev) return;
+      progressMapRef.current = next;
+      saveProgressMap(next);
+    };
+
+    const interval = setInterval(() => persist(), 5000);
+
+    // A `pagehide`/`visibilitychange` write catches the common "tab closed or
+    // phone locked mid-lecture" case that the interval would miss by up to 5s.
+    const handleHide = () => persist(true);
+    const handleVisibility = () => {
+      if (document.hidden) persist(true);
+    };
+    window.addEventListener('pagehide', handleHide);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      persist(true);
+      clearInterval(interval);
+      window.removeEventListener('pagehide', handleHide);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [currentTrack?.courseId, currentTrack?.filename]);
+
+  // Persist speed / volume / mute / repeat whenever one of them changes.
+  const prefsHydratedRef = useRef<boolean>(false);
+  useEffect(() => {
+    // The first pass runs with the defaults and would overwrite the stored
+    // preferences with them before the hydration effect above reads the file.
+    if (!prefsHydratedRef.current) {
+      prefsHydratedRef.current = true;
+      return;
+    }
+    savePlayerPrefs({
+      rate: playbackRate,
+      volume,
+      muted: isMuted,
+      repeat: repeatMode
+    });
+  }, [playbackRate, volume, isMuted, repeatMode]);
 
   // Save state to localStorage
   useEffect(() => {
@@ -165,9 +353,20 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentTrack, playlist]);
 
+  /**
+   * The two fields the polling effect reads.
+   *
+   * Named separately so the effect can depend on exactly what changes its
+   * behaviour. The object identity of `currentTrack` changes on every cache
+   * update (the poll itself rebuilds it), so depending on it would restart the
+   * interval each time — the timer would never reach its second tick.
+   */
+  const currentProxyUrl = currentTrack?.proxyUrl;
+  const isCurrentCached = currentTrack?.isServerCached ?? false;
+
   // Dynamic Cache Status Polling for Current Track
   useEffect(() => {
-    if (!currentTrack || currentTrack.isServerCached) return;
+    if (!currentProxyUrl || isCurrentCached) return;
 
     let isMounted = true;
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -186,7 +385,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     };
 
     const check = async () => {
-      const isCached = await fetchCacheStatus(currentTrack.proxyUrl);
+      const isCached = await fetchCacheStatus(currentProxyUrl);
       if (isCached) markCached();
     };
 
@@ -200,7 +399,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const handleVisibility = () => {
       if (document.hidden) {
         stopPolling();
-      } else if (!currentTrack.isServerCached) {
+      } else if (!isCurrentCached) {
         startPolling();
       }
     };
@@ -214,7 +413,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [currentTrack?.proxyUrl, currentTrack?.isServerCached]);
+  }, [currentProxyUrl, isCurrentCached]);
 
   // Audio HTML5 element lifecycle & event listeners
   useEffect(() => {
@@ -242,25 +441,63 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     const handleEnded = () => {
       setIsPlaying(false);
+
+      // A sleep timer that was armed "at end of episode" stops here, before any
+      // auto-advance: the point of the feature is to fall asleep to one talk,
+      // not to start the next one an hour later.
+      if (sleepTimerRef.current.endOfEpisode) {
+        setSleepTimer({ endsAt: null, endOfEpisode: false });
+        return;
+      }
+
       const curr = currentTrackRef.current;
       const list = playlistRef.current;
+
+      // Single-episode repeat restarts the same track instead of advancing.
+      if (curr && repeatModeRef.current === 'one') {
+        const reqId = ++playRequestIdRef.current;
+        Promise.all([
+          getOptimalMediaRoute(curr.proxyUrl, curr.url),
+          fetchCacheStatus(curr.proxyUrl)
+        ]).then(([routeRes, isCached]) => {
+          if (!isMountedRef.current || reqId !== playRequestIdRef.current) return;
+          setCurrentTrack({ ...curr, activeRoute: routeRes.route, isServerCached: isCached });
+          if (audioRef.current) {
+            audioRef.current.src = routeRes.activeUrl;
+            applyElementPlaybackRate(audioRef.current, playbackRateRef.current);
+            audioRef.current.load();
+            audioRef.current
+              .play()
+              .then(() => setIsPlaying(true))
+              .catch(() => setIsPlaying(false));
+          }
+        });
+        return;
+      }
+
       if (curr && list.length > 0) {
         // Resolve the next episode by index VALUE rather than by array
         // position, so a playlist whose indices are not contiguous (a filtered
         // list) still advances to the intended episode.
         const nextTrack =
           list.find((t) => t.index === curr.index + 1) ?? list[curr.index + 1];
-        if (nextTrack) {
+        // "No repeat" stops at the end of the playlist; repeat-all wraps.
+        const wrapped =
+          !nextTrack && repeatModeRef.current === 'all' && list.length > 1
+            ? list.find((t) => t.index === 0) ?? list[0]
+            : null;
+        const target = nextTrack ?? wrapped;
+        if (target) {
           const reqId = ++playRequestIdRef.current;
-          triggerBackgroundServerCache(nextTrack.proxyUrl);
+          triggerBackgroundServerCache(target.proxyUrl);
 
           Promise.all([
-            getOptimalMediaRoute(nextTrack.proxyUrl, nextTrack.url),
-            fetchCacheStatus(nextTrack.proxyUrl)
+            getOptimalMediaRoute(target.proxyUrl, target.url),
+            fetchCacheStatus(target.proxyUrl)
           ]).then(([routeRes, isCached]) => {
             if (!isMountedRef.current || reqId !== playRequestIdRef.current) return;
             const updatedTrack: PlayingTrack = {
-              ...nextTrack,
+              ...target,
               activeRoute: routeRes.route,
               isServerCached: isCached
             };
@@ -305,7 +542,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     courseTitle: string,
     courseId: number,
     tracks: { filename: string; proxyUrl: string; url: string; index: number }[],
-    trackIndex: number
+    trackIndex: number,
+    startAt?: number
   ) => {
     // Preserve the caller's `index` instead of overwriting it with the array
     // position. The two coincide only while callers always pass the unfiltered
@@ -331,6 +569,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setIsExpanded(true);
     setPlaylist(formattedPlaylist);
 
+    // Resolve where to start: an explicit `startAt` (used by the "continue
+    // listening" card and by deep links) wins; otherwise resume the stored
+    // position of that episode when it is worth resuming.
+    const stored = getEpisodeProgress(progressMapRef.current, courseId, targetTrack.filename);
+    const resumePoint = typeof startAt === 'number' && startAt > 0 ? startAt : resumeTimeFor(stored);
+    setResumeAt(resumePoint);
+
     const reqId = ++playRequestIdRef.current;
 
     // Initial cache status check & dual-path speed evaluation
@@ -351,6 +596,21 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         applyElementPlaybackRate(audioRef.current, playbackRateRef.current);
         applyElementVolume(audioRef.current, volume, isMuted);
         audioRef.current.load();
+
+        // Seeking before metadata has loaded either throws or is discarded by
+        // the browser, so apply the resume point once the element knows its
+        // timeline. `loadedmetadata` is guaranteed to fire after load() here.
+        if (resumePoint > 0) {
+          const audio = audioRef.current;
+          const seekOnce = () => {
+            audio.removeEventListener('loadedmetadata', seekOnce);
+            try {
+              audio.currentTime = resumePoint;
+              setCurrentTime(resumePoint);
+            } catch {}
+          };
+          audio.addEventListener('loadedmetadata', seekOnce);
+        }
 
         audioRef.current
           .play()
@@ -503,6 +763,75 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     setIsExpanded((prev) => !prev);
   }, []);
 
+  /* ---------------------------------------------------------------- *
+   * Sleep timer, repeat mode and resume controls
+   * ---------------------------------------------------------------- */
+
+  /**
+   * Countdown for a clock-based sleep timer.
+   *
+   * A single `setTimeout` for the full interval is not enough: laptops and
+   * phones throttle timers in background tabs and suspend entirely when the
+   * screen locks, so a 90-minute timeout can fire hours late. This ticks once a
+   * second while an end time is armed and stops as soon as the deadline passes,
+   * which also keeps the displayed remaining time accurate after a wake-up.
+   */
+  useEffect(() => {
+    if (!sleepTimer.endsAt) return;
+
+    let stopped = false;
+    const check = () => {
+      if (stopped) return;
+      if (Date.now() >= (sleepTimer.endsAt as number)) {
+        stopped = true;
+        audioRef.current?.pause();
+        setIsPlaying(false);
+        setSleepTimer({ endsAt: null, endOfEpisode: false });
+      }
+    };
+
+    const interval = setInterval(check, 1000);
+    check();
+
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
+  }, [sleepTimer.endsAt]);
+
+  const setSleepMinutes = useCallback((minutes: number) => {
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      setSleepTimer({ endsAt: null, endOfEpisode: false });
+      return;
+    }
+    // Bounded so a malformed value cannot arm a timer for years.
+    const clamped = Math.min(12 * 60, Math.max(1, Math.round(minutes)));
+    setSleepTimer({ endsAt: Date.now() + clamped * 60 * 1000, endOfEpisode: false });
+  }, []);
+
+  const setSleepEndOfEpisode = useCallback(() => {
+    setSleepTimer({ endsAt: null, endOfEpisode: true });
+  }, []);
+
+  const cancelSleepTimer = useCallback(() => {
+    setSleepTimer({ endsAt: null, endOfEpisode: false });
+  }, []);
+
+  const cycleRepeatMode = useCallback(() => {
+    setRepeatMode((prev) => computeNextRepeatMode(prev));
+  }, []);
+
+  const clearResume = useCallback(() => {
+    const track = currentTrackRef.current;
+    if (!track) return;
+    setResumeAt(0);
+    const prev = progressMapRef.current;
+    const next = recordEpisodeProgress(prev, track.courseId, track.filename, 0, 0);
+    if (next === prev) return;
+    progressMapRef.current = next;
+    saveProgressMap(next);
+  }, []);
+
   return (
     <AudioContext.Provider
       value={{
@@ -515,6 +844,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         volume,
         isMuted,
         isExpanded,
+        resumeAt,
+        clearResume,
+        repeatMode,
+        cycleRepeatMode,
+        sleepTimer,
+        setSleepMinutes,
+        setSleepEndOfEpisode,
+        cancelSleepTimer,
         playTrack,
         togglePlay,
         playNext,

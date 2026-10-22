@@ -213,7 +213,7 @@ export async function GET(request: Request) {
         'Cache-Control': 'no-cache, must-revalidate'
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[API/Courses] Error:', error);
     return NextResponse.json({ error: 'Failed to load course database' }, { status: 500 });
   }

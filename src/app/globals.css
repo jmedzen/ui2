@@ -3985,3 +3985,454 @@ html, body {
     gap: 14px;
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Player extras: repeat mode, sleep timer, resume chip
+ * ------------------------------------------------------------------ */
+
+.player-extra-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.player-tool-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.player-tool-btn:hover {
+  border-color: var(--gold-accent);
+  color: var(--text-primary);
+}
+
+.player-tool-btn.active {
+  border-color: var(--gold-accent);
+  color: var(--gold-accent);
+  background: var(--gold-glow);
+}
+
+/* "no repeat" is the only state that should read as inert. */
+.player-tool-btn.repeat-off {
+  opacity: 0.62;
+}
+
+.sleep-timer-widget {
+  position: relative;
+}
+
+.sleep-countdown {
+  font-size: calc(11px * var(--font-scale));
+  font-variant-numeric: tabular-nums;
+  color: var(--gold-accent);
+}
+
+.sleep-timer-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 120;
+  min-width: 190px;
+  padding: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.42);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sleep-menu-title {
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 4px 8px 6px;
+}
+
+.sleep-menu-item {
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: calc(13px * var(--font-scale));
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.sleep-menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--gold-accent);
+}
+
+.sleep-menu-item.cancel {
+  color: #e06c75;
+  border-top: 1px solid var(--border-color);
+  margin-top: 4px;
+  padding-top: 9px;
+}
+
+.sleep-menu-hint {
+  font-size: calc(11px * var(--font-scale));
+  color: var(--text-muted);
+  padding: 6px 10px 2px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 4px;
+}
+
+.resume-hint-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--gold-glow);
+  border: 1px solid var(--gold-accent);
+  color: var(--gold-accent);
+  font-size: calc(11px * var(--font-scale));
+}
+
+.resume-restart-btn {
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--gold-accent);
+  color: inherit;
+  font-size: inherit;
+  padding: 0 0 0 6px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.theme-system-hint {
+  margin-top: 10px;
+  font-size: calc(12px * var(--font-scale));
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* The "system" swatch has no palette of its own, so it is drawn from the two
+   appearances it switches between. */
+.theme-option-btn.system {
+  background: linear-gradient(135deg, var(--bg-hover) 0%, var(--bg-hover) 48%, var(--bg-main) 52%, var(--bg-main) 100%);
+}
+
+@media (max-width: 960px) {
+  .player-extra-controls {
+    gap: 4px;
+  }
+
+  .sleep-timer-menu {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-tool-btn,
+  .sleep-menu-item,
+  .resume-hint-chip {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Favorites
+ * ------------------------------------------------------------------ */
+
+.course-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.course-favorite-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.course-favorite-btn:hover {
+  border-color: var(--gold-accent);
+  color: var(--gold-accent);
+  background: var(--bg-card);
+}
+
+.course-favorite-btn.active {
+  border-color: var(--gold-accent);
+  color: var(--gold-accent);
+  background: var(--gold-glow);
+}
+
+/* Star affordance on a tree leaf. Kept visually quiet until hovered so 684
+   rows do not read as a wall of stars. */
+.leaf-favorite-btn {
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 0 2px;
+  color: var(--text-muted);
+  font-size: calc(13px * var(--font-scale));
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+}
+
+.tree-leaf-btn:hover .leaf-favorite-btn,
+.tree-leaf-btn.selected .leaf-favorite-btn,
+.leaf-favorite-btn.active,
+.leaf-favorite-btn:focus-visible {
+  opacity: 1;
+}
+
+.leaf-favorite-btn.active {
+  color: var(--gold-accent);
+}
+
+.leaf-favorite-btn:hover {
+  color: var(--gold-accent);
+}
+
+.favorites-section .recent-study-title {
+  color: var(--gold-accent);
+}
+
+.recent-chip-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.favorite-remove-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: calc(11px * var(--font-scale));
+  padding: 2px 4px;
+  cursor: pointer;
+  line-height: 1;
+  border-radius: 4px;
+}
+
+.favorite-remove-btn:hover {
+  color: #e06c75;
+  background: var(--bg-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .course-favorite-btn,
+  .leaf-favorite-btn {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Home: continue-listening card
+ * ------------------------------------------------------------------ */
+
+.home-resume-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--gold-accent);
+  border-radius: 16px;
+  box-shadow: 0 2px 18px var(--gold-glow);
+}
+
+.resume-card-icon {
+  font-size: calc(30px * var(--font-scale));
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.resume-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.resume-card-eyebrow {
+  display: block;
+  font-size: calc(11px * var(--font-scale));
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--gold-accent);
+  margin-bottom: 4px;
+}
+
+.resume-card-course {
+  font-family: var(--font-serif);
+  font-size: calc(18px * var(--font-scale));
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-card-episode {
+  font-size: calc(13px * var(--font-scale));
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-card-time {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.resume-card-progress {
+  margin-top: 10px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+
+.resume-card-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--gold-accent);
+  transition: width 0.3s ease;
+}
+
+.resume-card-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 960px) {
+  .home-resume-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px;
+  }
+
+  .resume-card-actions {
+    width: 100%;
+  }
+
+  .resume-card-actions .home-action-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .resume-card-course,
+  .resume-card-episode {
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resume-card-progress-fill {
+    transition: none;
+  }
+}
+
+/* Offline-ready indicator (only shown once the service worker is active). */
+.offline-ready-badge {
+  font-size: calc(10px * var(--font-scale));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--jade-accent);
+  border: 1px solid var(--jade-accent);
+  border-radius: 999px;
+  padding: 2px 7px;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ *
+ * Home: daily rotating recommendations
+ * ------------------------------------------------------------------ */
+
+.home-daily-section {
+  margin-bottom: 36px;
+}
+
+.daily-pick-card {
+  /* Same card as the core recommendations; the only difference is a subtle
+     dashed frame so the rotating set reads as a lighter, temporary selection
+     rather than fixed editorial curation. */
+  border-style: dashed;
+}
+
+/* Rotating content gets a slightly quieter hover lift than the fixed set. */
+.daily-pick-card:hover {
+  transform: translateY(-2px);
+}
+
+.daily-picks-note {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  font-size: calc(11.5px * var(--font-scale));
+  color: var(--text-muted);
+}
+
+.daily-picks-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.daily-picks-date {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.daily-picks-hint {
+  opacity: 0.75;
+}
+
+@media (max-width: 960px) {
+  .daily-picks-note {
+    gap: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .daily-pick-card:hover {
+    transform: none;
+  }
+}

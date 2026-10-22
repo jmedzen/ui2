@@ -57,7 +57,16 @@ export default function VideoPlayer({
   const [isServerCached, setIsServerCached] = useState<boolean>(false);
 
   // Range page tab state (0 = 1..20, 1 = 21..40, etc.)
-  const [selectedRangePage, setSelectedRangePage] = useState<number>(0);
+  /**
+   * Manual range-tab choice, tagged with the track index it was made at.
+   *
+   * The page used to live in state and be re-synced by an effect on every
+   * `currentTrackIndex` change. That is a derived value with one manual escape
+   * hatch, so it is computed during render instead: the tag invalidates the
+   * override automatically when the user picks a different episode, with no
+   * second render and no way for the two to drift apart.
+   */
+  const [pageOverride, setPageOverride] = useState<{ page: number; atIndex: number } | null>(null);
 
   const currentTrack = tracks[currentTrackIndex];
 
@@ -68,29 +77,41 @@ export default function VideoPlayer({
    */
   const playbackRateRef = useRef<number>(playbackRate);
 
-  // Sync range tab when currentTrackIndex changes
-  useEffect(() => {
-    const pageOfCurrentTrack = Math.floor(currentTrackIndex / PAGE_SIZE);
-    setSelectedRangePage(pageOfCurrentTrack);
-  }, [currentTrackIndex]);
+  // Range tab follows the playing episode unless the reader picked one for
+  // this episode.
+  const selectedRangePage =
+    pageOverride && pageOverride.atIndex === currentTrackIndex
+      ? pageOverride.page
+      : Math.floor(currentTrackIndex / PAGE_SIZE);
 
   useEffect(() => {
     playbackRateRef.current = playbackRate;
     applyElementPlaybackRate(videoRef.current, playbackRate);
   }, [playbackRate]);
 
+  /**
+   * The two fields the effects below read.
+   *
+   * Held as primitives so the dependency lists can name exactly what changes the
+   * behaviour, instead of depending on the whole `currentTrack` object (which
+   * gets a new identity on unrelated re-renders and would restart the route
+   * probe).
+   */
+  const currentProxyUrl = currentTrack?.proxyUrl;
+  const currentSourceUrl = currentTrack?.url;
+
   // Evaluate optimal media route & track server disk cache status
   useEffect(() => {
     let isMounted = true;
-    if (!currentTrack) return;
+    if (!currentProxyUrl) return;
     const reqId = ++videoRequestIdRef.current;
 
     // Trigger background cache on server
-    triggerBackgroundServerCache(currentTrack.proxyUrl);
+    triggerBackgroundServerCache(currentProxyUrl);
 
     Promise.all([
-      getOptimalMediaRoute(currentTrack.proxyUrl, currentTrack.url),
-      fetchCacheStatus(currentTrack.proxyUrl)
+      getOptimalMediaRoute(currentProxyUrl, currentSourceUrl || currentProxyUrl),
+      fetchCacheStatus(currentProxyUrl)
     ]).then(([routeRes, isCached]) => {
       if (!isMounted || reqId !== videoRequestIdRef.current) return;
       setActiveRoute(routeRes.route);
@@ -113,15 +134,15 @@ export default function VideoPlayer({
     return () => {
       isMounted = false;
     };
-  }, [currentTrackIndex, currentTrack?.proxyUrl]);
+  }, [currentTrackIndex, currentProxyUrl, currentSourceUrl]);
 
   // Dynamic Cache Status Polling for Current Video
   useEffect(() => {
-    if (!currentTrack || isServerCached) return;
+    if (!currentProxyUrl || isServerCached) return;
 
     let isMounted = true;
     let interval: ReturnType<typeof setInterval> | null = null;
-    const proxyUrl = currentTrack.proxyUrl;
+    const proxyUrl = currentProxyUrl;
 
     const stopPolling = () => {
       if (interval !== null) {
@@ -161,7 +182,7 @@ export default function VideoPlayer({
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [currentTrack?.proxyUrl, isServerCached]);
+  }, [currentProxyUrl, isServerCached]);
 
   const handleVideoPlay = () => {
     // When video starts playing, pause background audio player if it is currently playing
@@ -334,7 +355,7 @@ export default function VideoPlayer({
                 return (
                   <button
                     key={pIdx}
-                    onClick={() => setSelectedRangePage(pIdx)}
+                    onClick={() => setPageOverride({ page: pIdx, atIndex: currentTrackIndex })}
                     className={`range-tab-btn ${isCurrentPage ? 'active' : ''}`}
                   >
                     {startNum} - {endNum} 集

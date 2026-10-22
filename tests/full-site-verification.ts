@@ -10,6 +10,25 @@ interface CheckItem {
   details: string;
 }
 
+/**
+ * `execSync` rejects with an Error that also carries the child's stdio, which
+ * is the part worth printing. Typed here instead of `any` so the narrowing is
+ * checked; the fields are optional because a spawn failure has no stdout.
+ */
+function describeError(err: unknown): string {
+  if (err && typeof err === 'object') {
+    const withStdio = err as { stdout?: unknown; message?: unknown };
+    if (typeof withStdio.stdout === 'string' && withStdio.stdout) return withStdio.stdout;
+    if (typeof withStdio.message === 'string') return withStdio.message;
+  }
+  return String(err);
+}
+
+interface CourseRow {
+  video_path?: string | null;
+  pdfs?: unknown[] | null;
+}
+
 async function runFullSiteVerification() {
   console.log('\n======================================================');
   console.log('🌸 法雲資訊網 (fayun.org) 全站功能完整性測試與自動驗證');
@@ -29,23 +48,27 @@ async function runFullSiteVerification() {
       details: `共通過 ${passCount} 個測試案例 (Database, MediaCache, Proxy, TreeNav, UI)`
     });
     console.log(`✅ 測試套件全數通過 (${passCount} checks)\n`);
-  } catch (err: any) {
+  } catch (err: unknown) {
     results.push({
       name: '自動化測試套件 (Automated Test Suites)',
       passed: false,
-      details: err.stdout || err.message
+      details: describeError(err)
     });
-    console.error('❌ 測試套件失敗:\n', err.stdout || err.message);
+    console.error('❌ 測試套件失敗:\n', describeError(err));
   }
 
   // 2. Database & Catalog Consistency
   try {
     console.log('⏳ [2/6] 驗證課程典藏資料庫 (courses_db.json)...');
-    const dataDb = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', 'courses_db.json'), 'utf-8'));
-    const srcDb = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src', 'data', 'courses_db.json'), 'utf-8'));
+    const dataDb = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', 'courses_db.json'), 'utf-8')) as {
+      courses: unknown[];
+    };
+    const srcDb = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'src', 'data', 'courses_db.json'), 'utf-8')) as {
+      courses: CourseRow[];
+    };
     const totalCourses = srcDb.courses.length;
-    const videoCount = srcDb.courses.filter((c: any) => c.video_path).length;
-    const pdfCount = srcDb.courses.filter((c: any) => c.pdfs && c.pdfs.length > 0).length;
+    const videoCount = srcDb.courses.filter((c) => c.video_path).length;
+    const pdfCount = srcDb.courses.filter((c) => c.pdfs && c.pdfs.length > 0).length;
 
     const isMatch = dataDb.courses.length === srcDb.courses.length;
 
@@ -55,11 +78,11 @@ async function runFullSiteVerification() {
       details: `收錄 ${totalCourses} 門課程 | 影音講記 ${videoCount} 門 | 講義講述 ${pdfCount} 門 | 雙庫同動: ${isMatch ? '一致' : '不一致'}`
     });
     console.log(`✅ 數據庫檢驗通過: 684 門課程，479 門影音，雙庫同步一致\n`);
-  } catch (err: any) {
+  } catch (err: unknown) {
     results.push({
       name: '課程數據庫結構完整性 (Catalog DB)',
       passed: false,
-      details: err.message
+      details: describeError(err)
     });
   }
 
@@ -75,11 +98,11 @@ async function runFullSiteVerification() {
       details: `最大容量: ${cacheStats.maxGb} GB (${(cacheStats.maxBytes / (1024 ** 3)).toFixed(1)} GB) | 目前已用: ${(cacheStats.currentBytes / 1024 / 1024).toFixed(2)} MB (${cacheStats.fileCount} 檔案)`
     });
     console.log(`✅ 媒體快取配置正確: ${cacheStats.maxGb} GB LRU 磁碟快取\n`);
-  } catch (err: any) {
+  } catch (err: unknown) {
     results.push({
       name: '媒體快取容量限制 (Media Cache Limit)',
       passed: false,
-      details: err.message
+      details: describeError(err)
     });
   }
 
@@ -104,11 +127,11 @@ async function runFullSiteVerification() {
       details: `Next.js viewport export: ${hasViewportExport ? '已配置' : '缺失'} | 無重複 meta viewport: ${hasNoDuplicateMeta ? '是' : '否'} | 960px 響應式斷點: ${hasMobileQuery ? '已配置' : '缺失'} | JS 動態類別保底: ${hasClassOverride ? '已配置' : '缺失'}`
     });
     console.log(`✅ 行動相容檢驗通過: 包含原生 Head Viewport 與雙重判定保底\n`);
-  } catch (err: any) {
+  } catch (err: unknown) {
     results.push({
       name: '行動版瀏覽器與 Firefox 相容性 (Mobile Viewport)',
       passed: false,
-      details: err.message
+      details: describeError(err)
     });
   }
 
@@ -122,11 +145,11 @@ async function runFullSiteVerification() {
       details: '編譯成功，0 個 TypeScript 或 Turbopack 語法錯誤'
     });
     console.log('✅ 生產環境建置驗證通過 (0 Errors)\n');
-  } catch (err: any) {
+  } catch (err: unknown) {
     results.push({
       name: '生產環境建置驗證 (Next.js Production Build)',
       passed: false,
-      details: err.stdout || err.message
+      details: describeError(err)
     });
   }
 

@@ -46,8 +46,12 @@ test('Database Integrity Suite - courses_db.json validation', async (t) => {
   });
 
   await t.test('video courses count and path formatting', () => {
-    const db = JSON.parse(fs.readFileSync(srcDbPath, 'utf-8'));
-    const videoCourses = db.courses.filter((c: any) => c.video_path && c.video_path.trim() !== '');
+    const db = JSON.parse(fs.readFileSync(srcDbPath, 'utf-8')) as {
+      courses: { id: number; video_path?: string | null }[];
+    };
+    const videoCourses = db.courses.filter(
+      (c) => c.video_path && c.video_path.trim() !== ''
+    ) as { id: number; video_path: string }[];
 
     // 478 until the 2026-10-21 scan, which found a real video page for
     // id 293 (如何消除煩惱) at /media/隨緣化導/如何消除煩惱LA/video.
@@ -63,8 +67,13 @@ test('Database Integrity Suite - courses_db.json validation', async (t) => {
   });
 
   await t.test('pdf documents formatting and validity', () => {
-    const db = JSON.parse(fs.readFileSync(srcDbPath, 'utf-8'));
-    const pdfCourses = db.courses.filter((c: any) => Array.isArray(c.pdfs) && c.pdfs.length > 0);
+    const db = JSON.parse(fs.readFileSync(srcDbPath, 'utf-8')) as {
+      courses: { id: number; pdfs?: { filename?: string; url?: string }[] | null }[];
+    };
+    const pdfCourses = db.courses.filter(
+      (c): c is { id: number; pdfs: { filename?: string; url?: string }[] } =>
+        Array.isArray(c.pdfs) && c.pdfs.length > 0
+    );
 
     assert.ok(pdfCourses.length > 0, 'There should be courses with PDF documents');
 

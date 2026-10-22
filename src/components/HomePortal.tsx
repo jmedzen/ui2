@@ -1,18 +1,43 @@
 'use client';
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useSyncExternalStore } from 'react';
 import { CourseItem } from '@/types/course';
+import {
+  subscribeProgress,
+  getResumeSnapshot,
+  getResumeServerSnapshot
+} from '@/lib/playbackStore';
+import {
+  pickDailyPicks,
+  describeCourse,
+  iconForCourse,
+  dayLabelFromIndex,
+  DAILY_PICK_COUNT
+} from '@/lib/dailyPicks';
+import { useIsHydrated, useDayIndex } from '@/lib/useDailyPicks';
 
 interface HomePortalProps {
   courses: CourseItem[];
   onSelectCourse: (course: CourseItem) => void;
   onOpenMobileMenu?: () => void;
+  /** Resume the most recently played episode at its stored position. */
+  onResume?: (course: CourseItem, filename: string, position: number) => void;
+}
+
+function formatResumeClock(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
 export default function HomePortal({
   courses,
   onSelectCourse,
-  onOpenMobileMenu
+  onOpenMobileMenu,
+  onResume
 }: HomePortalProps) {
   // Find flagship courses.
   //
@@ -133,10 +158,53 @@ export default function HomePortal({
   // Total statistics. The bundled catalog is always present at first paint, so
   // these are real counts; the previous hardcoded fallbacks (684/478/413) would
   // have masked a genuinely empty database.
+  /**
+   * The "continue listening" card.
+   *
+   * Read in an effect rather than during render: `localStorage` is not
+   * available on the server, and reading it during render would make the
+   * server-rendered hero differ from the client's first paint.
+   */
+  const recentProgress = useSyncExternalStore(
+    subscribeProgress,
+    getResumeSnapshot,
+    getResumeServerSnapshot
+  );
+
+  const resumeCourse = useMemo(() => {
+    if (!recentProgress) return null;
+    return courses.find((c) => c.id === recentProgress.courseId) ?? null;
+  }, [recentProgress, courses]);
+
   const totalCourses = courses.length;
   const totalVideoCourses = useMemo(() => courses.filter((c) => Boolean(c.video_path)).length, [courses]);
   const totalPdfCourses = useMemo(() => courses.filter((c) => c.pdfs && c.pdfs.length > 0).length, [courses]);
   const hasCatalog = totalCourses > 0;
+
+  /**
+   * Today's rotating picks.
+   *
+   * Withheld until after hydration: the day is derived from the clock, and a
+   * page rendered at 23:59:59 can legitimately produce a different trio on the
+   * server than in the browser. Rendering nothing until mounted is cheaper than
+   * reconciling a mismatch, and the section is below the fold anyway.
+   */
+  const isHydrated = useIsHydrated();
+  const dayIndex = useDayIndex();
+  const dailyPicks = useMemo(() => {
+    if (!isHydrated || !hasCatalog) return [];
+    // Exclude the six flagship courses so the rotating trio never repeats a card
+    // that is already fixed on the same page.
+    const flagshipIds = featuredCourses.map((entry) => entry.course.id);
+    return pickDailyPicks(courses, dayIndex, DAILY_PICK_COUNT, { excludeIds: flagshipIds });
+  }, [isHydrated, courses, dayIndex, hasCatalog, featuredCourses]);
+
+  // Pure function of the day index, so the label rolls over at midnight with
+  // the picks and never reads the clock during render.
+  const dailyPicksLabel = useMemo(
+    () => (isHydrated ? dayLabelFromIndex(dayIndex) : ''),
+    [isHydrated, dayIndex]
+  );
 
   return (
     <div className="home-portal-pane">
@@ -193,6 +261,56 @@ export default function HomePortal({
           )}
         </div>
       </section>
+      )}
+
+      {/* Continue Listening */}
+      {hasCatalog && resumeCourse && recentProgress && (
+        <section className="home-resume-card">
+          <div className="resume-card-icon">⏱️</div>
+          <div className="resume-card-body">
+            <span className="resume-card-eyebrow">繼續上次的研讀</span>
+            <h2 className="resume-card-course">{resumeCourse.name}</h2>
+            <p className="resume-card-episode">
+              {recentProgress.filename.replace(/\.[^.]+$/, '')}
+              <span className="resume-card-time">
+                {' '}· 已聽到 {formatResumeClock(recentProgress.position)}
+                {recentProgress.duration > 0 && ` / ${formatResumeClock(recentProgress.duration)}`}
+              </span>
+            </p>
+            {recentProgress.duration > 0 && (
+              <div className="resume-card-progress" aria-hidden="true">
+                <div
+                  className="resume-card-progress-fill"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, (recentProgress.position / recentProgress.duration) * 100))}%`
+                  }}
+                />
+              </div>
+            )}
+          </div>
+          <div className="resume-card-actions">
+            <button
+              className="home-action-btn primary"
+              onClick={() => {
+                if (onResume) {
+                  onResume(resumeCourse, recentProgress.filename, recentProgress.position);
+                } else {
+                  onSelectCourse(resumeCourse);
+                }
+              }}
+              title="從上次聽到的位置接續播放"
+            >
+              ▶ 接續播放
+            </button>
+            <button
+              className="home-action-btn secondary"
+              onClick={() => onSelectCourse(resumeCourse)}
+              title="前往本課程，從頭開始"
+            >
+              查看課程
+            </button>
+          </div>
+        </section>
       )}
 
       {/* Realtime Archive Stats Grid */}
@@ -330,6 +448,74 @@ export default function HomePortal({
           </div>
         </div>
       </section>
+      )}
+
+      {/* Today's Rotating Picks — between the four divisions and the core
+          recommendations, matching the featured card layout. */}
+      {hasCatalog && dailyPicks.length > 0 && (
+        <section className="home-daily-section">
+          <div className="section-header">
+            <h2 className="section-title">🎲 今日隨機推薦</h2>
+            <span className="section-subtitle">
+              每日更新一次的三部講記 · 為您與今日的因緣挑選
+            </span>
+          </div>
+
+          <div className="featured-grid">
+            {dailyPicks.map((course) => (
+              <div
+                key={course.id}
+                className="featured-course-card daily-pick-card"
+                onClick={() => onSelectCourse(course)}
+                role="button"
+                tabIndex={0}
+                title={`進入研讀《${course.name}》`}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectCourse(course);
+                  }
+                }}
+              >
+                <div className="featured-card-top">
+                  <span className="featured-icon">{iconForCourse(course)}</span>
+                  <span className="featured-tag">{course.topic_title || '典藏講記'}</span>
+                </div>
+
+                <h3 className="featured-title">{course.name}</h3>
+
+                <p className="featured-desc">{describeCourse(course)}</p>
+
+                <div className="featured-meta-row">
+                  <span className="featured-meta-item">📍 {course.location || '法雲寺禪學院'}</span>
+                  {course.time && (
+                    <span className="featured-meta-item">
+                      🗓️ {/年/.test(String(course.time)) ? course.time : `${course.time} 年`}
+                    </span>
+                  )}
+                  {course.total_episodes > 0 && (
+                    <span className="featured-meta-item">🎧 {course.total_episodes} 講</span>
+                  )}
+                </div>
+
+                <div className="featured-footer">
+                  <div className="featured-badges">
+                    {course.total_episodes > 0 && <span className="media-badge audio">🎙️ 音訊</span>}
+                    {course.video_path && <span className="media-badge video">🎥 影音</span>}
+                    {course.pdfs && course.pdfs.length > 0 && <span className="media-badge pdf">📚 講義</span>}
+                  </div>
+                  <span className="featured-enter-btn">開始研讀 ➜</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="daily-picks-note">
+            <span className="daily-picks-badge">每日 00:00 更新</span>
+            {dailyPicksLabel && <span className="daily-picks-date">今日：{dailyPicksLabel}</span>}
+            <span className="daily-picks-hint">所有課程皆可於左側目錄自由瀏覽</span>
+          </p>
+        </section>
       )}
 
       {/* Featured Scripture Cards */}

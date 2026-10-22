@@ -179,7 +179,7 @@ test('F2 — VideoPlayer keeps the chosen speed across an episode change', async
     // Anchored on the code that follows the effect, because the effect's own
     // leading comment is stripped above.
     const route = code.slice(
-      code.indexOf('let isMounted = true;\n    if (!currentTrack) return;'),
+      code.indexOf('let isMounted = true;\n    if (!currentProxyUrl) return;'),
       code.indexOf('// Dynamic Cache Status Polling for Current Video')
     );
     assert.ok(route.length > 0, 'the route effect must be locatable');
@@ -212,9 +212,12 @@ test('F2 — VideoPlayer keeps the chosen speed across an episode change', async
     // element there without that cost.
     assert.match(
       code,
-      /\}, \[currentTrackIndex, currentTrack\?\.proxyUrl\]\);/,
+      /\}, \[currentTrackIndex, currentProxyUrl, currentSourceUrl\]\);/,
       'the route effect must stay keyed on the episode only'
     );
+    // The proxy/source URLs are derived from `currentTrack`; depending on the
+    // object itself would re-probe on every cache-status rebuild.
+    assert.match(code, /const currentProxyUrl = currentTrack\?\.proxyUrl;/);
     assert.doesNotMatch(
       code,
       /videoRef\.current\.playbackRate = playbackRate;/,
@@ -227,10 +230,18 @@ test('F3 — an out-of-range restored video index cannot blank the pane', async 
   const courseDetail = stripComments(read('src/components/CourseDetail.tsx'));
 
   await t.test('the restored index is clamped once the list length is known', () => {
+    // The clamp condition is unchanged; the reset now goes through the helper
+    // that owns the state setter, so a valid index is never silently dropped.
     assert.match(
       courseDetail,
-      /if \(videoTracks\.length > 0 && currentVideoIndex >= videoTracks\.length\) \{\s*\n\s*setCurrentVideoIndex\(0\);/,
-      'an index at or past videoTracks.length must be clamped to 0'
+      /if \(videoTracks\.length > 0 && currentVideoIndex >= videoTracks\.length\) \{/,
+      'an index at or past videoTracks.length must be clamped'
+    );
+    assert.match(courseDetail, /handleVideoIndexChange\(0\);/, 'the clamp must reset to 0');
+    assert.match(
+      courseDetail,
+      /const handleVideoIndexChange = \(idx: number\) => \{\s*\n\s*setCurrentVideoIndex\(idx\);/,
+      'the reset must go through the state setter'
     );
   });
 

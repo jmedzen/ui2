@@ -706,7 +706,13 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string)
       }
 
       const fileStream = fs.createWriteStream(tempPath);
-      const nodeStream = Readable.fromWeb(res.body as any);
+      // `Readable.fromWeb` is typed against the DOM `ReadableStream`, which is
+      // structurally compatible with what `fetch` returns but not nominally
+      // identical. The cast is on the stream type only; the value is unvalidated
+      // upstream data, so nothing else about it is trusted.
+      const nodeStream = Readable.fromWeb(
+        res.body as unknown as Parameters<typeof Readable.fromWeb>[0]
+      );
 
       /**
        * Enforces the size ceiling while streaming.

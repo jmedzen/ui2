@@ -2,6 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAudio } from '@/context/AudioContext';
+import {
+  REPEAT_LABELS,
+  formatSleepRemaining,
+  sleepStopClock
+} from '@/lib/playbackStore';
 
 export default function GlobalAudioPlayer() {
   const {
@@ -14,6 +19,14 @@ export default function GlobalAudioPlayer() {
     volume,
     isMuted,
     isExpanded,
+    resumeAt,
+    clearResume,
+    repeatMode,
+    cycleRepeatMode,
+    sleepTimer,
+    setSleepMinutes,
+    setSleepEndOfEpisode,
+    cancelSleepTimer,
     togglePlay,
     playNext,
     playPrev,
@@ -27,6 +40,15 @@ export default function GlobalAudioPlayer() {
 
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverPos, setHoverPos] = useState<number>(0);
+  const [isSleepMenuOpen, setIsSleepMenuOpen] = useState<boolean>(false);
+  /** Ticks once a second so the countdown label stays live. */
+  const [, forceTick] = useState<number>(0);
+
+  useEffect(() => {
+    if (!sleepTimer.endsAt) return;
+    const interval = setInterval(() => forceTick((n) => n + 1), 1000);
+    return () => clearInterval(interval);
+  }, [sleepTimer.endsAt]);
 
   const handleSliderMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!duration) return;
@@ -133,6 +155,21 @@ export default function GlobalAudioPlayer() {
               <span className="course-name-text">
                 {currentTrack.courseTitle} • 第 {currentTrack.index + 1} / {playlist.length} 集
               </span>
+              {resumeAt > 0 && currentTime < resumeAt - 2 && (
+                <span className="resume-hint-chip" title="已從上次聽到的位置接續播放">
+                  ⏱️ 從 {formatTime(resumeAt)} 續聽
+                  <button
+                    className="resume-restart-btn"
+                    onClick={() => {
+                      clearResume();
+                      seekTo(0);
+                    }}
+                    title="從頭開始播放並清除此集的續聽紀錄"
+                  >
+                    從頭
+                  </button>
+                </span>
+              )}
               {currentTrack.activeRoute === 'direct' ? (
                 <span className="route-badge-tag route-badge-direct" title="播放來源：Fayun.org 直連 (主機背景預載中)">
                   🌐 Direct Fayun (⏳ 預載中)
@@ -231,6 +268,79 @@ export default function GlobalAudioPlayer() {
                   {rate}x
                 </button>
               ))}
+            </div>
+
+            <div className="player-extra-controls">
+              <button
+                onClick={cycleRepeatMode}
+                className={`player-tool-btn repeat-${repeatMode} ${repeatMode !== 'off' ? 'active' : ''}`}
+                title={`循環模式：${REPEAT_LABELS[repeatMode]}（點擊切換）`}
+                aria-label={`循環模式：${REPEAT_LABELS[repeatMode]}`}
+              >
+                {repeatMode === 'one' ? '🔂' : '🔁'}
+              </button>
+
+              <div className="sleep-timer-widget">
+                <button
+                  onClick={() => setIsSleepMenuOpen((prev) => !prev)}
+                  className={`player-tool-btn ${sleepTimer.endsAt || sleepTimer.endOfEpisode ? 'active' : ''}`}
+                  title="睡眠定時器：時間到自動停止播放"
+                  aria-expanded={isSleepMenuOpen}
+                  aria-haspopup="menu"
+                >
+                  🌙
+                  {sleepTimer.endsAt && (
+                    <span className="sleep-countdown">{formatSleepRemaining(sleepTimer.endsAt)}</span>
+                  )}
+                  {sleepTimer.endOfEpisode && <span className="sleep-countdown">集末</span>}
+                </button>
+
+                {isSleepMenuOpen && (
+                  <div className="sleep-timer-menu" role="menu">
+                    <div className="sleep-menu-title">🌙 睡眠定時器</div>
+                    {[10, 15, 30, 45, 60, 90].map((minutes) => (
+                      <button
+                        key={minutes}
+                        role="menuitem"
+                        className="sleep-menu-item"
+                        onClick={() => {
+                          setSleepMinutes(minutes);
+                          setIsSleepMenuOpen(false);
+                        }}
+                      >
+                        {minutes} 分鐘後停止
+                      </button>
+                    ))}
+                    <button
+                      role="menuitem"
+                      className="sleep-menu-item"
+                      onClick={() => {
+                        setSleepEndOfEpisode();
+                        setIsSleepMenuOpen(false);
+                      }}
+                    >
+                      本集播完即停
+                    </button>
+                    {(sleepTimer.endsAt || sleepTimer.endOfEpisode) && (
+                      <button
+                        role="menuitem"
+                        className="sleep-menu-item cancel"
+                        onClick={() => {
+                          cancelSleepTimer();
+                          setIsSleepMenuOpen(false);
+                        }}
+                      >
+                        ✕ 取消定時
+                      </button>
+                    )}
+                    {sleepTimer.endsAt && (
+                      <div className="sleep-menu-hint">
+                        將於 {sleepStopClock(sleepTimer.endsAt)} 停止播放
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="volume-widget">

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, useSyncExternalStore } from 'react';
 import { CourseItem, ThemeType } from '@/types/course';
 import { AudioProvider, useAudio } from '@/context/AudioContext';
 import TreeNav from '@/components/TreeNav';
@@ -9,10 +9,64 @@ import HomePortal from '@/components/HomePortal';
 import GlobalAudioPlayer from '@/components/GlobalAudioPlayer';
 import SettingsModal from '@/components/SettingsModal';
 import initialDb from '@/data/courses_db.json';
+import {
+  DEFAULT_THEME_PREFERENCE,
+  isThemePreference,
+  resolveTheme,
+  systemPrefersDark,
+  type ThemePreference
+} from '@/lib/themePreference';
+import {
+  saveFavorites,
+  toggleFavorite,
+  isFavorite,
+  subscribeFavorites,
+  getFavoritesSnapshot,
+  getFavoritesServerSnapshot,
+  type FavoriteRecord
+} from '@/lib/playbackStore';
+import { buildCoursePath, currentCatalogLocation } from '@/lib/catalogUrl';
+import { createStringStore } from '@/lib/stringStore';
+import { useServiceWorker } from '@/lib/useServiceWorker';
 
 const THEME_STORAGE_KEY = 'fayun_theme';
 const FONT_SIZE_PX_STORAGE_KEY = 'fayun_font_size_px';
 const LAST_COURSE_STORAGE_KEY = 'fayun_last_selected_course_id';
+
+const MIN_FONT_SIZE_PX = 12;
+const MAX_FONT_SIZE_PX = 28;
+const DEFAULT_FONT_SIZE_PX = 16;
+
+/**
+ * Browser-preference stores.
+ *
+ * These live at module scope so the sidebar, the settings modal and the player
+ * all read the same value. Restoring them in a mount effect and then mirroring
+ * them into `useState` was the pattern the hooks rules reject (a second render
+ * before the first paint, and two sources of truth that could disagree); these
+ * stores make storage itself the single source.
+ */
+const themeStore = createStringStore<ThemePreference>({
+  key: THEME_STORAGE_KEY,
+  fallback: DEFAULT_THEME_PREFERENCE,
+  // An unknown value (hand-edited storage, or a theme removed in an upgrade)
+  // falls back to the default rather than rendering `.app-root` with no palette.
+  parse: (raw) => (isThemePreference(raw) ? raw : DEFAULT_THEME_PREFERENCE),
+  serialize: (value) => value
+});
+
+const fontSizeStore = createStringStore<number>({
+  key: FONT_SIZE_PX_STORAGE_KEY,
+  fallback: DEFAULT_FONT_SIZE_PX,
+  parse: (raw) => {
+    const parsed = parseInt(raw, 10);
+    return !isNaN(parsed) && parsed >= MIN_FONT_SIZE_PX && parsed <= MAX_FONT_SIZE_PX
+      ? parsed
+      : DEFAULT_FONT_SIZE_PX;
+  },
+  serialize: (value) =>
+    String(Math.min(MAX_FONT_SIZE_PX, Math.max(MIN_FONT_SIZE_PX, Math.round(value))))
+});
 
 /**
  * Cheap "did this course actually change?" check.
@@ -49,9 +103,7 @@ interface MainLayoutProps {
   courses: CourseItem[];
   selectedCourse: CourseItem | null;
   handleSelectCourse: (course: CourseItem) => void;
-  fetchCourses: () => Promise<void>;
   theme: ThemeType;
-  handleSelectTheme: (theme: ThemeType) => void;
   setIsSettingsOpen: (open: boolean) => void;
   isLoading: boolean;
   error: string | null;
@@ -59,6 +111,12 @@ interface MainLayoutProps {
   setIsZenMode: React.Dispatch<React.SetStateAction<boolean>>;
   isMobileViewport: boolean;
   onGoHome: () => void;
+  favorites: FavoriteRecord[];
+  onToggleFavorite: (course: CourseItem) => void;
+  /** Opens a course and starts the named episode at a position. */
+  onResume: (course: CourseItem, filename: string, position: number) => void;
+  autoPlayRequest: { filename: string; position: number } | null;
+  onAutoPlayConsumed: () => void;
 }
 
 function MainLayout({
@@ -67,16 +125,19 @@ function MainLayout({
   courses,
   selectedCourse,
   handleSelectCourse,
-  fetchCourses,
   theme,
-  handleSelectTheme,
   setIsSettingsOpen,
   isLoading,
   error,
   isZenMode,
   setIsZenMode,
   isMobileViewport,
-  onGoHome
+  onGoHome,
+  favorites,
+  onToggleFavorite,
+  onResume,
+  autoPlayRequest,
+  onAutoPlayConsumed
 }: MainLayoutProps) {
   const { currentTrack, isExpanded } = useAudio();
   const hasExpandedPlayer = Boolean(currentTrack && isExpanded);
@@ -89,11 +150,11 @@ function MainLayout({
           courses={courses}
           selectedCourse={selectedCourse}
           onSelectCourse={handleSelectCourse}
-          onRefreshCourses={fetchCourses}
           theme={theme}
-          onSelectTheme={handleSelectTheme}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onGoHome={onGoHome}
+          favorites={favorites}
+          onToggleFavorite={onToggleFavorite}
         />
       </div>
 
@@ -123,12 +184,17 @@ function MainLayout({
             isZenMode={isZenMode}
             onToggleZenMode={() => setIsZenMode((prev) => !prev)}
             onGoHome={onGoHome}
+            isFavorite={isFavorite(favorites, selectedCourse.id)}
+            onToggleFavorite={() => onToggleFavorite(selectedCourse)}
+            autoPlayRequest={autoPlayRequest}
+            onAutoPlayConsumed={onAutoPlayConsumed}
           />
         ) : (
           <HomePortal
             courses={courses}
             onSelectCourse={handleSelectCourse}
             onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+            onResume={onResume}
           />
         )}
       </div>
@@ -137,8 +203,17 @@ function MainLayout({
 }
 
 export default function Home() {
-  // Initialize state immediately from bundled JSON data for 0ms load time
-  const initialCourses: CourseItem[] = (initialDb.courses as CourseItem[]) || [];
+  // Registers the offline worker once the page has loaded (no-op in dev).
+  const { isOfflineReady } = useServiceWorker();
+  // Initialize state immediately from bundled JSON data for 0ms load time.
+  // Wrapped in useMemo so its identity is stable: the bare `(x as [] ) || []`
+  // expression produced a new array reference on every render, which made any
+  // effect or callback depending on it re-run without anything actually
+  // changing.
+  const initialCourses: CourseItem[] = useMemo(
+    () => (initialDb.courses as CourseItem[]) || [],
+    []
+  );
 
   const [courses, setCourses] = useState<CourseItem[]>(initialCourses);
   // Tracks whether the catalog has ever been populated, without making
@@ -154,12 +229,41 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [theme, setTheme] = useState<ThemeType>('dark');
-  const [fontSizePx, setFontSizePx] = useState<number>(16);
+  const themePreference = useSyncExternalStore(
+    themeStore.subscribe,
+    themeStore.getSnapshot,
+    themeStore.getServerSnapshot
+  );
+  /**
+   * True only when the OS reports a dark appearance; drives `system`.
+   *
+   * Seeded lazily rather than in the effect below. It cannot cause a hydration
+   * mismatch because the default preference is `dark`, which resolves to the
+   * same class whatever this value is; `system` is only ever restored from
+   * storage on the client, after hydration.
+   */
+  const [prefersDark, setPrefersDark] = useState<boolean>(() => systemPrefersDark());
+  const fontSizePx = useSyncExternalStore(
+    fontSizeStore.subscribe,
+    fontSizeStore.getSnapshot,
+    fontSizeStore.getServerSnapshot
+  );
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
   const [isZenMode, setIsZenMode] = useState<boolean>(false);
   const [isMobileViewport, setIsMobileViewport] = useState<boolean>(false);
+  const favorites = useSyncExternalStore(
+    subscribeFavorites,
+    getFavoritesSnapshot,
+    getFavoritesServerSnapshot
+  );
+  /**
+   * A pending request to start a specific episode once its track list loads.
+   *
+   * `playTrack` lives in the audio context, which is *below* this component, so
+   * the request is passed down to `CourseDetail` rather than played here.
+   */
+  const [autoPlayRequest, setAutoPlayRequest] = useState<{ filename: string; position: number } | null>(null);
 
   // Auto-detect mobile viewport / user-agent across all browsers (including Firefox Mobile)
   useEffect(() => {
@@ -227,28 +331,53 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isZenMode]);
 
+  /**
+   * Tracks the OS appearance preference.
+   *
+   * Kept in state (not read once on mount) so choosing "跟隨系統" follows a
+   * sunset switch live instead of being frozen at the value seen on load.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+
+    let media: MediaQueryList;
+    try {
+      media = window.matchMedia('(prefers-color-scheme: dark)');
+    } catch {
+      return;
+    }
+    const handleChange = (e: MediaQueryListEvent) => setPrefersDark(e.matches);
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', handleChange);
+      return () => media.removeEventListener('change', handleChange);
+    }
+    // Safari < 14 only exposes the deprecated listener API.
+    media.addListener(handleChange);
+    return () => media.removeListener(handleChange);
+  }, []);
+
+  // Resolved during render rather than in an effect: the applied theme is a
+  // pure function of the preference and the OS setting, so deriving it keeps
+  // the class in the same commit as the state that changed it (an effect would
+  // paint one frame with the previous palette).
+  const theme: ThemeType = resolveTheme(themePreference, prefersDark);
+
   // Restore saved theme, font size & last selected/played course from localStorage on mount
   useEffect(() => {
     try {
-      const savedTheme = localStorage.getItem(THEME_STORAGE_KEY) as ThemeType | null;
-      if (savedTheme && ['dark', 'light', 'pine', 'sandalwood', 'zen', 'gruvbox'].includes(savedTheme)) {
-        setTheme(savedTheme);
-      }
+      // Theme, font size and favorites are read through their stores, so they
+      // need no restore step here; only the selection remains.
 
-      const savedPxStr = localStorage.getItem(FONT_SIZE_PX_STORAGE_KEY);
-      if (savedPxStr) {
-        const parsedPx = parseInt(savedPxStr, 10);
-        if (!isNaN(parsedPx) && parsedPx >= 12 && parsedPx <= 28) {
-          setFontSizePx(parsedPx);
-        }
-      }
-
-      // Restore last course ID or last played audio track's course ID
+      // The URL wins over the stored course: a shared link or a bookmark must
+      // open the course it names, not whatever was studied last.
+      const fromUrl = currentCatalogLocation();
       const savedCourseIdStr = localStorage.getItem(LAST_COURSE_STORAGE_KEY);
       const savedTrackStr = localStorage.getItem('fayun_last_played_track');
 
       let targetId: number | null = null;
-      if (savedCourseIdStr) {
+      if (fromUrl.courseId !== null) {
+        targetId = fromUrl.courseId;
+      } else if (savedCourseIdStr) {
         targetId = parseInt(savedCourseIdStr, 10);
       } else if (savedTrackStr) {
         try {
@@ -262,6 +391,13 @@ export default function Home() {
       if (targetId && !isNaN(targetId)) {
         const restoredCourse = initialCourses.find((c) => c.id === targetId);
         if (restoredCourse) {
+          // Deliberately a state write in an effect. The stored selection is an
+          // external system (the URL and localStorage) and cannot be read during
+          // render without desynchronising SSR from the first client paint, so
+          // this is React's documented "subscribe to an external system" case
+          // rather than a render-phase cascade. `initialCourses` is memoised, so
+          // this runs exactly once.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setSelectedCourse(restoredCourse);
         }
       }
@@ -270,28 +406,59 @@ export default function Home() {
     }
   }, [initialCourses]);
 
-  const handleSelectTheme = (newTheme: ThemeType) => {
-    setTheme(newTheme);
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, newTheme);
-    } catch (e) {
-      console.warn('Failed to save theme to localStorage:', e);
-    }
+  /**
+   * Adds/removes a course from the favorites list.
+   *
+   * Written through the shared store so the sidebar chips, the course header
+   * star and the persisted record can never disagree about what is favorited.
+   */
+  const handleToggleFavorite = useCallback((course: CourseItem) => {
+    const next = toggleFavorite(getFavoritesSnapshot(), course.id, course.name);
+    saveFavorites(next);
+  }, []);
+
+  const handleSelectTheme = (newTheme: ThemePreference) => {
+    themeStore.set(newTheme);
   };
 
   const handleSelectFontSizePx = (newPx: number) => {
-    const clamped = Math.min(28, Math.max(12, newPx));
-    setFontSizePx(clamped);
-    try {
-      localStorage.setItem(FONT_SIZE_PX_STORAGE_KEY, String(clamped));
-    } catch (e) {
-      console.warn('Failed to save font size to localStorage:', e);
-    }
+    fontSizeStore.set(newPx);
   };
+
+  /**
+   * Responds to Back/Forward.
+   *
+   * A history traversal changes the address bar without going through
+   * `handleSelectCourse`, so the selection has to be re-derived from the URL or
+   * the page and the address bar disagree after a Back press.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      const location = currentCatalogLocation();
+      if (location.courseId === null) {
+        setSelectedCourse(null);
+        return;
+      }
+      // The catalog may not have loaded yet on a cold Back into a deep link, so
+      // the row is resolved from whatever list the page currently holds.
+      const match = courses.find((c) => c.id === location.courseId);
+      if (match) setSelectedCourse(match);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [courses]);
 
   const fetchCourses = useCallback(async () => {
     try {
-      setIsLoading(true);
+      // Only show the spinner when there is genuinely nothing to render yet.
+      // The bundled catalog is available synchronously, so a first-paint load
+      // flashed "正在載入..." over a page that was already complete (visible as
+      // home -> spinner -> home). A refresh with data on screen stays silent;
+      // the fetched rows simply replace the bundled ones.
+      if (!hasCoursesRef.current) setIsLoading(true);
       setError(null);
       const res = await fetch(`/api/courses?t=${Date.now()}`, {
         cache: 'no-store'
@@ -361,8 +528,16 @@ export default function Home() {
     // while the count alternated. The ref breaks that cycle.
   }, []);
 
+  // Initial catalog refresh. The bundled catalog is already rendered, so this
+  // only reconciles it with the server.
+  //
+  // The lint rule cannot see through the call: `fetchCourses` does contain a
+  // `setIsLoading(true)`, but it is behind `if (!hasCoursesRef.current)`, which
+  // is false on mount because the bundled catalog is present. The only state
+  // write that can happen here is the one after the network round-trip.
   useEffect(() => {
-    fetchCourses();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchCourses();
   }, [fetchCourses]);
 
   const handleSelectCourse = (course: CourseItem) => {
@@ -373,12 +548,48 @@ export default function Home() {
     } catch (e) {
       console.warn('Failed to save last course ID to localStorage:', e);
     }
+    pushCatalogUrl(course.id);
   };
+
+  /**
+   * Writes the selection into the address bar.
+   *
+   * `pushState` rather than the router: navigating through the App Router would
+   * re-render this page component, remount `AudioProvider`, and stop playback.
+   * The History entry is what makes the URL shareable and the Back button work.
+   */
+  const pushCatalogUrl = useCallback((courseId: number | null, episode?: number | null) => {
+    if (typeof window === 'undefined') return;
+    const next = buildCoursePath(courseId, episode);
+    if (window.location.pathname + window.location.search === next) return;
+    window.history.pushState({ courseId }, '', next);
+  }, []);
+
+  /**
+   * Opens the course that owns a stored position and asks it to start there.
+   *
+   * Selecting the course and queueing the episode are separate steps because
+   * the episode list does not exist until `CourseDetail` has discovered it.
+   */
+  const handleResumeFromHome = useCallback(
+    (course: CourseItem, filename: string, position: number) => {
+      setSelectedCourse(course);
+      setIsMobileSidebarOpen(false);
+      setAutoPlayRequest({ filename, position });
+      try {
+        localStorage.setItem(LAST_COURSE_STORAGE_KEY, String(course.id));
+      } catch {}
+    },
+    []
+  );
 
   const handleGoHome = useCallback(() => {
     setSelectedCourse(null);
     setIsMobileSidebarOpen(false);
     setIsZenMode(false);
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      window.history.pushState({ courseId: null }, '', '/');
+    }
     try {
       localStorage.removeItem(LAST_COURSE_STORAGE_KEY);
     } catch (e) {
@@ -427,6 +638,11 @@ export default function Home() {
           >
             妙境法軒
           </span>
+          {isOfflineReady && (
+            <span className="offline-ready-badge" title="已啟用離線快取：聽過的講記可在無網路時重聽">
+              離線
+            </span>
+          )}
           <button
             className="settings-open-btn mobile-settings-btn"
             onClick={() => setIsSettingsOpen(true)}
@@ -442,9 +658,7 @@ export default function Home() {
           courses={courses}
           selectedCourse={selectedCourse}
           handleSelectCourse={handleSelectCourse}
-          fetchCourses={fetchCourses}
           theme={theme}
-          handleSelectTheme={handleSelectTheme}
           setIsSettingsOpen={setIsSettingsOpen}
           isLoading={isLoading}
           error={error}
@@ -452,6 +666,11 @@ export default function Home() {
           setIsZenMode={setIsZenMode}
           isMobileViewport={isMobileViewport}
           onGoHome={handleGoHome}
+          favorites={favorites}
+          onToggleFavorite={handleToggleFavorite}
+          onResume={handleResumeFromHome}
+          autoPlayRequest={autoPlayRequest}
+          onAutoPlayConsumed={() => setAutoPlayRequest(null)}
         />
 
         {/* Settings Modal Panel */}

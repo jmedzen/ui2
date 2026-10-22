@@ -1,8 +1,15 @@
 'use client';
 
-import React, { useState, useMemo, useDeferredValue, useEffect } from 'react';
+import React, { useState, useMemo, useDeferredValue, useSyncExternalStore } from 'react';
 import { CourseItem, TreeNode, ThemeType } from '@/types/course';
 import { useAudio } from '@/context/AudioContext';
+import { isFavorite, type FavoriteRecord } from '@/lib/playbackStore';
+import {
+  getRecentCoursesSnapshot,
+  getRecentCoursesServerSnapshot,
+  pushRecentCourse,
+  subscribeRecentCourses
+} from '@/lib/recentCourses';
 
 /**
  * How many recently-visited courses are remembered and displayed.
@@ -10,17 +17,16 @@ import { useAudio } from '@/context/AudioContext';
  * Shared by the reader and the writer below so the stored list and the rendered
  * list can never drift apart.
  */
-const MAX_RECENT_COURSES = 4;
-
 interface TreeNavProps {
   courses: CourseItem[];
   selectedCourse: CourseItem | null;
   onSelectCourse: (course: CourseItem) => void;
-  onRefreshCourses: () => Promise<void>;
+  /** Palette class applied to the sidebar shell. */
   theme: ThemeType;
-  onSelectTheme: (theme: ThemeType) => void;
   onOpenSettings: () => void;
   onGoHome?: () => void;
+  favorites: FavoriteRecord[];
+  onToggleFavorite: (course: CourseItem) => void;
 }
 
 type MediaFilterType = 'all' | 'audio' | 'video' | 'pdf';
@@ -29,53 +35,43 @@ export default function TreeNav({
   courses,
   selectedCourse,
   onSelectCourse,
-  onRefreshCourses,
   theme,
-  onSelectTheme,
   onOpenSettings,
-  onGoHome
+  onGoHome,
+  favorites,
+  onToggleFavorite
 }: TreeNavProps) {
-  const { currentTrack, isPlaying } = useAudio();
+  const { currentTrack } = useAudio();
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const [mediaFilter, setMediaFilter] = useState<MediaFilterType>('all');
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
 
-  // Recently Visited Courses History
-  const [recentCourseIds, setRecentCourseIds] = useState<number[]>([]);
+  // Recently Visited Courses History.
+  //
+  // Read from an external store rather than mirrored into state by an effect:
+  // the list is written when a course is opened, so the write belongs in the
+  // click handler, and the read is a snapshot subscription.
   const [isRecentOpen, setIsRecentOpen] = useState<boolean>(true);
+  const [isFavoritesOpen, setIsFavoritesOpen] = useState<boolean>(true);
+  const recentCourseIds = useSyncExternalStore(
+    subscribeRecentCourses,
+    getRecentCoursesSnapshot,
+    getRecentCoursesServerSnapshot
+  );
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('fayun_recent_course_ids');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          // localStorage is user-writable and survives upgrades, so the stored
-          // value cannot be trusted: keep only finite numeric ids and at most
-          // the number this feature actually displays. Otherwise a corrupted or
-          // hand-edited entry would be held in state and re-persisted forever.
-          const ids = parsed
-            .filter((id): id is number => typeof id === 'number' && Number.isFinite(id))
-            .slice(0, MAX_RECENT_COURSES);
-          setRecentCourseIds(ids);
-        }
-      }
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    if (!selectedCourse) return;
-    setRecentCourseIds((prev) => {
-      const filtered = prev.filter((id) => id !== selectedCourse.id);
-      const updated = [selectedCourse.id, ...filtered].slice(0, MAX_RECENT_COURSES);
-      try {
-        localStorage.setItem('fayun_recent_course_ids', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
-  }, [selectedCourse?.id]);
+  /**
+   * Selection handler for every entry point in the sidebar.
+   *
+   * Recording the visit here (a click handler) rather than in an effect keeps
+   * the write on the interaction that caused it, so there is no second render
+   * just to update the recent list.
+   */
+  const handleOpenCourse = (course: CourseItem) => {
+    pushRecentCourse(course.id);
+    onSelectCourse(course);
+  };
 
   const recentList = useMemo(() => {
     // Index the catalog once so the "recently studied" lookup stays O(n) overall
@@ -86,6 +82,21 @@ export default function TreeNav({
       .map((id) => byId.get(id))
       .filter((c): c is CourseItem => Boolean(c));
   }, [recentCourseIds, courses]);
+
+  /**
+   * Favorites resolved against the live catalog.
+   *
+   * A stored favorite whose course disappeared from the catalog (renamed or
+   * removed upstream) is skipped rather than rendered as a dead chip; its
+   * record is left in storage so it comes back if the course returns.
+   */
+  const favoriteList = useMemo(() => {
+    const byId = new Map<number, CourseItem>();
+    for (const c of courses) byId.set(c.id, c);
+    return favorites
+      .map((fav) => byId.get(fav.id))
+      .filter((c): c is CourseItem => Boolean(c));
+  }, [favorites, courses]);
 
   // Build hierarchical tree: Main Menu -> Sub Menu -> Topic -> Courses with O(N) Map Indexing
   const treeData = useMemo(() => {
@@ -110,14 +121,26 @@ export default function TreeNav({
       // Search the branch titles the user can actually see in the tree as well
       // as the row's own fields; matching only name/location/time/topic meant
       // typing a visible category such as 開示與法語 returned "未找到".
+      //
+      // Every term must match (AND, not OR): typing "金剛 1998" used to return
+      // every 金剛 course plus every 1998 course, which is rarely what a reader
+      // narrowing a catalogue wants. PDF filenames are included because the
+      // lecture-note titles are often the only place a topic is named in full.
       if (q) {
-        const matchName = (course.name || '').toLowerCase().includes(q);
-        const matchMain = (course.main_menu_title || '').toLowerCase().includes(q);
-        const matchSub = (course.sub_menu_title || '').toLowerCase().includes(q);
-        const matchLoc = (course.location || '').toLowerCase().includes(q);
-        const matchYear = (course.time || '').toLowerCase().includes(q);
-        const matchTopic = (course.topic_title || '').toLowerCase().includes(q);
-        if (!matchName && !matchMain && !matchSub && !matchLoc && !matchYear && !matchTopic) {
+        const terms = q.split(/\s+/).filter(Boolean);
+        const haystack = [
+          course.name,
+          course.main_menu_title,
+          course.sub_menu_title,
+          course.location,
+          course.time,
+          course.topic_title,
+          course.comment || '',
+          ...(course.pdfs || []).map((p) => p.filename)
+        ]
+          .map((value) => (value || '').toLowerCase())
+          .join('\u0000');
+        if (!terms.every((term) => haystack.includes(term))) {
           return;
         }
       }
@@ -220,7 +243,7 @@ export default function TreeNav({
         return (
           <li key={node.id} className="tree-leaf-item">
             <button
-              onClick={() => node.course && onSelectCourse(node.course)}
+              onClick={() => node.course && handleOpenCourse(node.course)}
               className={`tree-leaf-btn ${isSelected ? 'selected' : ''}`}
               style={{ paddingLeft: `${depth * 14 + 16}px` }}
             >
@@ -242,6 +265,36 @@ export default function TreeNav({
               ) : null}
               {node.course?.pdfs && node.course.pdfs.length > 0 && (
                 <span className="badge-pdf" title={`包含 ${node.course.pdfs.length} 份 PDF 講義筆記`}>📄 講義</span>
+              )}
+              {node.course && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className={`leaf-favorite-btn ${isFavorite(favorites, node.course.id) ? 'active' : ''}`}
+                  title={
+                    isFavorite(favorites, node.course.id)
+                      ? '移除收藏'
+                      : '加入收藏（可在側欄「我的收藏」快速回到本課程）'
+                  }
+                  aria-label={
+                    isFavorite(favorites, node.course.id) ? '移除收藏' : '加入收藏'
+                  }
+                  aria-pressed={isFavorite(favorites, node.course.id)}
+                  onClick={(e) => {
+                    // The row itself selects the course; the star must not.
+                    e.stopPropagation();
+                    if (node.course) onToggleFavorite(node.course);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (node.course) onToggleFavorite(node.course);
+                    }
+                  }}
+                >
+                  {isFavorite(favorites, node.course.id) ? '★' : '☆'}
+                </span>
               )}
             </button>
           </li>
@@ -394,13 +447,53 @@ export default function TreeNav({
               {recentList.map((c) => (
                 <button
                   key={c.id}
-                  onClick={() => onSelectCourse(c)}
+                  onClick={() => handleOpenCourse(c)}
                   className={`recent-chip ${selectedCourse?.id === c.id ? 'active' : ''}`}
                   title={`重返研讀：${c.name}`}
                 >
                   <span className="recent-chip-icon">📖</span>
                   <span className="recent-chip-name">{c.name}</span>
                 </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* My Favorites */}
+      {favoriteList.length > 0 && !deferredSearchQuery.trim() && (
+        <div className="recent-study-section favorites-section">
+          <div
+            className="recent-study-header"
+            onClick={() => setIsFavoritesOpen(!isFavoritesOpen)}
+            title="點擊展開/收合我的收藏"
+          >
+            <span className="recent-study-title">★ 我的收藏 ({favoriteList.length})</span>
+            <span className={`recent-arrow ${isFavoritesOpen ? 'open' : ''}`}>
+              {isFavoritesOpen ? '▼' : '▶'}
+            </span>
+          </div>
+          {isFavoritesOpen && (
+            <div className="recent-study-chips">
+              {favoriteList.map((c) => (
+                <span key={c.id} className="recent-chip-wrapper">
+                  <button
+                    onClick={() => handleOpenCourse(c)}
+                    className={`recent-chip ${selectedCourse?.id === c.id ? 'active' : ''}`}
+                    title={`前往《${c.name}》`}
+                  >
+                    <span className="recent-chip-icon">★</span>
+                    <span className="recent-chip-name">{c.name}</span>
+                  </button>
+                  <button
+                    className="favorite-remove-btn"
+                    onClick={() => onToggleFavorite(c)}
+                    title="移除收藏"
+                    aria-label={`從收藏移除《${c.name}》`}
+                  >
+                    ✕
+                  </button>
+                </span>
               ))}
             </div>
           )}

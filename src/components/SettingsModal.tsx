@@ -1,8 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ThemeType } from '@/types/course';
 import AdminSecurityPanel from './AdminSecurityPanel';
+import {
+  THEME_LABELS,
+  THEME_PREFERENCES,
+  type ThemePreference
+} from '@/lib/themePreference';
 import SiteUrlPanel from './SiteUrlPanel';
 import packageInfo from '../../package.json';
 
@@ -13,8 +17,8 @@ function errorMessage(error: unknown): string {
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  theme: ThemeType;
-  onSelectTheme: (theme: ThemeType) => void;
+  theme: ThemePreference;
+  onSelectTheme: (theme: ThemePreference) => void;
   fontSizePx: number;
   onSelectFontSize: (sizePx: number) => void;
   onRefreshCourses?: () => Promise<void>;
@@ -654,60 +658,33 @@ export default function SettingsModal({
                 <p className="settings-section-desc">選擇適合您專注研讀與視力舒適的禪意配色主題</p>
 
                 <div className="theme-options-grid">
-                  <button
-                    className={`theme-option-btn dark ${theme === 'dark' ? 'active' : ''}`}
-                    onClick={() => onSelectTheme('dark')}
-                  >
-                    <span className="theme-icon">🌙</span>
-                    <span className="theme-name">玄夜禪月</span>
-                    <span className="theme-tag">深色</span>
-                  </button>
-
-                  <button
-                    className={`theme-option-btn light ${theme === 'light' ? 'active' : ''}`}
-                    onClick={() => onSelectTheme('light')}
-                  >
-                    <span className="theme-icon">☀️</span>
-                    <span className="theme-name">淨白雲卷</span>
-                    <span className="theme-tag">淺色</span>
-                  </button>
-
-                  <button
-                    className={`theme-option-btn pine ${theme === 'pine' ? 'active' : ''}`}
-                    onClick={() => onSelectTheme('pine')}
-                  >
-                    <span className="theme-icon">🍃</span>
-                    <span className="theme-name">松林竹韻</span>
-                    <span className="theme-tag">竹綠</span>
-                  </button>
-
-                  <button
-                    className={`theme-option-btn sandalwood ${theme === 'sandalwood' ? 'active' : ''}`}
-                    onClick={() => onSelectTheme('sandalwood')}
-                  >
-                    <span className="theme-icon">🪵</span>
-                    <span className="theme-name">古木沉香</span>
-                    <span className="theme-tag">茶木</span>
-                  </button>
-
-                  <button
-                    className={`theme-option-btn zen ${theme === 'zen' ? 'active' : ''}`}
-                    onClick={() => onSelectTheme('zen')}
-                  >
-                    <span className="theme-icon">🍵</span>
-                    <span className="theme-name">日式禪風</span>
-                    <span className="theme-tag">和風抹茶</span>
-                  </button>
-
-                  <button
-                    className={`theme-option-btn gruvbox ${theme === 'gruvbox' ? 'active' : ''}`}
-                    onClick={() => onSelectTheme('gruvbox')}
-                  >
-                    <span className="theme-icon">🌾</span>
-                    <span className="theme-name">Gruvbox</span>
-                    <span className="theme-tag">復古暖調</span>
-                  </button>
+                  {THEME_PREFERENCES.map((preference) => {
+                    const meta = THEME_LABELS[preference];
+                    return (
+                      <button
+                        key={preference}
+                        className={`theme-option-btn ${preference} ${theme === preference ? 'active' : ''}`}
+                        onClick={() => onSelectTheme(preference)}
+                        title={
+                          preference === 'system'
+                            ? '跟隨作業系統的淺色／深色外觀，並隨系統切換即時更新'
+                            : `套用「${meta.name}」主題`
+                        }
+                        aria-pressed={theme === preference}
+                      >
+                        <span className="theme-icon">{meta.icon}</span>
+                        <span className="theme-name">{meta.name}</span>
+                        <span className="theme-tag">{meta.tag}</span>
+                      </button>
+                    );
+                  })}
                 </div>
+
+                {theme === 'system' && (
+                  <p className="theme-system-hint">
+                    🖥️ 目前跟隨系統外觀設定；切換作業系統的深色模式時，本站會即時跟著變換。
+                  </p>
+                )}
               </div>
 
               {/* Font Size Section */}

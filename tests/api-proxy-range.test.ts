@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
-import path from 'path';
 import { NextRequest } from 'next/server';
 import { GET } from '@/app/api/proxy/route';
 import { getCacheFilePath, ensureCacheDir, getCacheKey } from '@/lib/serverMediaCache';

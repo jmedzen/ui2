@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { CourseItem, PdfItem } from '@/types/course';
 import { useAudio } from '@/context/AudioContext';
+import { getKeyedStringStore } from '@/lib/stringStore';
 import VideoPlayer, { VideoTrackInfo } from './VideoPlayer';
 import PdfViewer from './PdfViewer';
 
@@ -11,6 +12,78 @@ interface CourseDetailProps {
   isZenMode?: boolean;
   onToggleZenMode?: () => void;
   onGoHome?: () => void;
+  /** Whether this course is in the reader's favorites list. */
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
+  /**
+   * Episode to start as soon as the audio list resolves, with its position.
+   *
+   * Used by the home page's "continue listening" card and by a deep link that
+   * names an episode: the track list is discovered asynchronously, so the
+   * request has to survive until the list exists.
+   */
+  autoPlayRequest?: { filename: string; position: number } | null;
+  /** Called once the request has been honoured, so it is not replayed. */
+  onAutoPlayConsumed?: () => void;
+}
+
+const MIN_SPLIT_RATIO = 25;
+const MAX_SPLIT_RATIO = 75;
+const DEFAULT_SPLIT_RATIO = 50;
+
+const splitRatioStore = getKeyedStringStore<number>({
+  key: 'fayun_split_ratio',
+  fallback: DEFAULT_SPLIT_RATIO,
+  parse: (raw) => {
+    const val = parseFloat(raw);
+    return !isNaN(val) && val >= MIN_SPLIT_RATIO && val <= MAX_SPLIT_RATIO
+      ? val
+      : DEFAULT_SPLIT_RATIO;
+  },
+  serialize: (value) =>
+    String(Math.min(MAX_SPLIT_RATIO, Math.max(MIN_SPLIT_RATIO, value)))
+});
+
+/**
+ * Per-course tab and video-position stores.
+ *
+ * The key includes the course id because the stored preference is
+ * per-course (`fayun_last_tab_<id>`); the factory caches by key, so the
+ * snapshot identity stays stable while the same course is open.
+ */
+const tabStoreFor = (courseId: number) =>
+  getKeyedStringStore<ActiveTab>({
+    key: `fayun_last_tab_${courseId}`,
+    fallback: 'audio',
+    parse: (raw) => (isActiveTab(raw) ? raw : 'audio'),
+    serialize: (value) => value
+  });
+
+const videoIndexStoreFor = (courseId: number) =>
+  getKeyedStringStore<number>({
+    key: `fayun_last_video_idx_${courseId}`,
+    fallback: 0,
+    parse: (raw) => {
+      const parsed = parseInt(raw, 10);
+      return !isNaN(parsed) && parsed >= 0 ? parsed : 0;
+    },
+    serialize: (value) => String(Math.max(0, Math.floor(value)))
+  });
+
+/** Tabs the detail pane can show; also used to validate the stored value. */
+type ActiveTab = 'audio' | 'video' | 'pdf' | 'info' | 'split';
+
+const ACTIVE_TABS: readonly ActiveTab[] = ['audio', 'video', 'pdf', 'info', 'split'];
+
+/**
+ * Validates a value read back from localStorage.
+ *
+ * The stored tab is user-writable and survives upgrades, so it is narrowed
+ * rather than cast: a stale or hand-edited value previously went through
+ * `as any` and put an unknown string into state.
+ */
+function isActiveTab(value: unknown): value is ActiveTab {
+  return typeof value === 'string' && (ACTIVE_TABS as readonly string[]).includes(value);
 }
 
 const AUDIO_EXTS = ['.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac', '.mp4', '.m4v', '.webm', '.mov'];
@@ -45,7 +118,14 @@ const sortVolumes = (vols: string[]): string[] => {
   });
 };
 
-const extractFilename = (item: any): string => {
+/**
+ * A file as returned by the upstream directory-listing endpoint: either a bare
+ * filename or a `{ name }` record. The endpoint is external, so this is the only
+ * shape trusted about it.
+ */
+type FileEntry = string | { name?: unknown };
+
+const extractFilename = (item: FileEntry): string => {
   if (typeof item === 'string') return item;
   if (item && typeof item.name === 'string') return item.name;
   return String(item || '');
@@ -132,34 +212,45 @@ const canonicalPdfPath = (folder: string, name: string): string => {
   return `${segments.join('/')}::${decodedName}`;
 };
 
-export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoHome }: CourseDetailProps) {
+export default function CourseDetail({
+  course,
+  isZenMode,
+  onToggleZenMode,
+  onGoHome,
+  isFavorite,
+  onToggleFavorite,
+  autoPlayRequest,
+  onAutoPlayConsumed
+}: CourseDetailProps) {
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
 
-  const [activeTab, setActiveTab] = useState<'audio' | 'video' | 'pdf' | 'info' | 'split'>('audio');
+
   const [audioTracks, setAudioTracks] = useState<AudioTrackInfo[]>([]);
   const [availableVolumes, setAvailableVolumes] = useState<string[]>([]);
   const [selectedVolume, setSelectedVolume] = useState<string>('all');
   const [videoTracks, setVideoTracks] = useState<VideoTrackInfo[]>([]);
   const [pdfTracks, setPdfTracks] = useState<PdfItem[]>(course.pdfs || []);
-  const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
+
   const [isLoadingAudio, setIsLoadingAudio] = useState<boolean>(false);
   const [isLoadingVideo, setIsLoadingVideo] = useState<boolean>(false);
   const [isLoadingPdf, setIsLoadingPdf] = useState<boolean>(false);
   const [episodeSearch, setEpisodeSearch] = useState<string>('');
 
   // Draggable Split-Screen Ratio
-  const [splitRatio, setSplitRatio] = useState<number>(50);
+  /**
+   * Reader-adjusted split-pane width, persisted across visits.
+   *
+   * Held in a module-level store rather than restored by a mount effect: the
+   * pane must not paint at the default width and then jump, and writing state
+   * from an effect is the pattern the hooks rules reject.
+   */
+  const splitRatio = useSyncExternalStore(
+    splitRatioStore.subscribe,
+    splitRatioStore.getSnapshot,
+    splitRatioStore.getServerSnapshot
+  );
+  const setSplitRatio = (value: number) => splitRatioStore.set(value);
   const splitContainerRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    try {
-      const savedRatio = localStorage.getItem('fayun_split_ratio');
-      if (savedRatio) {
-        const val = parseFloat(savedRatio);
-        if (!isNaN(val) && val >= 25 && val <= 75) setSplitRatio(val);
-      }
-    } catch {}
-  }, []);
 
   // Drag listeners are registered on window; keep handles so an unmount in the
   // middle of a drag (e.g. switching course) cannot leave them attached.
@@ -198,9 +289,9 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
     const handleMouseUp = () => {
       splitDragCleanupRef.current?.();
       splitDragCleanupRef.current = null;
-      try {
-        localStorage.setItem('fayun_split_ratio', String(pendingRatio.toFixed(1)));
-      } catch {}
+      // Through the store, so subscribers update and the write is not a second
+      // path to a key the store already owns.
+      splitRatioStore.set(Number(pendingRatio.toFixed(1)));
     };
 
     const cleanup = () => {
@@ -280,7 +371,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
 
             sortedVols.forEach((vol) => {
               const vData = listData[vol];
-              let audioList: any[] = [];
+              let audioList: FileEntry[] = [];
               let audioSubfolder = 'audio';
 
               if (Array.isArray(vData)) {
@@ -410,7 +501,11 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
     async function loadVideoTracks() {
       setIsLoadingVideo(true);
       setVideoTracks([]);
-      setCurrentVideoIndex(0);
+      // Not `setCurrentVideoIndex`: that setter is declared further down, and
+      // resetting the index here only matters once the new list arrives (the
+      // clamp handles it). Persisting 0 would also discard the reader's saved
+      // position for this course.
+
 
       let fetchedVideos: VideoTrackInfo[] = [];
       const vPath = course.video_path || sharedRootDirFor(course);
@@ -480,7 +575,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
 
                 sortedVols.forEach((vol) => {
                   const vData = listData[vol];
-                  let videoList: any[] = [];
+                  let videoList: FileEntry[] = [];
                   let videoSubfolder = 'video';
 
                   if (Array.isArray(vData)) {
@@ -537,8 +632,8 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
               }
             }
           }
-        } catch (e: any) {
-          if (e.name !== 'AbortError') {
+        } catch (e: unknown) {
+          if (!(e instanceof Error && e.name === 'AbortError')) {
             console.warn('Failed to fetch remote video list:', e);
           }
         }
@@ -556,8 +651,10 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
       setPdfTracks(initialPdfs);
 
       const potentialPaths: string[] = [];
-      if ((course as any).lecture_path) potentialPaths.push((course as any).lecture_path);
-      if ((course as any).pdf_path) potentialPaths.push((course as any).pdf_path);
+      // `lecture_path` is declared on CourseItem and present on 603 rows.
+      // A `pdf_path` cast used to be pushed here too, but the field exists on
+      // zero rows and is not part of the type, so it was always a dead branch.
+      if (course.lecture_path) potentialPaths.push(course.lecture_path);
 
       if (course.name.includes('本地分')) {
         // Scope to this course's own volume. Pushing the shared root here made
@@ -610,7 +707,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
             const pdfFilenames: { name: string; displayName?: string; folder: string }[] = [];
 
             if (Array.isArray(listData)) {
-              listData.forEach((item: any) => {
+              listData.forEach((item: FileEntry) => {
                 const fname = extractFilename(item);
                 if (fname.toLowerCase().endsWith('.pdf')) {
                   pdfFilenames.push({ name: fname, folder: dirPath });
@@ -644,7 +741,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
                   const pdfList = Array.isArray(val)
                     ? val
                     : (Array.isArray(val.bilu) ? val.bilu : (Array.isArray(val.pdf) ? val.pdf : []));
-                  pdfList.forEach((item: any) => {
+                  pdfList.forEach((item: FileEntry) => {
                     const fname = extractFilename(item);
                     if (fname.toLowerCase().endsWith('.pdf')) {
                       pdfFilenames.push({
@@ -663,7 +760,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
                 mediaKeyNames.forEach((key) => {
                   const val = listData[key];
                   if (Array.isArray(val)) {
-                    val.forEach((item: any) => {
+                    val.forEach((item: FileEntry) => {
                       const fname = extractFilename(item);
                       if (fname.toLowerCase().endsWith('.pdf')) {
                         pdfFilenames.push({ name: fname, folder: `${dirPath}/${key}` });
@@ -672,7 +769,7 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
                   } else if (val && typeof val === 'object') {
                     Object.entries(val).forEach(([subKey, subVal]) => {
                       if (Array.isArray(subVal)) {
-                        subVal.forEach((item: any) => {
+                        subVal.forEach((item: FileEntry) => {
                           const fname = extractFilename(item);
                           if (fname.toLowerCase().endsWith('.pdf')) {
                             pdfFilenames.push({ name: fname, folder: `${dirPath}/${key}/${subKey}` });
@@ -708,8 +805,8 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
             });
           }
         });
-      } catch (e: any) {
-        if (e.name !== 'AbortError') {
+      } catch (e: unknown) {
+        if (!(e instanceof Error && e.name === 'AbortError')) {
           console.warn('Failed to fetch remote PDF list:', e);
         }
       }
@@ -740,58 +837,70 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
 
   const hasVideo = Boolean(course.video_path || (course.name && course.name.includes('本地分')));
 
-  // The index actually handed to VideoPlayer. Guarding both the lookup it does
-  // (`tracks[currentTrackIndex]`) and its "第 N / M 集" label against a stale
-  // saved index, for the frames before the clamp effect below has run. The
-  // stored state itself is deliberately left untouched here so the persistence
-  // contract (fayun_last_video_idx_<id>) still round-trips.
-  const safeVideoIndex =
-    videoTracks.length > 0 && currentVideoIndex >= videoTracks.length ? 0 : currentVideoIndex;
-
   // Reset the tab during render when the course changes.
   //
-  // The restore effect below runs *after* render, so the first commit after
-  // selecting a new course rendered the previous course's tab (a video or PDF
-  // pane backed by this course's still-empty lists). Adjusting state during
-  // render is React's documented way to avoid that extra, wrong frame.
-  const [tabCourseId, setTabCourseId] = useState<number>(course.id);
-  if (tabCourseId !== course.id) {
-    setTabCourseId(course.id);
-    setActiveTab('audio');
+  /**
+   * Per-course tab and video position, restored from storage.
+   *
+   * These are read during render from keyed stores instead of being pushed into
+   * state by a mount effect. The old effect had two problems it could not solve:
+   * it ran after the first paint (so the previous course's tab showed for one
+   * frame), and it wrote state on every mount/course change, which is the
+   * cascading-render pattern the hooks rules reject.
+   *
+   * The manual override below is tagged with the course it belongs to, so the
+   * stored value wins again as soon as a different course is opened.
+   */
+  const tabOverride = useSyncExternalStore(
+    tabStoreFor(course.id).subscribe,
+    tabStoreFor(course.id).getSnapshot,
+    tabStoreFor(course.id).getServerSnapshot
+  );
+
+  // A stored `video`/`split` tab is not reachable for a course with no video, so
+  // it falls back to the audio tab rather than rendering an empty pane.
+  const activeTab: ActiveTab =
+    (tabOverride === 'video' || tabOverride === 'split') && !hasVideo ? 'audio' : tabOverride;
+
+  const setActiveTab = (tab: ActiveTab) => {
+    tabStoreFor(course.id).set(tab);
+  };
+
+  const savedVideoIndex = useSyncExternalStore(
+    videoIndexStoreFor(course.id).subscribe,
+    videoIndexStoreFor(course.id).getSnapshot,
+    videoIndexStoreFor(course.id).getServerSnapshot
+  );
+
+  // Seeded from the stored value once per course, then owned by the component.
+  const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(savedVideoIndex);
+  const [videoIndexCourseId, setVideoIndexCourseId] = useState<number>(course.id);
+  if (videoIndexCourseId !== course.id) {
+    setVideoIndexCourseId(course.id);
+    setCurrentVideoIndex(savedVideoIndex);
   }
 
-  // Restore saved active tab & video index per course on mount/course change
+  /**
+   * Persists the video position for this course.
+   *
+   * A write to storage, not a state update, so it belongs in an effect: doing it
+   * inside the render-phase clamp below would touch `localStorage` and notify
+   * subscribers while rendering, which is not allowed.
+   */
   useEffect(() => {
-    try {
-      const savedTab = localStorage.getItem(`fayun_last_tab_${course.id}`);
-      if (savedTab && ['audio', 'video', 'pdf', 'info', 'split'].includes(savedTab)) {
-        if ((savedTab === 'video' || savedTab === 'split') && !hasVideo) {
-          setActiveTab('audio');
-        } else {
-          setActiveTab(savedTab as any);
-        }
-      } else {
-        setActiveTab('audio');
-      }
+    videoIndexStoreFor(course.id).set(currentVideoIndex);
+  }, [course.id, currentVideoIndex]);
 
-      const savedVideoIdx = localStorage.getItem(`fayun_last_video_idx_${course.id}`);
-      if (savedVideoIdx) {
-        const parsed = parseInt(savedVideoIdx, 10);
-        // Lower bound only. `videoTracks` is still empty here (discovery is an
-        // async request), so the upper bound cannot be applied until the list
-        // arrives — the clamp effect below does that.
-        if (!isNaN(parsed) && parsed >= 0) {
-          setCurrentVideoIndex(parsed);
-        } else {
-          setCurrentVideoIndex(0);
-        }
-      } else {
-        setCurrentVideoIndex(0);
-      }
-    } catch (e) {
-      console.warn('Failed to restore course tab state:', e);
-    }
-  }, [course.id, course.video_path, hasVideo]);
+  const handleVideoIndexChange = (idx: number) => {
+    setCurrentVideoIndex(idx);
+  };
+
+  // The index actually handed to VideoPlayer. Guards both the lookup it does
+  // (`tracks[currentTrackIndex]`) and its "第 N / M 集" label against a stale
+  // saved index, for the frames before the clamp below has run. The stored value
+  // itself is left untouched so persistence still round-trips.
+  const safeVideoIndex =
+    videoTracks.length > 0 && currentVideoIndex >= videoTracks.length ? 0 : currentVideoIndex;
 
   // Clamp the restored video index against the discovered list.
   //
@@ -810,7 +919,9 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
   if (videoListLength !== videoTracks.length) {
     setVideoListLength(videoTracks.length);
     if (videoTracks.length > 0 && currentVideoIndex >= videoTracks.length) {
-      setCurrentVideoIndex(0);
+      // Also resets the stored index: leaving a now-invalid value in storage
+      // made the clamp re-run on every future visit for this course.
+      handleVideoIndexChange(0);
     }
   }
 
@@ -821,29 +932,69 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
     if (tab === 'video' && isPlaying) {
       togglePlay();
     }
+    // The store persists and notifies subscribers; no separate localStorage
+    // write here, which would be a second path to the same key.
     setActiveTab(tab);
-    try {
-      localStorage.setItem(`fayun_last_tab_${course.id}`, tab);
-    } catch {}
   };
 
   const handleVideoSelect = (idx: number) => {
     if (idx >= 0 && idx < videoTracks.length) {
-      setCurrentVideoIndex(idx);
+      // The persistence effect watches `currentVideoIndex` and writes it, so no
+      // direct storage write here.
+      handleVideoIndexChange(idx);
       if (isPlaying) {
         togglePlay();
       }
-      try {
-        localStorage.setItem(`fayun_last_video_idx_${course.id}`, String(idx));
-      } catch {}
     }
   };
 
-  useEffect(() => {
+  // Reset the volume filter and the episode search when the course changes.
+  //
+  // Done during render (the same idiom as the tab reset above) so the first
+  // commit for the new course already shows the unfiltered list instead of
+  // briefly applying the previous course's volume, which matched nothing and
+  // rendered an empty episode list for one frame.
+  const [filtersCourseId, setFiltersCourseId] = useState<number>(course.id);
+  if (filtersCourseId !== course.id) {
+    setFiltersCourseId(course.id);
     setSelectedVolume('all');
     setAvailableVolumes([]);
     setEpisodeSearch('');
-  }, [course.id]);
+  }
+
+  /**
+   * Honours a pending "start this episode" request.
+   *
+   * The track list is discovered asynchronously, so the request can arrive
+   * before there is anything to play. This waits for both the list and the
+   * request, matches by filename (the URL carries the episode's identity, not
+   * its position, since the list order is not guaranteed), and only then
+   * consumes the request — a failed match leaves it pending rather than
+   * silently dropping the user somewhere else.
+   */
+  useEffect(() => {
+    if (!autoPlayRequest || audioTracks.length === 0) return;
+
+    const target =
+      audioTracks.find((t) => (t.displayName || t.filename) === autoPlayRequest.filename) ||
+      audioTracks.find((t) => t.filename === autoPlayRequest.filename) ||
+      audioTracks.find((t) => t.filename.includes(autoPlayRequest.filename));
+    if (!target) return;
+
+    playTrack(
+      course.name,
+      course.id,
+      audioTracks.map((t) => ({
+        filename: t.displayName || t.filename,
+        url: t.url,
+        proxyUrl: t.proxyUrl,
+        index: t.index
+      })),
+      target.index,
+      autoPlayRequest.position
+    );
+    onAutoPlayConsumed?.();
+  }, [autoPlayRequest, audioTracks, course.name, course.id, playTrack, onAutoPlayConsumed]);
 
   const filteredAudioTracks = audioTracks.filter((t) => {
     const matchVol = selectedVolume === 'all' || t.volume === selectedVolume;
@@ -885,15 +1036,27 @@ export default function CourseDetail({ course, isZenMode, onToggleZenMode, onGoH
             <span className="current">{course.name}</span>
           </div>
 
-          {onToggleZenMode && (
-            <button
-              className={`zen-focus-toggle-btn ${isZenMode ? 'active' : ''}`}
-              onClick={onToggleZenMode}
-              title={isZenMode ? '退出禪境專注模式 (Esc)' : '一鍵開啟禪境專注模式 (全螢幕研經聽法)'}
-            >
-              {isZenMode ? '✕ 退出專注 (Esc)' : '⛶ 禪境專注'}
-            </button>
-          )}
+          <div className="course-header-actions">
+            {onToggleFavorite && (
+              <button
+                className={`course-favorite-btn ${isFavorite ? 'active' : ''}`}
+                onClick={onToggleFavorite}
+                title={isFavorite ? '從「我的收藏」移除本課程' : '加入「我的收藏」快速回訪'}
+                aria-pressed={Boolean(isFavorite)}
+              >
+                {isFavorite ? '★ 已收藏' : '☆ 收藏'}
+              </button>
+            )}
+            {onToggleZenMode && (
+              <button
+                className={`zen-focus-toggle-btn ${isZenMode ? 'active' : ''}`}
+                onClick={onToggleZenMode}
+                title={isZenMode ? '退出禪境專注模式 (Esc)' : '一鍵開啟禪境專注模式 (全螢幕研經聽法)'}
+              >
+                {isZenMode ? '✕ 退出專注 (Esc)' : '⛶ 禪境專注'}
+              </button>
+            )}
+          </div>
         </div>
 
         <h1 className="course-title">{course.name}</h1>

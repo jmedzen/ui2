@@ -54,3 +54,6 @@ media_cache/
 # python cache
 __pycache__/
 *.pyc
+
+# Local browser-verification artifacts (screenshots from headless Chrome)
+.verify/

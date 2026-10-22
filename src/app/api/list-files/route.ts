@@ -1,8 +1,20 @@
 import { NextResponse } from 'next/server';
 
+/**
+ * Shape of the upstream directory listing.
+ *
+ * The proxy forwards the remote service's JSON verbatim, so only the field this
+ * route actually reads is declared; everything else stays `unknown` rather than
+ * being trusted.
+ */
+interface UpstreamListing {
+  status?: boolean;
+  [key: string]: unknown;
+}
+
 // Server-side In-Memory LRU Cache (TTL: 1 Hour, Max Capacity: 300 entries)
 interface CacheEntry {
-  data: any;
+  data: UpstreamListing;
   timestamp: number;
   ttl: number;
   status: number;
@@ -123,8 +135,8 @@ export async function POST(request: Request) {
         cache: 'no-store',
         signal: controller.signal
       });
-    } catch (e: any) {
-      if (e?.name === 'AbortError') {
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') {
         return NextResponse.json({ error: 'Upstream directory listing timed out' }, { status: 504 });
       }
       return NextResponse.json({ error: 'Upstream directory listing failed' }, { status: 502 });
@@ -205,9 +217,9 @@ export async function POST(request: Request) {
       text = Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf-8');
     }
 
-    let data: any;
+    let data: UpstreamListing;
     try {
-      data = JSON.parse(text);
+      data = JSON.parse(text) as UpstreamListing;
     } catch {
       return NextResponse.json({ error: 'Upstream returned malformed JSON' }, { status: 502 });
     }
@@ -231,7 +243,7 @@ export async function POST(request: Request) {
         'Cache-Control': 'public, max-age=3600'
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[API/ListFiles] Error:', error);
     return NextResponse.json({ error: 'Failed to list files' }, { status: 500 });
   }

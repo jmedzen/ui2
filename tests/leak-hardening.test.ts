@@ -159,14 +159,21 @@ test('Whole-site leak hardening', async (t) => {
     );
   });
 
-  await t.test('TreeNav validates and bounds stored recent-course ids', () => {
-    const src = read('src/components/TreeNav.tsx');
+  await t.test('recent-course ids are validated and bounded', () => {
+    // The logic moved out of TreeNav into a store shared by the reader and the
+    // writer, so the invariants are asserted where they now live.
+    const store = read('src/lib/recentCourses.ts');
 
-    assert.match(src, /const MAX_RECENT_COURSES = 4;/);
-    assert.match(src, /typeof id === 'number' && Number\.isFinite\(id\)/);
-    assert.match(src, /\.slice\(0, MAX_RECENT_COURSES\)/);
+    assert.match(store, /export const MAX_RECENT_COURSES = 4;/);
+    assert.match(store, /typeof id === 'number' && Number\.isFinite\(id\)/);
+    assert.match(store, /\.slice\(0, MAX_RECENT_COURSES\)/);
     // The writer uses the same bound, so reader and writer cannot diverge.
-    assert.doesNotMatch(src, /\.slice\(0, 4\)/);
+    assert.doesNotMatch(store, /\.slice\(0, 4\)/);
+
+    // TreeNav must consume the store rather than re-implementing the rules.
+    const src = read('src/components/TreeNav.tsx');
+    assert.match(src, /getRecentCoursesSnapshot/);
+    assert.doesNotMatch(src, /const MAX_RECENT_COURSES = 4;/);
   });
 
   await t.test('TreeNav audio pill tests audio_path, and search covers branch titles', () => {
@@ -177,10 +184,21 @@ test('Whole-site leak hardening', async (t) => {
     assert.match(src, /if \(mediaFilter === 'audio' && !course\.audio_path\) return;/);
     assert.doesNotMatch(src, /mediaFilter === 'audio' && course\.total_episodes === 0/);
 
-    // Visible branch labels must be searchable (they are rendered on screen).
-    assert.match(src, /const matchMain = \(course\.main_menu_title \|\| ''\)\.toLowerCase\(\)\.includes\(q\);/);
-    assert.match(src, /const matchSub = \(course\.sub_menu_title \|\| ''\)\.toLowerCase\(\)\.includes\(q\);/);
-    assert.match(src, /if \(!matchName && !matchMain && !matchSub && !matchLoc && !matchYear && !matchTopic\)/);
+    // Visible branch labels must be searchable (they are rendered on screen),
+    // and a multi-term query must narrow the result set rather than widen it.
+    assert.match(src, /course\.main_menu_title,/, 'main menu label must be in the haystack');
+    assert.match(src, /course\.sub_menu_title,/, 'sub menu label must be in the haystack');
+    assert.match(src, /course\.topic_title,/, 'topic label must be in the haystack');
+    assert.match(
+      src,
+      /if \(!terms\.every\(\(term\) => haystack\.includes\(term\)\)\) \{/,
+      'every search term must match (AND), not any one of them (OR)'
+    );
+    assert.match(
+      src,
+      /\.\.\.\(course\.pdfs \|\| \[\]\)\.map\(\(p\) => p\.filename\)/,
+      'lecture-note filenames must be searchable'
+    );
   });
 
   await t.test('page.tsx fetchCourses has a stable identity and validates rows', () => {

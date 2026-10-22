@@ -27,7 +27,16 @@ function sortVolumes(vols: string[]): string[] {
 const AUDIO_EXTS = ['.mp3', '.m4a', '.aac', '.ogg', '.wav', '.wma', '.flac', '.mp4', '.m4v', '.webm', '.mov'];
 const VIDEO_EXTS = ['.mp4', '.m4v', '.wmv', '.flv', '.mov', '.avi', '.mkv', '.webm', '.mpg', '.mpeg'];
 
-function extractFilename(item: any): string {
+/**
+ * The upstream directory payload is intentionally untyped JSON: a volume maps to
+ * either a filename array or an object holding `audio`/`video`/`bilu` arrays of
+ * either strings or `{ name }` records. Modelling that shape here is what lets
+ * the parser below be checked instead of being written against `any`.
+ */
+type FileEntry = string | { name?: unknown };
+type VolumeValue = FileEntry[] | Record<string, unknown> | null | undefined;
+
+function extractFilename(item: FileEntry): string {
   if (typeof item === 'string') return item;
   if (item && typeof item.name === 'string') return item.name;
   return String(item || '');
@@ -35,14 +44,14 @@ function extractFilename(item: any): string {
 
 function parseMultiVolumeAudio(
   basePath: string,
-  dataObj: Record<string, any>
+  dataObj: Record<string, VolumeValue>
 ): { filename: string; volume: string; displayName: string; fullPath: string }[] {
   const sortedVols = sortVolumes(Object.keys(dataObj));
   const parsedTracks: { filename: string; volume: string; displayName: string; fullPath: string }[] = [];
 
   sortedVols.forEach((vol) => {
     const vData = dataObj[vol];
-    let audioList: any[] = [];
+    let audioList: FileEntry[] = [];
     let audioSubfolder = 'audio';
 
     if (Array.isArray(vData)) {
@@ -50,14 +59,14 @@ function parseMultiVolumeAudio(
       audioSubfolder = '';
     } else if (vData && typeof vData === 'object') {
       if (Array.isArray(vData.audio)) {
-        audioList = vData.audio;
+        audioList = vData.audio as FileEntry[];
         audioSubfolder = 'audio';
       } else {
         for (const subKey of Object.keys(vData)) {
           if (Array.isArray(vData[subKey])) {
-            const sample = vData[subKey][0];
-            if (typeof sample === 'string' && AUDIO_EXTS.some((ext: string) => sample.toLowerCase().endsWith(ext))) {
-              audioList = vData[subKey];
+            const sample = (vData[subKey] as FileEntry[])[0];
+            if (typeof sample === 'string' && AUDIO_EXTS.some((ext) => sample.toLowerCase().endsWith(ext))) {
+              audioList = vData[subKey] as FileEntry[];
               audioSubfolder = subKey;
               break;
             }
@@ -68,10 +77,10 @@ function parseMultiVolumeAudio(
 
     const validFiles = audioList
       .map(extractFilename)
-      .filter((fn: string) => AUDIO_EXTS.includes('.' + fn.split('.').pop()?.toLowerCase()))
-      .sort((a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+      .filter((fn) => AUDIO_EXTS.includes('.' + fn.split('.').pop()?.toLowerCase()))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
-    validFiles.forEach((fn: string) => {
+    validFiles.forEach((fn) => {
       const subPath = audioSubfolder ? `${vol}/${audioSubfolder}/${fn}` : `${vol}/${fn}`;
       parsedTracks.push({
         filename: fn,
@@ -87,14 +96,14 @@ function parseMultiVolumeAudio(
 
 function parseMultiVolumeVideos(
   basePath: string,
-  dataObj: Record<string, any>
+  dataObj: Record<string, VolumeValue>
 ): { filename: string; volume: string; displayName: string; fullPath: string }[] {
   const sortedVols = sortVolumes(Object.keys(dataObj));
   const parsedVideos: { filename: string; volume: string; displayName: string; fullPath: string }[] = [];
 
   sortedVols.forEach((vol) => {
     const vData = dataObj[vol];
-    let videoList: any[] = [];
+    let videoList: FileEntry[] = [];
     let videoSubfolder = 'video';
 
     if (Array.isArray(vData)) {
@@ -102,14 +111,14 @@ function parseMultiVolumeVideos(
       videoSubfolder = '';
     } else if (vData && typeof vData === 'object') {
       if (Array.isArray(vData.video)) {
-        videoList = vData.video;
+        videoList = vData.video as FileEntry[];
         videoSubfolder = 'video';
       } else {
         for (const subKey of Object.keys(vData)) {
           if (Array.isArray(vData[subKey])) {
-            const sample = vData[subKey][0];
-            if (typeof sample === 'string' && VIDEO_EXTS.some((ext: string) => sample.toLowerCase().endsWith(ext))) {
-              videoList = vData[subKey];
+            const sample = (vData[subKey] as FileEntry[])[0];
+            if (typeof sample === 'string' && VIDEO_EXTS.some((ext) => sample.toLowerCase().endsWith(ext))) {
+              videoList = vData[subKey] as FileEntry[];
               videoSubfolder = subKey;
               break;
             }
@@ -120,8 +129,8 @@ function parseMultiVolumeVideos(
 
     const validVideos = videoList
       .map(extractFilename)
-      .filter((fn: string) => VIDEO_EXTS.includes('.' + fn.split('.').pop()?.toLowerCase()))
-      .sort((a: string, b: string) => {
+      .filter((fn) => VIDEO_EXTS.includes('.' + fn.split('.').pop()?.toLowerCase()))
+      .sort((a, b) => {
         const baseA = a.substring(0, a.lastIndexOf('.')) || a;
         const baseB = b.substring(0, b.lastIndexOf('.')) || b;
         const numsA = baseA.match(/\d+/g);
@@ -132,7 +141,7 @@ function parseMultiVolumeVideos(
         return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
       });
 
-    validVideos.forEach((fn: string) => {
+    validVideos.forEach((fn) => {
       const subPath = videoSubfolder ? `${vol}/${videoSubfolder}/${fn}` : `${vol}/${fn}`;
       parsedVideos.push({
         filename: fn,
@@ -148,7 +157,7 @@ function parseMultiVolumeVideos(
 
 function parseMultiVolumePdfs(
   basePath: string,
-  dataObj: Record<string, any>
+  dataObj: Record<string, VolumeValue>
 ): { filename: string; displayName: string; fullUrl: string }[] {
   const sortedVols = sortVolumes(Object.keys(dataObj));
   const parsedPdfs: { filename: string; displayName: string; fullUrl: string }[] = [];
@@ -156,11 +165,16 @@ function parseMultiVolumePdfs(
   sortedVols.forEach((vol) => {
     const val = dataObj[vol];
     if (val && typeof val === 'object') {
-      const pdfList = Array.isArray(val)
-        ? val
-        : (Array.isArray(val.bilu) ? val.bilu : (Array.isArray(val.pdf) ? val.pdf : []));
-      
-      pdfList.forEach((item: any) => {
+      const record = val as Record<string, unknown>;
+      const pdfList: FileEntry[] = Array.isArray(val)
+        ? (val as FileEntry[])
+        : Array.isArray(record.bilu)
+          ? (record.bilu as FileEntry[])
+          : Array.isArray(record.pdf)
+            ? (record.pdf as FileEntry[])
+            : [];
+
+      pdfList.forEach((item) => {
         const fname = extractFilename(item);
         if (fname.toLowerCase().endsWith('.pdf')) {
           parsedPdfs.push({
@@ -189,8 +203,17 @@ test('Multi-Volume Course Parsing & Course 97 Integrity Suite', async (t) => {
   }
 
   await t.test('Course 97 database integrity in src/data/courses_db.json', () => {
-    const db = JSON.parse(fs.readFileSync(srcDbPath, 'utf-8'));
-    const c97 = db.courses.find((c: any) => c.id === 97);
+    const db = JSON.parse(fs.readFileSync(srcDbPath, 'utf-8')) as {
+      courses: {
+        id: number;
+        name: string;
+        audio_path: string | null;
+        video_path: string | null;
+        lecture_path: string | null;
+        pdfs: { filename: string; url: string }[];
+      }[];
+    };
+    const c97 = db.courses.find((c) => c.id === 97);
 
     assert.ok(c97, 'Course 97 must exist');
     assert.strictEqual(c97.id, 97);
@@ -223,8 +246,15 @@ test('Multi-Volume Course Parsing & Course 97 Integrity Suite', async (t) => {
   });
 
   await t.test('Course 97 database integrity in data/courses_db.json', () => {
-    const db = JSON.parse(fs.readFileSync(dataDbPath, 'utf-8'));
-    const c97 = db.courses.find((c: any) => c.id === 97);
+    const db = JSON.parse(fs.readFileSync(dataDbPath, 'utf-8')) as {
+      courses: {
+        id: number;
+        audio_path: string | null;
+        video_path: string | null;
+        pdfs: unknown[];
+      }[];
+    };
+    const c97 = db.courses.find((c) => c.id === 97);
 
     assert.ok(c97, 'Course 97 must exist in data/courses_db.json');
     assert.strictEqual(c97.audio_path, '/media/釋論/瑜伽師地論・本地分');
