@@ -78,14 +78,44 @@ jobs:
             NODE_VERSION=24.17.0
 
       - name: Prune old container images from GHCR (keep latest 5)
-        # NOTE: this action is still published for the Node 20 runtime and has no
-        # Node 24 release yet, so it emits a deprecation warning. It is marked
-        # continue-on-error so a future runtime removal cannot fail the build.
-        uses: actions/delete-package-versions@v5
+        # Uses the runner's built-in `gh` instead of actions/delete-package-versions,
+        # which is still published only for the Node 20 runtime and therefore made
+        # every run emit a "Node.js 20 is deprecated" annotation.
+        #
+        # Non-fatal by design: pruning is housekeeping, and a registry hiccup must
+        # not fail a build whose image has already been pushed successfully.
         continue-on-error: true
-        with:
-          package-name: 'ui2'
-          package-type: 'container'
-          min-versions-to-keep: 5
-          delete-only-untagged-versions: 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE_NAME: ui2
+          MIN_VERSIONS_TO_KEEP: '5'
+        run: |
+          set -euo pipefail
+
+          owner="${GITHUB_REPOSITORY%%/*}"
+          versions_url="users/${owner}/packages/container/${PACKAGE_NAME}/versions"
+
+          # Paginate over every published version (the API caps pages at 100).
+          gh api --paginate "${versions_url}?per_page=100" \
+            --jq '.[] | [.id, .created_at] | @tsv' > versions.tsv || {
+              echo "::warning::Could not list package versions; skipping prune."
+              exit 0
+            }
+
+          total=$(grep -c . versions.tsv || true)
+          echo "Found ${total} published version(s); keeping the newest ${MIN_VERSIONS_TO_KEEP}."
+
+          # Oldest first: ISO-8601 UTC timestamps sort correctly as plain strings.
+          sort -k2,2 versions.tsv > sorted.tsv
+          to_delete=$(( total - MIN_VERSIONS_TO_KEEP ))
+          if [ "${to_delete}" -le 0 ]; then
+            echo "Nothing to prune."
+            exit 0
+          fi
+
+          head -n "${to_delete}" sorted.tsv | while IFS=$'\t' read -r id created; do
+            echo "Deleting version ${id} (created ${created})."
+            gh api --method DELETE "${versions_url}/${id}" \
+              || echo "::warning::Failed to delete version ${id}; continuing."
+          done
 
