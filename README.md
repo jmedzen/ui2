@@ -199,6 +199,18 @@ docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name ui2 ui2:latest
 
 > **🩺 任務鎖定（Task Lock）**：`data/logs/scan.lock` 記錄持有任務的 PID。伺服器啟動時會自動清除前一次執行遺留的鎖定，且鎖定僅在持有程序仍存活時才生效，因此 `docker compose restart` 不會再造成「已有任務正在執行中」的永久誤判。
 
+### 映像保留策略
+
+每次建置會把**同一個映像**推到多個 tag（`latest`、`main`、`sha-xxxx`，版號變更時另有 semver tag）。GHCR 為每個 tag 各記一筆 *version*，所以一次建置會產生 3 筆 version。
+
+因此清理邏輯**以「建置」為單位**：依 image digest 把同一次建置的所有 tag 分成一組，保留最新 **5 個建置**，其餘整組刪除。若改用「保留 5 筆 version」，實際只留住約 1.5 次建置，而且會把同一次建置的 tag 拆散（留下 `latest` 卻刪掉對應的 `sha-xxxx`）。
+
+- 自動：每次推送 `main` 後，`docker-publish` 工作流在推送成功後執行清理
+- 排程：`Prune Old GHCR Docker Images` 每週日 02:00 UTC 執行一次
+- 手動：可在 Actions 頁面觸發該工作流，並指定保留數量或勾選 **dry run** 先預覽要刪哪些
+
+`latest` 標籤所在的 version 永遠不會被刪除。實作見 [`.github/scripts/prune-ghcr.sh`](./.github/scripts/prune-ghcr.sh)。
+
 ---
 
 ## 🔐 環境變數與安全設定 (Environment Variables)

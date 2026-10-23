@@ -6,11 +6,16 @@ on:
     - cron: '0 2 * * 0'
   workflow_dispatch:
     inputs:
-      min_versions_to_keep:
-        description: 'Number of latest image versions to keep'
+      min_images_to_keep:
+        description: 'Number of newest image builds to keep'
         required: true
         default: '5'
         type: string
+      dry_run:
+        description: 'Log what would be deleted without deleting'
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   prune-images:
@@ -20,36 +25,15 @@ jobs:
       contents: read
 
     steps:
-      - name: Prune old container versions from GHCR
-        # Uses the runner's built-in `gh` instead of actions/delete-package-versions,
-        # which is still published only for the Node 20 runtime and therefore made
-        # every run emit a "Node.js 20 is deprecated" annotation.
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Prune old container images from GHCR
+        # Keeps the newest N *builds* rather than the newest N package versions;
+        # see .github/scripts/prune-ghcr.sh for why that distinction matters.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PACKAGE_NAME: ui2
-          MIN_VERSIONS_TO_KEEP: ${{ inputs.min_versions_to_keep || '5' }}
-        run: |
-          set -euo pipefail
-
-          owner="${GITHUB_REPOSITORY%%/*}"
-          versions_url="users/${owner}/packages/container/${PACKAGE_NAME}/versions"
-
-          # Paginate over every published version (the API caps pages at 100).
-          gh api --paginate "${versions_url}?per_page=100" \
-            --jq '.[] | [.id, .created_at] | @tsv' > versions.tsv
-
-          total=$(grep -c . versions.tsv || true)
-          echo "Found ${total} published version(s); keeping the newest ${MIN_VERSIONS_TO_KEEP}."
-
-          # Oldest first: ISO-8601 UTC timestamps sort correctly as plain strings.
-          sort -k2,2 versions.tsv > sorted.tsv
-          to_delete=$(( total - MIN_VERSIONS_TO_KEEP ))
-          if [ "${to_delete}" -le 0 ]; then
-            echo "Nothing to prune."
-            exit 0
-          fi
-
-          head -n "${to_delete}" sorted.tsv | while IFS=$'\t' read -r id created; do
-            echo "Deleting version ${id} (created ${created})."
-            gh api --method DELETE "${versions_url}/${id}"
-          done
+          PACKAGE_NAME: ${{ github.event.repository.name }}
+          MIN_IMAGES_TO_KEEP: ${{ inputs.min_images_to_keep || '5' }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: bash .github/scripts/prune-ghcr.sh
