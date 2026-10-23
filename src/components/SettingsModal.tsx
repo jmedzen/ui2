@@ -234,6 +234,55 @@ export default function SettingsModal({
     return () => clearTimeout(timer);
   }, [isOpen, fetchAdminSession, fetchLogs]);
 
+  /**
+   * Dialog keyboard behaviour: Escape closes, Tab stays inside.
+   *
+   * The modal is `aria-modal` but nothing enforced it, so Tab walked straight
+   * past the dialog into the 684-row sidebar behind the backdrop, and Escape did
+   * nothing at all. Focus is returned to whatever opened the dialog on close,
+   * otherwise it lands back on <body> and the reader loses their place.
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const card = modalCardRef.current;
+    card?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || !card) return;
+
+      const focusable = card.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      // Wrap at both ends so Tab never leaves the dialog.
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && (active === first || active === card)) {
+        event.preventDefault();
+        last.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [isOpen, onClose]);
+
   // Keep the log window and the running indicator fresh while the log tab is
   // open, no matter who started the task.
   //
@@ -606,6 +655,10 @@ export default function SettingsModal({
         className={`settings-modal-card shadow-card ${isResizing ? 'resizing' : ''}`}
         style={{ width: `${modalWidth}px` }}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="設定"
+        tabIndex={-1}
       >
         {/* Mouse Drag Resize Handles */}
         <div

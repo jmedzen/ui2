@@ -167,7 +167,7 @@ function MainLayout({
       )}
 
       {/* Right Main Content Pane */}
-      <div className="main-content-wrapper">
+      <div className="main-content-wrapper" id="main-content" tabIndex={-1}>
         {isLoading ? (
           <div className="global-loading">
             <span className="loading-spinner">🌸</span>
@@ -615,6 +615,12 @@ export default function Home() {
           } as React.CSSProperties
         }
       >
+        {/* Keyboard users otherwise tab through the 684-row course tree before
+            reaching the content; this jumps straight to the main pane. */}
+        <a href="#main-content" className="skip-to-content">
+          跳至主要內容
+        </a>
+
         {/* Mobile Top Navbar */}
         <div className="mobile-navbar">
           <button

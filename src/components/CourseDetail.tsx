@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { CourseItem, PdfItem } from '@/types/course';
 import { useAudio } from '@/context/AudioContext';
 import { getKeyedStringStore } from '@/lib/stringStore';
@@ -190,6 +190,15 @@ const sharedRootDirFor = (course: CourseItem): string | undefined => {
   return undefined;
 };
 
+/**
+ * Episodes rendered per batch.
+ *
+ * Large enough that a normal 30-80 episode course shows everything at once (no
+ * "load more" in the common case), small enough that the 969-episode outliers
+ * stay cheap.
+ */
+const EPISODE_BATCH_SIZE = 100;
+
 const canonicalPdfPath = (folder: string, name: string): string => {
   const decode = (v: string) => {
     try {
@@ -211,6 +220,26 @@ const canonicalPdfPath = (folder: string, name: string): string => {
 
   return `${segments.join('/')}::${decodedName}`;
 };
+
+/**
+ * Shown in place of a list whose discovery request failed.
+ *
+ * Deliberately distinct from the "no files" empty state: one means "reload may
+ * fix this", the other means "there is nothing here". `role="alert"` so the
+ * message is announced when it replaces a spinner.
+ */
+function ListErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="list-error-state" role="alert">
+      <span className="list-error-icon" aria-hidden="true">⚠️</span>
+      <p className="list-error-message">{message}</p>
+      <p className="list-error-hint">請確認網路連線後重試；若持續失敗，可能是伺服器暫時無法存取典藏目錄。</p>
+      <button type="button" className="list-error-retry" onClick={onRetry}>
+        重新載入
+      </button>
+    </div>
+  );
+}
 
 export default function CourseDetail({
   course,
@@ -235,6 +264,27 @@ export default function CourseDetail({
   const [isLoadingVideo, setIsLoadingVideo] = useState<boolean>(false);
   const [isLoadingPdf, setIsLoadingPdf] = useState<boolean>(false);
   const [episodeSearch, setEpisodeSearch] = useState<string>('');
+
+  /**
+   * Why a list is empty, when the answer is "the request failed".
+   *
+   * Without these the failure path fell through to the empty state, which told
+   * the reader "尚無線上記錄之音訊檔案" — indistinguishable from a course that
+   * genuinely has no files. A reload was never suggested, so a transient network
+   * error looked like a permanent gap in the archive.
+   */
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  /**
+   * Bumped by the retry buttons to re-run the discovery effect.
+   *
+   * The effect depends on `course`, so re-running it needs a dependency that
+   * changes without the course itself changing.
+   */
+  const [reloadToken, setReloadToken] = useState<number>(0);
+  const retryLoad = () => setReloadToken((n) => n + 1);
 
   // Draggable Split-Screen Ratio
   /**
@@ -316,6 +366,14 @@ export default function CourseDetail({
       setIsLoadingAudio(true);
       setAudioTracks([]);
       setAvailableVolumes([]);
+      setAudioError(null);
+
+      // Tracks whether discovery failed, as opposed to genuinely finding nothing.
+      // `queryDirectory` deliberately swallows its own errors so one bad
+      // candidate path cannot abort the whole probe, which means the caller has
+      // no other way to tell "all probes errored" from "all paths were empty".
+      let probeAttempts = 0;
+      let probeFailures = 0;
 
       let fetchedTracks: AudioTrackInfo[] = [];
       let detectedVolumes: string[] = [];
@@ -328,7 +386,10 @@ export default function CourseDetail({
             body: JSON.stringify({ src: aPath }),
             signal: controller.signal
           });
-          if (!res.ok) return { path: aPath, tracks: [], volumes: [] };
+          if (!res.ok) {
+            probeFailures += 1;
+            return { path: aPath, tracks: [], volumes: [] };
+          }
           const rawData = await res.json();
           const listData = rawData && typeof rawData === 'object' && rawData.data !== undefined ? rawData.data : rawData;
 
@@ -419,12 +480,14 @@ export default function CourseDetail({
 
           return { path: aPath, tracks: [], volumes: [] };
         } catch {
+          probeFailures += 1;
           return { path: aPath, tracks: [], volumes: [] };
         }
       };
 
       // 1. Fast-Path: Probe primary course.audio_path first
       if (course.audio_path && course.audio_path !== '/media') {
+        probeAttempts += 1;
         const primaryResult = await queryDirectory(course.audio_path);
         if (primaryResult.tracks.length > 0 && isMounted) {
           fetchedTracks = primaryResult.tracks.map((t, idx) => {
@@ -469,6 +532,7 @@ export default function CourseDetail({
         const uniqueCandidatePaths = Array.from(new Set(potentialAudioPaths)).filter((p) => p !== course.audio_path && p !== '/media');
 
         if (uniqueCandidatePaths.length > 0) {
+          probeAttempts += uniqueCandidatePaths.length;
           const results = await Promise.allSettled(uniqueCandidatePaths.map(queryDirectory));
 
           for (const res of results) {
@@ -494,6 +558,11 @@ export default function CourseDetail({
       if (isMounted) {
         setAudioTracks(fetchedTracks);
         setAvailableVolumes(detectedVolumes);
+        // Only when nothing was found AND every probe errored: a partial success
+        // means the empty state is the honest answer.
+        if (fetchedTracks.length === 0 && probeAttempts > 0 && probeFailures === probeAttempts) {
+          setAudioError('無法連線至音訊清單服務。');
+        }
         setIsLoadingAudio(false);
       }
     }
@@ -501,6 +570,8 @@ export default function CourseDetail({
     async function loadVideoTracks() {
       setIsLoadingVideo(true);
       setVideoTracks([]);
+      setVideoError(null);
+      let videoFailed = false;
       // Not `setCurrentVideoIndex`: that setter is declared further down, and
       // resetting the index here only matters once the new list arrives (the
       // clamp handles it). Persisting 0 would also discard the reader's saved
@@ -635,18 +706,24 @@ export default function CourseDetail({
         } catch (e: unknown) {
           if (!(e instanceof Error && e.name === 'AbortError')) {
             console.warn('Failed to fetch remote video list:', e);
+            videoFailed = true;
           }
         }
       }
 
       if (isMounted) {
         setVideoTracks(fetchedVideos);
+        if (videoFailed && fetchedVideos.length === 0) {
+          setVideoError('無法連線至影音清單服務。');
+        }
         setIsLoadingVideo(false);
       }
     }
 
     async function loadPdfTracks() {
       setIsLoadingPdf(true);
+      setPdfError(null);
+      let pdfFailed = false;
       const initialPdfs = (course.pdfs || []).filter(p => !p.filename.endsWith('_筆記.pdf'));
       setPdfTracks(initialPdfs);
 
@@ -808,6 +885,7 @@ export default function CourseDetail({
       } catch (e: unknown) {
         if (!(e instanceof Error && e.name === 'AbortError')) {
           console.warn('Failed to fetch remote PDF list:', e);
+          pdfFailed = true;
         }
       }
 
@@ -820,6 +898,11 @@ export default function CourseDetail({
         } else {
           const fallbackPdfs = (course.pdfs || []).filter(p => !p.filename.endsWith('_筆記.pdf'));
           setPdfTracks(fallbackPdfs);
+          // Discovery errored and the bundled catalog has no PDFs either, so the
+          // empty state would be reporting a failure as an absence.
+          if (pdfFailed && fallbackPdfs.length === 0) {
+            setPdfError('無法連線至講義清單服務。');
+          }
         }
         setIsLoadingPdf(false);
       }
@@ -833,7 +916,7 @@ export default function CourseDetail({
       isMounted = false;
       controller.abort();
     };
-  }, [course]);
+  }, [course, reloadToken]);
 
   const hasVideo = Boolean(course.video_path || (course.name && course.name.includes('本地分')));
 
@@ -996,7 +1079,7 @@ export default function CourseDetail({
     onAutoPlayConsumed?.();
   }, [autoPlayRequest, audioTracks, course.name, course.id, playTrack, onAutoPlayConsumed]);
 
-  const filteredAudioTracks = audioTracks.filter((t) => {
+  const filteredAudioTracks = useMemo(() => audioTracks.filter((t) => {
     const matchVol = selectedVolume === 'all' || t.volume === selectedVolume;
     const q = episodeSearch.trim().toLowerCase();
     const matchSearch = q
@@ -1005,7 +1088,53 @@ export default function CourseDetail({
          (t.volume && t.volume.toLowerCase().includes(q)))
       : true;
     return matchVol && matchSearch;
-  });
+  }), [audioTracks, selectedVolume, episodeSearch]);
+
+  /**
+   * How many episodes are in the DOM.
+   *
+   * 瑜伽師地論 has 969 episodes. Rendering them all produced 7,945 DOM nodes and
+   * 986 buttons in one commit, which made scrolling stutter on mid-range phones
+   * and re-rendered the whole list on every keystroke in the episode search.
+   * Batches of 100 keep the first paint cheap and grow on demand.
+   */
+  const [visibleCount, setVisibleCount] = useState<number>(EPISODE_BATCH_SIZE);
+
+  // A new filter (or a new course) starts again from the first batch.
+  const [batchedFor, setBatchedFor] = useState<string>(`${course.id}::${selectedVolume}::${episodeSearch}`);
+  if (batchedFor !== `${course.id}::${selectedVolume}::${episodeSearch}`) {
+    setBatchedFor(`${course.id}::${selectedVolume}::${episodeSearch}`);
+    setVisibleCount(EPISODE_BATCH_SIZE);
+  }
+
+  const visibleAudioTracks = visibleCount >= filteredAudioTracks.length
+    ? filteredAudioTracks
+    : filteredAudioTracks.slice(0, visibleCount);
+  const hasMoreEpisodes = visibleCount < filteredAudioTracks.length;
+
+  const loadMoreRef = useRef<HTMLLIElement | null>(null);
+  const loadMore = useCallback(() => {
+    setVisibleCount((n) => n + EPISODE_BATCH_SIZE);
+  }, []);
+
+  // Grow the list as the sentinel scrolls into view, so the reader never has to
+  // press anything; the button stays for keyboard users, who cannot scroll a
+  // sentinel into view.
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || !hasMoreEpisodes) return;
+    if (typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMore();
+      },
+      // Start a screen early so the next batch is ready before it is reached.
+      { rootMargin: '600px 0px' }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMoreEpisodes, loadMore, visibleCount]);
 
   return (
     <div className="course-detail-pane">
@@ -1172,13 +1301,15 @@ export default function CourseDetail({
                   <span className="loading-spinner">🌸</span>
                   <p>正在載入音訊清單...</p>
                 </div>
+              ) : audioError ? (
+                <ListErrorState message={audioError} onRetry={retryLoad} />
               ) : audioTracks.length === 0 ? (
                 <div className="no-audio-state">
                   <p>尚無線上記錄之音訊檔案，或正在數據庫同步中</p>
                 </div>
               ) : (
                 <ul className="episodes-list">
-                  {filteredAudioTracks.map((track) => {
+                  {visibleAudioTracks.map((track) => {
                     const isCurrentlyPlayingTrack =
                       currentTrack?.courseId === course.id && currentTrack?.filename === (track.displayName || track.filename);
 
@@ -1223,6 +1354,18 @@ export default function CourseDetail({
                       </li>
                     );
                   })}
+                  {hasMoreEpisodes && (
+                    <li className="episodes-load-more" ref={loadMoreRef}>
+                      <button
+                        type="button"
+                        className="load-more-btn"
+                        onClick={loadMore}
+                        aria-label={`載入更多集數，目前顯示 ${visibleAudioTracks.length} / ${filteredAudioTracks.length}`}
+                      >
+                        載入更多（已顯示 {visibleAudioTracks.length} / {filteredAudioTracks.length}）
+                      </button>
+                    </li>
+                  )}
                 </ul>
               )}
             </div>
@@ -1236,6 +1379,8 @@ export default function CourseDetail({
                   <span className="loading-spinner">🎬</span>
                   <p>正在載入影音講記清單...</p>
                 </div>
+              ) : videoError ? (
+                <ListErrorState message={videoError} onRetry={retryLoad} />
               ) : (
                 <VideoPlayer
                   tracks={videoTracks}
@@ -1255,6 +1400,8 @@ export default function CourseDetail({
                   <span className="loading-spinner">📄</span>
                   <p>正在載入講義 PDF 清單...</p>
                 </div>
+              ) : pdfError ? (
+                <ListErrorState message={pdfError} onRetry={retryLoad} />
               ) : (
                 <PdfViewer pdfs={pdfTracks} courseTitle={course.name} />
               )}

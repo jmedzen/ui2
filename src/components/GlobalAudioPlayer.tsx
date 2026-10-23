@@ -146,7 +146,11 @@ export default function GlobalAudioPlayer() {
                 <span className="bar bar-3" />
                 <span className="bar bar-4" />
               </div>
-              <span className="status-text">{isPlaying ? '播放中' : '已暫停'}</span>
+              {/* Announced to screen readers when playback state changes; the
+                  visual status text alone is invisible to them. */}
+              <span className="status-text" role="status" aria-live="polite">
+                {isPlaying ? '播放中' : '已暫停'}
+              </span>
             </div>
             <div className="title-block">
               <h4 className="track-name-text" title={currentTrack.filename}>
