@@ -301,11 +301,11 @@ test('Daily picks are wired into the home page', async (t) => {
   const home = fs.readFileSync(path.join(process.cwd(), 'src', 'components', 'HomePortal.tsx'), 'utf-8');
 
   await t.test('the section sits between the divisions and the core recommendations', () => {
-    const divisions = home.indexOf('四大經典法門導覽');
+    const divisions = home.indexOf('主要學習法種類');
     const daily = home.indexOf('今日隨機推薦');
     const featured = home.indexOf('核心經典講記推薦');
     assert.ok(divisions > 0 && daily > 0 && featured > 0, 'all three sections must exist');
-    assert.ok(divisions < daily, 'daily picks must come after the four divisions');
+    assert.ok(divisions < daily, 'daily picks must come after the study categories');
     assert.ok(daily < featured, 'daily picks must come before the core recommendations');
   });
 

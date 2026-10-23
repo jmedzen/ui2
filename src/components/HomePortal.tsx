@@ -350,11 +350,11 @@ export default function HomePortal({
       </section>
       )}
 
-      {/* Four Dharma Divisions Banner */}
+      {/* Main study categories */}
       {hasCatalog && (
       <section className="home-divisions-section">
         <div className="section-header">
-          <h2 className="section-title">🗂️ 四大經典法門導覽</h2>
+          <h2 className="section-title">🗂️ 主要學習法種類</h2>
           <span className="section-subtitle">點選代表經典立即進入深入修學</span>
         </div>
 
@@ -433,24 +433,11 @@ export default function HomePortal({
               )}
             </div>
           </div>
-
-          <div className="division-card">
-            <div className="division-header">
-              <span className="division-icon">⚖️</span>
-              <div>
-                <h3 className="division-name">戒律儀軌（行持）</h3>
-                <span className="division-meta">防非止惡清淨道基</span>
-              </div>
-            </div>
-            <p className="division-desc">
-              開示瑜伽菩薩戒本、在家菩薩戒與沙彌律儀，以戒為師，端正威儀，清淨三業，為定慧修持之堅實基石。
-            </p>
-          </div>
         </div>
       </section>
       )}
 
-      {/* Today's Rotating Picks — between the four divisions and the core
+      {/* Today's Rotating Picks — between the study categories and the core
           recommendations, matching the featured card layout. */}
       {hasCatalog && dailyPicks.length > 0 && (
         <section className="home-daily-section">

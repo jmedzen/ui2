@@ -3702,7 +3702,7 @@ html, body {
   color: var(--text-secondary);
 }
 
-/* Four Dharma Divisions */
+/* Main study categories */
 .section-header {
   display: flex;
   flex-direction: column;
@@ -3727,7 +3727,10 @@ html, body {
 
 .home-divisions-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* Three study categories on one row. `minmax(0, 1fr)` lets the cards shrink
+     below their content width, so a long division name wraps instead of
+     overflowing the viewport. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
 }
 
