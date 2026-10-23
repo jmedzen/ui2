@@ -201,15 +201,23 @@ docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name ui2 ui2:latest
 
 ### 映像保留策略
 
-每次建置會把**同一個映像**推到多個 tag（`latest`、`main`、`sha-xxxx`，版號變更時另有 semver tag）。GHCR 為每個 tag 各記一筆 *version*，所以一次建置會產生 3 筆 version。
+一次 `docker buildx` 推送會產生 **3 筆 version**：一筆帶 tag（`latest`、`main`、`sha-xxxx`），另外兩筆是 buildx 一併推上去的 attestation manifest，沒有 tag，而且**三筆的 digest 各不相同**：
 
-因此清理邏輯**以「建置」為單位**：依 image digest 把同一次建置的所有 tag 分成一組，保留最新 **5 個建置**，其餘整組刪除。若改用「保留 5 筆 version」，實際只留住約 1.5 次建置，而且會把同一次建置的 tag 拆散（留下 `latest` 卻刪掉對應的 `sha-xxxx`）。
+```
+1433233153 | 2026-10-23T07:49:44Z | sha256:ddaa8e13… | sha-70e9e70,latest,main
+1433233116 | 2026-10-23T07:49:44Z | sha256:75acf533… |
+1433233075 | 2026-10-23T07:49:43Z | sha256:525b2695… |
+```
+
+因為沒有任何兩筆共用 digest，**用 digest 無法分組**（會退化成「每一筆都是獨立建置」），只用 tag 分組也一樣（看不到無 tag 的那兩筆）。同一次建置的 version 都在數秒內建立，而不同建置相隔數分鐘，所以清理邏輯**以建立時間聚類**：把時間相近的 version 歸為同一次建置，保留最新 **5 個建置**，其餘整組刪除。
+
+若改成「保留 5 筆 version」，實際只留住約 1.5 次建置，還會把同一次建置拆散（留下 `latest` 卻刪掉對應的 `sha-xxxx`）。
 
 - 自動：每次推送 `main` 後，`docker-publish` 工作流在推送成功後執行清理
 - 排程：`Prune Old GHCR Docker Images` 每週日 02:00 UTC 執行一次
 - 手動：可在 Actions 頁面觸發該工作流，並指定保留數量或勾選 **dry run** 先預覽要刪哪些
 
-`latest` 標籤所在的 version 永遠不會被刪除。實作見 [`.github/scripts/prune-ghcr.sh`](./.github/scripts/prune-ghcr.sh)。
+`latest` 所在的**整個建置**都不會被刪除（包含同批 attestation，避免留下不完整的映像）。實作見 [`.github/scripts/prune-ghcr.sh`](./.github/scripts/prune-ghcr.sh)。
 
 ---
 

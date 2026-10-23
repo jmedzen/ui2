@@ -2,28 +2,39 @@
 #
 # Prune old GHCR container images, keeping the newest N *builds*.
 #
-# Why this is not "keep the newest N versions":
+# Why the grouping is by time and not by tag or digest:
 #
-# Each run publishes the same image under several tags (latest, main, sha-xxxx,
-# and a semver tag when the version changes). GHCR stores one package *version*
-# per tag, so a single build shows up as three versions. Preserving "the newest
-# 5 versions" therefore preserved barely one and a half builds, and — worse —
-# whichever count it was given, it cut through a build's tag set: it would keep
-# `latest` and `main` while deleting the matching `sha-xxxx`, leaving an image
-# whose tags no longer agree.
+# One `docker buildx` push publishes more than one package version. In the
+# registry this looks like:
 #
-# Grouping by image digest fixes both problems: all tags of one build share a
-# digest, so a build is kept or dropped as a unit, and "keep 5" now means five
-# complete, independently usable images.
+#   1433233153 | 2026-10-23T07:49:44Z | sha256:ddaa8e13... | sha-70e9e70,latest,main
+#   1433233116 | 2026-10-23T07:49:44Z | sha256:75acf533... |
+#   1433233075 | 2026-10-23T07:49:43Z | sha256:525b2695... |
 #
-# `latest` is never deleted, even if it somehow fell outside the newest N.
+# The tagged manifest is the image people pull; the untagged entries are the
+# attestation manifests buildx pushes alongside it. They share a build and a
+# timestamp, but - critically - every one of them has a *different* digest. So:
+#
+#   - Grouping by tag only sees the one tagged entry per build and treats each
+#     untagged attestation as its own build.
+#   - Grouping by digest is worse: it never merges anything, because no two
+#     versions ever share a digest.
+#   - Counting versions ("keep the newest 5") kept barely one and a half builds
+#     and could cut a build's tag set in half.
+#
+# Versions belonging to one build are created within a second or two of each
+# other, while separate builds are minutes apart, so clustering on creation
+# time groups a build's versions correctly. A build is therefore kept or
+# dropped as a unit.
 #
 # Environment:
 #   GH_TOKEN              required; needs read:packages and write:packages
 #   PACKAGE_NAME          container package name, e.g. ui2
 #   MIN_IMAGES_TO_KEEP    number of newest builds to keep (default 5)
 #   GITHUB_REPOSITORY     owner/repo, provided by Actions
+#   BUILD_CLUSTER_GAP     seconds of silence that separate two builds (default 180)
 #   DRY_RUN               set to 1 to log deletions without performing them
+#   DEBUG                 set to 1 to dump the raw version listing
 #
 # Exit status is 0 even when pruning is skipped: housekeeping must not fail a
 # build whose image was already pushed successfully.
@@ -32,6 +43,7 @@ set -euo pipefail
 
 PACKAGE_NAME="${PACKAGE_NAME:?PACKAGE_NAME is required}"
 MIN_IMAGES_TO_KEEP="${MIN_IMAGES_TO_KEEP:-5}"
+BUILD_CLUSTER_GAP="${BUILD_CLUSTER_GAP:-180}"
 DRY_RUN="${DRY_RUN:-0}"
 
 # Guard against a typo turning into "delete everything".
@@ -52,8 +64,10 @@ trap 'rm -rf "${workdir}"' EXIT
 versions_tsv="${workdir}/versions.tsv"
 
 # Paginate: the API caps pages at 100.
-#   .name                    image digest for container packages (the build key)
-#   .metadata.container.tags every tag pointing at this version
+#   .id                      version id, what DELETE takes
+#   .created_at              when this version was published (ISO-8601 UTC)
+#   .name                    image digest (unique per version; not a grouping key)
+#   .metadata.container.tags tags pointing at this version, if any
 if ! gh api --paginate "${versions_url}?per_page=100" \
   --jq '.[] | [.id, .created_at, .name, ((.metadata.container.tags // []) | join(","))] | @tsv' \
   > "${versions_tsv}"; then
@@ -61,11 +75,9 @@ if ! gh api --paginate "${versions_url}?per_page=100" \
   exit 0
 fi
 
-# DEBUG=1 dumps the raw projection so the grouping key can be verified against
-# the registry's real shape. Off by default; it is noisy and lists every version.
 if [ "${DEBUG:-0}" = "1" ]; then
-  echo "--- raw versions (id, created_at, name, tags) ---"
-  awk -F'\t' '{ printf "  %s | %s | name=%s | tags=%s\n", $1, $2, $3, $4 }' "${versions_tsv}"
+  echo "--- raw versions (id | created_at | digest | tags) ---"
+  awk -F'\t' '{ printf "  %s | %s | %s | %s\n", $1, $2, $3, $4 }' "${versions_tsv}"
   echo "--- end raw versions ---"
 fi
 
@@ -75,21 +87,34 @@ if [ "${version_count}" -eq 0 ]; then
   exit 0
 fi
 
-# One row per version: digest, id, created_at, tags.
-# A version without a digest is bucketed by minute so it is not merged with
-# unrelated untagged versions.
-awk -F'\t' '{
-  digest = $3
-  if (digest == "" || digest == "null") digest = "untagged:" substr($2, 1, 16)
-  printf "%s\t%s\t%s\t%s\n", digest, $1, $2, $4
-}' "${versions_tsv}" > "${workdir}/tagged.tsv"
+# Normalise to "epoch<TAB>id<TAB>created_at<TAB>tags", sorted oldest first.
+#
+# Epoch seconds come from a portable civil-date conversion rather than `date -d`
+# (GNU-only) so the script behaves the same locally and on the runner.
+awk -F'\t' '
+  function civil_epoch(y, m, d, hh, mi, ss,   era, yoe, doy, doe) {
+    if (m <= 2) { y -= 1; m += 12 }
+    era = int(y / 400)
+    yoe = y - era * 400
+    doy = int((153 * (m - 3) + 2) / 5) + d - 1
+    doe = yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy
+    return (era * 146097 + doe - 719468) * 86400 + hh * 3600 + mi * 60 + ss
+  }
+  {
+    if (split($2, t, /[-T:Z]/) < 6) { print "unparsable created_at: " $2 > "/dev/stderr"; exit 1 }
+    epoch = civil_epoch(t[1] + 0, t[2] + 0, t[3] + 0, t[4] + 0, t[5] + 0, t[6] + 0)
+    printf "%d\t%s\t%s\t%s\n", epoch, $1, $2, $4
+  }
+' "${versions_tsv}" | sort -n -k1,1 -k2,2 > "${workdir}/by_time.tsv"
 
-# Newest-first list of distinct builds.
-awk -F'\t' '{ if ($3 > newest[$1]) newest[$1] = $3 }
-  END { for (d in newest) printf "%s\t%s\n", newest[d], d }' "${workdir}/tagged.tsv" \
-  | sort -r > "${workdir}/builds.tsv"
+# Assign a cluster (build) number: a gap longer than BUILD_CLUSTER_GAP starts a
+# new build. Cluster numbers therefore increase with time.
+awk -F'\t' -v gap="${BUILD_CLUSTER_GAP}" '
+  { if (NR == 1 || $1 - previous > gap) cluster++; previous = $1
+    printf "%d\t%s\n", cluster, $0 }
+' "${workdir}/by_time.tsv" > "${workdir}/clustered.tsv"
 
-build_count=$(grep -c . "${workdir}/builds.tsv" || true)
+build_count=$(awk -F'\t' 'END { print $1 + 0 }' "${workdir}/clustered.tsv")
 echo "Found ${version_count} version(s) across ${build_count} image build(s); keeping the newest ${MIN_IMAGES_TO_KEEP} build(s)."
 
 if [ "${build_count}" -le "${MIN_IMAGES_TO_KEEP}" ]; then
@@ -97,20 +122,36 @@ if [ "${build_count}" -le "${MIN_IMAGES_TO_KEEP}" ]; then
   exit 0
 fi
 
-# Everything past the newest N builds is due for removal.
-tail -n "+$(( MIN_IMAGES_TO_KEEP + 1 ))" "${workdir}/builds.tsv" | cut -f2 \
-  > "${workdir}/doomed_builds.txt"
+# Builds older than the newest N are due for removal.
+cutoff=$(( build_count - MIN_IMAGES_TO_KEEP ))
+
+# A build carrying `latest` is never removed, even if it somehow fell outside
+# the newest N: deleting `latest` would break every `docker pull` of it.
+awk -F'\t' -v cutoff="${cutoff}" '
+  {
+    cluster = $1; id = $3; created = $4; tags = $5
+    if (cluster <= cutoff) {
+      if (tags ~ /(^|,)latest(,|$)/) protected[cluster] = 1
+      order[++n] = cluster "\t" id "\t" created "\t" tags
+    }
+  }
+  END {
+    for (i = 1; i <= n; i++) {
+      split(order[i], f, "\t")
+      if (f[1] in protected) { printf "SKIP\t%s\t%s\t%s\n", f[2], f[3], f[4] }
+      else { printf "DELETE\t%s\t%s\t%s\n", f[2], f[3], f[4] }
+    }
+  }
+' "${workdir}/clustered.tsv" > "${workdir}/plan.tsv"
 
 deleted=0
-blocked=0
-while IFS=$'\t' read -r _digest id created tags; do
-  case ",${tags}," in
-    *,latest,*)
-      echo "Skipping version ${id} (created ${created}): it carries the 'latest' tag."
-      blocked=$(( blocked + 1 ))
-      continue
-      ;;
-  esac
+skipped=0
+while IFS=$'\t' read -r action id created tags; do
+  if [ "${action}" = "SKIP" ]; then
+    echo "Skipping version ${id} (created ${created}): its build carries the 'latest' tag."
+    skipped=$(( skipped + 1 ))
+    continue
+  fi
 
   if [ "${DRY_RUN}" = "1" ]; then
     echo "[dry-run] Would delete version ${id} (created ${created}, tags: ${tags:-none})."
@@ -124,9 +165,6 @@ while IFS=$'\t' read -r _digest id created tags; do
   else
     echo "::warning::Failed to delete version ${id}; continuing."
   fi
-done < <(awk -F'\t' '
-  NR == FNR { doomed[$1] = 1; next }
-  ($1 in doomed)
-' "${workdir}/doomed_builds.txt" "${workdir}/tagged.tsv")
+done < "${workdir}/plan.tsv"
 
-echo "Pruned ${deleted} version(s); kept ${MIN_IMAGES_TO_KEEP} build(s)${blocked:+ (skipped ${blocked} 'latest' version(s))}."
+echo "Pruned ${deleted} version(s); kept ${MIN_IMAGES_TO_KEEP} build(s) (skipped ${skipped} 'latest' version(s))."

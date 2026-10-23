@@ -9,41 +9,47 @@ import path from 'node:path';
  * The GHCR prune script keeps the newest N *builds*, not the newest N package
  * versions.
  *
- * That distinction is the whole point of the script, and it is easy to
- * reintroduce the old behaviour by "simplifying" the grouping away, so the
- * behaviour is pinned here. Each test drives the real script through a stub
- * `gh` that records the versions it was asked to delete.
+ * The grouping rule is the subtle part, so it is pinned here against data
+ * captured from the real registry. A single `docker buildx` push produces three
+ * versions with three *different* digests:
+ *
+ *   1433233153 | 2026-10-23T07:49:44Z | sha256:ddaa8e13... | sha-70e9e70,latest,main
+ *   1433233116 | 2026-10-23T07:49:44Z | sha256:75acf533... |
+ *   1433233075 | 2026-10-23T07:49:43Z | sha256:525b2695... |
+ *
+ * Only one carries tags; the others are attestation manifests. Because no two
+ * versions share a digest, grouping by digest silently degenerates into "every
+ * version is its own build" - which is exactly the bug these tests guard
+ * against. Builds are therefore clustered on creation time.
  */
 
-const repoRoot = path.join(process.cwd());
+const repoRoot = process.cwd();
 const scriptPath = path.join(repoRoot, '.github', 'scripts', 'prune-ghcr.sh');
+
+type Row = [id: string, createdAt: string, digest: string, tags: string];
 
 interface Harness {
   dir: string;
   run: (options?: { keep?: string; dryRun?: boolean }) => { stdout: string; deleted: string[] };
 }
 
-/**
- * Builds a sandbox containing a stub `gh` and the given version listing.
- *
- * @param rows [id, created_at, digest, tags] tuples in the shape the real API
- *             returns after the jq projection.
- */
-function harness(rows: Array<[string, string, string, string]>): Harness {
+function harness(rows: Row[]): Harness {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'prune-ghcr-'));
-  const apiTsv = rows.map((r) => r.join('\t')).join('\n') + '\n';
-  fs.writeFileSync(path.join(dir, 'api.tsv'), apiTsv);
+  fs.writeFileSync(path.join(dir, 'api.tsv'), rows.map((r) => r.join('\t')).join('\n') + '\n');
 
-  // Stub `gh`: serve the fixture on list, log deletes to a file.
-  const stub = `#!/usr/bin/env bash
+  // Stub `gh`: serve the fixture on list, record deletes to a file.
+  fs.writeFileSync(
+    path.join(dir, 'gh'),
+    `#!/usr/bin/env bash
 case "$1 $2" in
   "api --paginate") cat "${dir}/api.tsv"; exit 0 ;;
   "api --method") echo "$4" >> "${dir}/deleted.log"; exit 0 ;;
 esac
 echo "stub-unexpected: $*" >&2
 exit 9
-`;
-  fs.writeFileSync(path.join(dir, 'gh'), stub, { mode: 0o755 });
+`,
+    { mode: 0o755 }
+  );
 
   return {
     dir,
@@ -60,7 +66,8 @@ exit 9
           PACKAGE_NAME: 'ui2',
           MIN_IMAGES_TO_KEEP: keep,
           GITHUB_REPOSITORY: 'jmedzen/ui2',
-          DRY_RUN: dryRun ? '1' : '0'
+          DRY_RUN: dryRun ? '1' : '0',
+          DEBUG: '0'
         }
       });
 
@@ -72,101 +79,135 @@ exit 9
   };
 }
 
-/** Six builds, three versions each; only the newest carries `latest`. */
-function sixBuilds(): Array<[string, string, string, string]> {
-  const rows: Array<[string, string, string, string]> = [];
-  const digests = ['aaa', 'bbb', 'ccc', 'ddd', 'eee', 'fff'];
-  digests.forEach((digest, i) => {
-    const day = String(20 + i).padStart(2, '0');
-    const latest = i === digests.length - 1 ? 'latest,' : '';
-    rows.push([String(1000 + i * 10 + 1), `2026-10-${day}T01:00:00Z`, `sha256:${digest}`, `${latest}main,sha-${digest}`]);
-    rows.push([String(1000 + i * 10 + 2), `2026-10-${day}T01:00:01Z`, `sha256:${digest}`, `sha-${digest}-b`]);
-    rows.push([String(1000 + i * 10 + 3), `2026-10-${day}T01:00:02Z`, `sha256:${digest}`, `sha-${digest}-c`]);
-  });
+/**
+ * Builds a fixture shaped like the real registry: each build contributes one
+ * tagged version plus two untagged attestations, all with distinct digests and
+ * timestamps within the same second or two.
+ */
+function builds(count: number, options: { latestOn?: number } = {}): Row[] {
+  const latestOn = options.latestOn ?? count - 1;
+  const rows: Row[] = [];
+  const base = Date.UTC(2026, 9, 20, 1, 0, 0) / 1000; // 2026-10-20T01:00:00Z
+
+  for (let i = 0; i < count; i++) {
+    // Builds three hours apart, far wider than the clustering gap.
+    const at = base + i * 3 * 3600;
+    const iso = (offset: number) =>
+      new Date((at + offset) * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+    const tags = i === latestOn ? `sha-${i},latest,main` : `sha-${i},main`;
+    rows.push([`${1000 + i * 10 + 1}`, iso(1), `sha256:digest-${i}-a`, tags]);
+    rows.push([`${1000 + i * 10 + 2}`, iso(1), `sha256:digest-${i}-b`, '']);
+    rows.push([`${1000 + i * 10 + 3}`, iso(0), `sha256:digest-${i}-c`, '']);
+  }
   return rows;
 }
 
-test('GHCR prune keeps whole builds, not individual versions', async (t) => {
-  await t.test('keeps five builds and drops every tag of the sixth', () => {
-    const h = harness(sixBuilds());
+const idsOf = (deleted: string[]) => deleted.map((line) => Number(line.split('/').pop()));
+
+test('GHCR prune groups the versions of one build into one build', async (t) => {
+  await t.test('three versions of a single push count as one build, not three', () => {
+    // This is the real-registry failure mode: digest-based grouping reported
+    // "9 version(s) across 9 image build(s)".
+    const h = harness(builds(3));
+    const { stdout, deleted } = h.run({ keep: '5' });
+
+    assert.match(stdout, /Found 9 version\(s\) across 3 image build\(s\)/);
+    assert.match(stdout, /Nothing to prune/);
+    assert.deepEqual(deleted, []);
+  });
+
+  await t.test('keeps five builds and drops every version of the sixth', () => {
+    const h = harness(builds(6));
     const { stdout, deleted } = h.run({ keep: '5' });
 
     assert.match(stdout, /Found 18 version\(s\) across 6 image build\(s\)/);
     // The oldest build is three versions that must go together.
-    assert.deepEqual(deleted.sort(), [
-      'users/jmedzen/packages/container/ui2/versions/1001',
-      'users/jmedzen/packages/container/ui2/versions/1002',
-      'users/jmedzen/packages/container/ui2/versions/1003'
-    ]);
+    assert.deepEqual(idsOf(deleted).sort((a, b) => a - b), [1001, 1002, 1003]);
   });
 
-  await t.test('the kept builds are exactly the newest ones', () => {
-    const h = harness(sixBuilds());
-    h.run({ keep: '5' });
-    const deleted = fs.readFileSync(path.join(h.dir, 'deleted.log'), 'utf8').trim().split('\n');
-
-    // Nothing from builds bbb..fff (ids 1011 and above) may be deleted.
-    for (const line of deleted) {
-      const id = Number(line.split('/').pop());
+  await t.test('never deletes a version belonging to a kept build', () => {
+    const h = harness(builds(6));
+    const { deleted } = h.run({ keep: '5' });
+    for (const id of idsOf(deleted)) {
       assert.ok(id < 1011, `deleted a version from a build that should be kept: ${id}`);
     }
   });
 
-  await t.test('a version-based count would have cut a build in half', () => {
-    // Pins the regression: keeping "5 versions" of 18 keeps only part of one
-    // build. Keeping 1 build must still delete 15 versions, not 13.
-    const h = harness(sixBuilds());
+  await t.test('keeping one build deletes the other five builds entirely', () => {
+    // Pins the regression: a version-based count of "1" would delete 17 of 18.
+    const h = harness(builds(6));
     const { deleted } = h.run({ keep: '1' });
-    assert.strictEqual(deleted.length, 15, 'keeping 1 build deletes the other 5 builds x 3 versions');
+    assert.strictEqual(deleted.length, 15, '5 dropped builds x 3 versions each');
   });
 
-  await t.test('never deletes the version carrying the latest tag', () => {
-    // Simulate drift: an old build still tagged latest, outside the newest N.
-    const rows = sixBuilds();
-    rows[0][3] = 'latest,main';           // oldest build carries latest
-    rows[rows.length - 1][3] = 'main';    // newest no longer does
-
+  await t.test('a build spanning a second stays one build', () => {
+    // Attestations land a second after the manifest; the cluster gap must not
+    // be so tight that a normal push is split in two.
+    const rows: Row[] = [
+      ['2001', '2026-10-23T07:49:44Z', 'sha256:x1', 'latest,main'],
+      ['2002', '2026-10-23T07:49:44Z', 'sha256:x2', ''],
+      ['2003', '2026-10-23T07:49:43Z', 'sha256:x3', ''],
+      ['2011', '2026-10-23T06:43:31Z', 'sha256:y1', 'sha-45693c3'],
+      ['2012', '2026-10-23T06:43:31Z', 'sha256:y2', ''],
+      ['2013', '2026-10-23T06:43:30Z', 'sha256:y3', '']
+    ];
     const h = harness(rows);
+    const { stdout } = h.run({ keep: '5' });
+    assert.match(stdout, /across 2 image build\(s\)/);
+  });
+
+  await t.test('never deletes the build carrying the latest tag', () => {
+    // Drift: the oldest build (build 0) still holds `latest`, which puts it
+    // outside the newest two and therefore on the deletion list.
+    const h = harness(builds(4, { latestOn: 0 }));
     const { stdout, deleted } = h.run({ keep: '2' });
 
-    // The oldest build is due for removal, but its latest-tagged version is not.
-    assert.ok(
-      !deleted.some((line) => line.endsWith('/1001')),
-      'the latest-tagged version must survive'
-    );
-    assert.match(stdout, /Skipping version 1001/);
-    // Its untagged siblings still go.
-    assert.ok(deleted.some((line) => line.endsWith('/1002')));
+    // The whole build survives, not just the tagged version: removing the
+    // attestations of an image that `latest` still points at would leave an
+    // inconsistent build behind.
+    for (const id of [1001, 1002, 1003]) {
+      assert.ok(!idsOf(deleted).includes(id), `build carrying latest lost version ${id}`);
+      assert.match(stdout, new RegExp(`Skipping version ${id}`));
+    }
+
+    // The next build is still pruned normally.
+    assert.deepEqual(idsOf(deleted).sort((a, b) => a - b), [1011, 1012, 1013]);
   });
 });
 
 test('GHCR prune is safe at the boundaries', async (t) => {
   await t.test('does nothing when the build count equals the limit', () => {
-    const rows = sixBuilds().slice(0, 15); // five builds
-    const h = harness(rows);
+    const h = harness(builds(5));
     const { stdout, deleted } = h.run({ keep: '5' });
     assert.match(stdout, /Nothing to prune/);
     assert.deepEqual(deleted, []);
   });
 
   await t.test('does nothing when there are fewer builds than the limit', () => {
-    const h = harness(sixBuilds().slice(0, 6)); // two builds
+    const h = harness(builds(2));
     const { stdout, deleted } = h.run({ keep: '5' });
     assert.match(stdout, /Nothing to prune/);
     assert.deepEqual(deleted, []);
   });
 
+  await t.test('handles an empty registry', () => {
+    const h = harness([]);
+    const { stdout, deleted } = h.run({ keep: '5' });
+    assert.match(stdout, /No published versions found/);
+    assert.deepEqual(deleted, []);
+  });
+
   await t.test('dry run reports without deleting', () => {
-    const h = harness(sixBuilds());
+    const h = harness(builds(6));
     const { stdout, deleted } = h.run({ keep: '5', dryRun: true });
     assert.match(stdout, /\[dry-run\] Would delete version 1001/);
     assert.deepEqual(deleted, [], 'dry run must not issue any DELETE');
   });
 
   await t.test('rejects a keep count that would delete everything', () => {
-    const h = harness(sixBuilds());
-    // The script exits 1 and reports why. `execFileSync` captures stdout even on
-    // failure, so both channels are checked rather than assuming one.
+    const h = harness(builds(6));
+    // The script reports on stdout and exits 1; execFileSync captures stdout.
     assert.throws(
       () => h.run({ keep: '0' }),
       (error: unknown) => {
@@ -181,17 +222,12 @@ test('GHCR prune is safe at the boundaries', async (t) => {
     );
   });
 
-  await t.test('tolerates a version with no digest or tags', () => {
-    const rows = sixBuilds();
-    // An untagged version: no digest, no tags at all.
-    rows[0] = ['1001', '2026-10-20T01:00:00Z', '', ''];
-    const h = harness(rows);
-    const { stdout, deleted } = h.run({ keep: '5' });
-    // Without a digest the version cannot be attributed to a build, so it is
-    // bucketed on its own. That makes six builds into seven, and the extra
-    // bucket is the oldest, so it is deleted with the first build's tags.
-    assert.match(stdout, /across 7 image build\(s\)/);
-    assert.match(stdout, /Deleting version 1001 .*tags: none/);
-    assert.ok(deleted.length > 0);
+  await t.test('rejects a non-numeric keep count', () => {
+    const h = harness(builds(6));
+    assert.throws(() => h.run({ keep: 'five' }), (error: unknown) => {
+      const e = error as { status?: number };
+      assert.strictEqual(e.status, 1);
+      return true;
+    });
   });
 });
