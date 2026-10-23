@@ -315,6 +315,7 @@ export default function VideoPlayer({
                 onChange={(e) => handleSelectTrack(Number(e.target.value))}
                 className="video-dropdown-select"
                 title="快速選集"
+                aria-label="選擇集數"
               >
                 {tracks.map((t, idx) => (
                   <option key={idx} value={idx}>

@@ -2,32 +2,21 @@ import './helpers/isolated-media-cache';
 
 import test from 'node:test';
 import assert from 'node:assert';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { canonicalPdfPath } from '../src/lib/courseMedia';
+
+// The media-key handling now lives in the PDF discovery hook.
 const here = path.dirname(fileURLToPath(import.meta.url));
-const source = fs.readFileSync(path.join(here, '..', 'src', 'components', 'CourseDetail.tsx'), 'utf8');
-
-/**
- * Extracts the canonicalPdfPath helper from the component and evaluates it.
- * The component itself is a React client module, so the pure helper is pulled
- * out textually rather than rendered.
- */
-function loadCanonicalPdfPath(): (folder: string, name: string) => string {
-  const match = source.match(/const canonicalPdfPath = [\s\S]*?\n};/);
-  assert.ok(match, 'canonicalPdfPath helper must exist in CourseDetail.tsx');
-  // Strip TypeScript annotations so the pure helper can run as plain JS.
-  const js = match[0]
-    .replace('(folder: string, name: string): string', '(folder, name)')
-    .replace(/: string\[\]/g, '')
-    .replace('(v: string)', '(v)');
-  const factory = new Function(`${js}; return canonicalPdfPath;`);
-  return factory() as (folder: string, name: string) => string;
-}
+const source = fs.readFileSync(path.join(here, '..', 'src', 'lib', 'usePdfTracks.ts'), 'utf8');
 
 test('PDF discovery deduplicates one physical file', async (t) => {
-  const canonical = loadCanonicalPdfPath();
+  // Imported directly now that the helper lives in a plain module; it used to be
+  // regex-extracted from CourseDetail.tsx and eval'd.
+  const canonical = canonicalPdfPath;
 
   await t.test('treats a duplicated trailing segment as the same file', () => {
     // Regression: `bilu` was treated as a volume name AND as a media key, so the
@@ -68,7 +57,7 @@ test('PDF discovery deduplicates one physical file', async (t) => {
   });
 });
 
-test('CourseDetail no longer treats media keys as volume names', () => {
+test('PDF discovery no longer treats media keys as volume names', () => {
   // The single-folder upstream shape is { video: [...], bilu: [...] }; `bilu`
   // must be handled by the media-key branch only.
   assert.match(source, /MEDIA_KEYS\s*=\s*\['bilu',\s*'pdf',\s*'beizhu'\]/);

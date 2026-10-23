@@ -2,7 +2,9 @@
 
 一個基於 **Node.js + Next.js App Router + React + TypeScript** 打造的高效能、美觀且功能完備的現代化 Web 瀏覽平台，完整收錄 `fayun.org` 玅境長老一生講述之佛法經論、禪修止觀、戒律與專題開示資料。
 
-包含 400+ 門課程、音訊 MP3/M4A 線上串流播放、影音影片觀看、以及 1000+ 份 PDF 講義筆記線上對照閱讀。
+包含 684 門課程、音訊 MP3/M4A 線上串流播放、影音影片觀看、以及 1000+ 份 PDF 講義筆記線上對照閱讀。
+
+> 📐 想了解內部結構、資料流與設計取捨，請見 **[ARCHITECTURE.md](./ARCHITECTURE.md)**。
 
 ---
 
@@ -59,35 +61,63 @@
 
 ```
 ui2/
-├── public/                    # 靜態資源
+├── public/                       # 靜態資源（圖示、manifest）
 ├── scripts/
-│   ├── build_unified_db.py   # 課程資料庫建置腳本
-│   └── scan_fayun.py         # fayun.org 媒體庫掃描腳本
+│   ├── build_unified_db.py      # 課程資料庫建置腳本
+│   ├── scan_fayun.py            # fayun.org 媒體庫掃描腳本
+│   └── admin-password.mjs       # 管理員密碼／TOTP CLI
 ├── src/
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── courses/      # 全站課程索引 API
-│   │   │   ├── list-files/   # 遠端目錄檔案查詢 API (附 Server Cache)
-│   │   │   ├── proxy/        # 音訊/影片/PDF 串流代理 API
-│   │   │   └── scan/         # Web 媒體掃描同步 API
-│   │   ├── globals.css       # 現代禪風主題樣式系統
-│   │   ├── layout.tsx        # 根版面與 SEO Metadata
-│   │   └── page.tsx          # 響應式主頁面與樹狀導覽
+│   │   │   ├── admin/          # 登入、登出、密碼、TOTP、工作階段、網站網址
+│   │   │   ├── courses/        # 全站課程索引 API
+│   │   │   ├── list-files/     # 遠端目錄查詢 API（附 Server LRU Cache）
+│   │   │   ├── proxy/          # 音訊／影片／PDF 串流代理（支援 Range）
+│   │   │   ├── scan/           # 媒體掃描同步 API
+│   │   │   └── health-check/   # 自我巡檢修復 API
+│   │   ├── styles/             # 樣式（由 globals.css 依序 @import）
+│   │   │   ├── base.css        #   reset、字級縮放基底
+│   │   │   ├── themes.css      #   六套主題的 15 個 CSS 變數
+│   │   │   ├── layout.css      #   外殼、側欄、目錄樹、播放列
+│   │   │   └── components.css  #   分頁、集數清單、PDF、設定、首頁
+│   │   ├── globals.css         # 樣式進入點（僅含 @import）
+│   │   ├── layout.tsx          # 根版面、SEO Metadata、viewport
+│   │   ├── manifest.ts         # PWA manifest
+│   │   └── page.tsx            # 主頁面、樹狀導覽、全站狀態
 │   ├── components/
-│   │   ├── AudioPlayer.tsx        # 音訊播放組件
-│   │   ├── CourseDetail.tsx       # 課程詳細與雙欄對照組件
-│   │   ├── GlobalAudioPlayer.tsx  # 全站全域懸浮播放器
-│   │   ├── PdfViewer.tsx          # PDF 講義閱讀器
-│   │   ├── TreeNav.tsx            # 極簡樹狀目錄與防抖搜尋
-│   │   └── VideoPlayer.tsx        # 影音影片播放器
+│   │   ├── AdminSecurityPanel.tsx  # 管理員登入／密碼／TOTP 面板
+│   │   ├── AudioTab.tsx            # 音訊分頁（搜尋、卷次、分批清單）
+│   │   ├── CourseDetail.tsx        # 課程詳細頁與五個分頁
+│   │   ├── GlobalAudioPlayer.tsx   # 全站懸浮播放器
+│   │   ├── HomePortal.tsx          # 首頁入口、學習法種類、每日推薦
+│   │   ├── ListErrorState.tsx      # 清單載入失敗與重試（共用）
+│   │   ├── PdfViewer.tsx           # PDF 講義閱讀器
+│   │   ├── SettingsModal.tsx       # 設定面板（主題、字級、網站網址）
+│   │   ├── SiteUrlPanel.tsx        # 網站網址設定子面板
+│   │   ├── TreeNav.tsx             # 樹狀目錄與防抖搜尋
+│   │   └── VideoPlayer.tsx         # 影音播放器
 │   ├── context/
-│   │   └── AudioContext.tsx       # 全域音訊狀態上下文
+│   │   └── AudioContext.tsx        # 全域音訊狀態（跨頁不中斷）
+│   ├── lib/
+│   │   ├── courseMedia.ts          # 純函式：PDF 去重、卷次範圍、排序
+│   │   ├── useAudioTracks.ts       # 音訊清單探索（含錯誤狀態）
+│   │   ├── useVideoTracks.ts       # 影音清單探索
+│   │   ├── usePdfTracks.ts         # 講義清單探索
+│   │   ├── playbackStore.ts        # 播放進度、最愛（useSyncExternalStore）
+│   │   ├── stringStore.ts          # 型別安全的 localStorage store
+│   │   ├── catalog.ts              # 課程資料庫存取
+│   │   ├── serverMediaCache.ts     # 媒體快取（LRU、20 GB 上限）
+│   │   ├── admin*.ts               # 管理員認證、工作階段、速率限制、稽核
+│   │   └── …                       # themePreference、dailyPicks、useServiceWorker 等
 │   ├── data/
-│   │   └── courses_db.json        # 高速索引課程資料庫
-│   └── types/
-│       └── course.ts              # TypeScript 型態定義
+│   │   └── courses_db.json         # 高速索引課程資料庫
+│   ├── types/
+│   │   └── course.ts               # TypeScript 型態定義
+│   ├── instrumentation.ts          # 啟動時掛載（快取維護）
+│   └── proxy.ts                    # 頁面安全標頭（CSP 等）
+├── tests/                          # node:test + tsx（449 個斷言案例）
+├── data/                           # 執行期資料（DB、快取、日誌、site.json）
 ├── package.json
-├── scanner.log                # 媒體同步歷史日誌
 └── tsconfig.json
 ```
 

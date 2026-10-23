@@ -3,6 +3,7 @@ import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import { getCacheStats } from '../src/lib/serverMediaCache';
+import { readAllStyles } from './helpers/styles';
 
 interface CheckItem {
   name: string;
@@ -110,7 +111,8 @@ async function runFullSiteVerification() {
   try {
     console.log('⏳ [4/6] 檢驗手機版 Firefox 與行動端 UI 相容配置...');
     const layoutContent = fs.readFileSync(path.join(process.cwd(), 'src', 'app', 'layout.tsx'), 'utf-8');
-    const cssContent = fs.readFileSync(path.join(process.cwd(), 'src', 'app', 'globals.css'), 'utf-8');
+    // Styles are split across src/app/styles/*.css; read the whole set.
+    const cssContent = readAllStyles();
 
     // Next.js manages <head> via the `viewport` export; a hand-written
     // <meta name="viewport"> would be duplicated in the rendered document.

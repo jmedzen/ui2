@@ -333,21 +333,28 @@ test('Whole-site leak hardening', async (t) => {
   });
 
   await t.test('CourseDetail scopes 本地分 discovery to the course volume', () => {
-    const src = read('src/components/CourseDetail.tsx');
+    // The volume-scoping helper now lives in a plain module, so assert against
+    // it directly instead of regexing the component.
+    const helper = read('src/lib/courseMedia.ts');
 
     // The shared-root fallback over-attributed files to every volume page.
-    assert.match(src, /const sharedRootDirFor = \(course: CourseItem\): string \| undefined =>/);
+    assert.match(helper, /export const sharedRootDirFor = \(course: CourseItem\): string \| undefined =>/);
     assert.doesNotMatch(
-      src,
+      helper,
       /course\.name\.includes\('本地分'\) \? '\/media\/釋論\/瑜伽師地論・本地分' : undefined/
     );
-    assert.match(src, /const scoped = sharedRootDirFor\(course\)/);
 
     // The course name decides the volume; the full token must be captured so
     // real directories like 卷12至13-1 are not truncated to 卷12.
-    assert.match(src, /const vols = name\.match\(\/卷\[0-9０-９\]\+/);
-    assert.match(src, /if \(vols && vols\.length === 1\) \{/);
-    assert.match(src, /if \(!\/卷\/\.test\(name\)\) \{/);
+    assert.match(helper, /const vols = name\.match\(\/卷\[0-9０-９\]\+/);
+    assert.match(helper, /if \(vols && vols\.length === 1\) \{/);
+    assert.match(helper, /if \(!\/卷\/\.test\(name\)\) \{/);
+
+    // The discovery logic itself now lives in the PDF hook.
+    const pdfHook = read('src/lib/usePdfTracks.ts');
+    assert.match(pdfHook, /const scoped = sharedRootDirFor\(course\)/);
+
+    const src = read('src/components/CourseDetail.tsx');
 
     // The loading label must not equate "empty" with "loading".
     assert.match(src, /isLoadingVideo \? '載入中' : videoTracks\.length/);

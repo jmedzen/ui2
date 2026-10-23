@@ -1,0 +1,130 @@
+/* Theme palette.
+ * Every theme defines the same 15 custom properties; --text-muted was tuned
+ * so all six clear WCAG AA (4.5) against --bg-card.
+ */
+
+/* Theme variables */
+.app-root.dark {
+  --bg-main: #11151c;
+  --bg-sidebar: #171d26;
+  --bg-card: #1d2430;
+  --bg-hover: #263040;
+  --bg-active: #303c50;
+  --border-color: #2b3547;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #808ea1;
+  --gold-accent: #f0a500;
+  --gold-glow: rgba(240, 165, 0, 0.2);
+  --jade-accent: #10b981;
+  --purple-accent: #8b5cf6;
+  --purple-glow: rgba(139, 92, 246, 0.18);
+  --shadow-color: rgba(0, 0, 0, 0.45);
+}
+
+.app-root.light {
+  --bg-main: #fbf9f5;
+  --bg-sidebar: #f5f2eb;
+  --bg-card: #ffffff;
+  --bg-hover: #eee9df;
+  --bg-active: #e2dbcd;
+  --border-color: #e5ded3;
+  --text-primary: #1e242b;
+  --text-secondary: #52606d;
+  --text-muted: #6a7682;
+  --gold-accent: #c67c13;
+  --gold-glow: rgba(198, 124, 19, 0.16);
+  --jade-accent: #059669;
+  --purple-accent: #7c3aed;
+  --purple-glow: rgba(124, 58, 237, 0.15);
+  --shadow-color: rgba(0, 0, 0, 0.06);
+}
+
+.app-root.pine {
+  --bg-main: #0b1410;
+  --bg-sidebar: #111e18;
+  --bg-card: #16261e;
+  --bg-hover: #1e3328;
+  --bg-active: #264234;
+  --border-color: #243d30;
+  --text-primary: #ecfdf5;
+  --text-secondary: #a7f3d0;
+  --text-muted: #5eead4;
+  --gold-accent: #10b981;
+  --gold-glow: rgba(16, 185, 129, 0.2);
+  --jade-accent: #34d399;
+  --purple-accent: #a78bfa;
+  --purple-glow: rgba(167, 139, 250, 0.18);
+  --shadow-color: rgba(0, 0, 0, 0.45);
+}
+
+.app-root.sandalwood {
+  --bg-main: #1a1512;
+  --bg-sidebar: #241d18;
+  --bg-card: #2e251f;
+  --bg-hover: #3d3129;
+  --bg-active: #4d3e34;
+  --border-color: #44372e;
+  --text-primary: #fdfaf6;
+  --text-secondary: #e2cbbd;
+  --text-muted: #b09584;
+  --gold-accent: #cfa169;
+  --gold-glow: rgba(207, 161, 105, 0.22);
+  --jade-accent: #38b2ac;
+  --purple-accent: #d4955b;
+  --purple-glow: rgba(212, 149, 91, 0.2);
+  --shadow-color: rgba(0, 0, 0, 0.45);
+}
+
+.app-root.zen {
+  --bg-main: #f4efea;
+  --bg-sidebar: #eae3da;
+  --bg-card: #fdfbf7;
+  --bg-hover: #e4dcd0;
+  --bg-active: #d8cebf;
+  --border-color: #dcd3c5;
+  --text-primary: #2d2926;
+  --text-secondary: #59524c;
+  --text-muted: #7a716a;
+  --gold-accent: #b8860b;
+  --gold-glow: rgba(184, 134, 11, 0.16);
+  --jade-accent: #4a6b54;
+  --purple-accent: #786c5f;
+  --purple-glow: rgba(120, 108, 95, 0.16);
+  --shadow-color: rgba(60, 50, 40, 0.08);
+}
+
+.app-root.gruvbox {
+  --bg-main: #282828;
+  --bg-sidebar: #1d2021;
+  --bg-card: #3c3836;
+  --bg-hover: #504945;
+  --bg-active: #665c54;
+  --border-color: #504945;
+  --text-primary: #ebdbb2;
+  --text-secondary: #d5c4a1;
+  --text-muted: #b1a28a;
+  --gold-accent: #fabd2f;
+  --gold-glow: rgba(250, 189, 47, 0.2);
+  --jade-accent: #b8bb26;
+  --purple-accent: #d65d0e;
+  --purple-glow: rgba(214, 93, 14, 0.2);
+  --shadow-color: rgba(0, 0, 0, 0.5);
+}
+
+.theme-dropdown {
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: calc(12px * var(--font-scale));
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.theme-dropdown:hover {
+  border-color: var(--gold-accent);
+}

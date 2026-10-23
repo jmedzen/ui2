@@ -197,6 +197,7 @@ export default function GlobalAudioPlayer() {
                 onClick={() => seekRelative(-10)}
                 className="ctrl-btn-sm"
                 title="倒退 10 秒 (← 鍵 倒退5秒)"
+                aria-label="倒退 10 秒"
               >
                 ⏪ -10s
               </button>
@@ -205,6 +206,7 @@ export default function GlobalAudioPlayer() {
                 disabled={currentTrack.index === 0}
                 className="ctrl-btn-sm"
                 title="上一集"
+                aria-label="播放上一集"
               >
                 ⏮️
               </button>
@@ -212,6 +214,7 @@ export default function GlobalAudioPlayer() {
                 onClick={togglePlay}
                 className="ctrl-btn-lg play-main-btn"
                 title={isPlaying ? '暫停 (空白鍵)' : '播放 (空白鍵)'}
+                aria-label={isPlaying ? '暫停播放' : '開始播放'}
               >
                 {isPlaying ? '⏸️' : '▶️'}
               </button>
@@ -220,6 +223,7 @@ export default function GlobalAudioPlayer() {
                 disabled={currentTrack.index === playlist.length - 1}
                 className="ctrl-btn-sm"
                 title="下一集"
+                aria-label="播放下一集"
               >
                 ⏭️
               </button>
@@ -227,6 +231,7 @@ export default function GlobalAudioPlayer() {
                 onClick={() => seekRelative(10)}
                 className="ctrl-btn-sm"
                 title="快進 10 秒 (→ 鍵 快進5秒)"
+                aria-label="快進 10 秒"
               >
                 +10s ⏩
               </button>
@@ -289,6 +294,7 @@ export default function GlobalAudioPlayer() {
                   onClick={() => setIsSleepMenuOpen((prev) => !prev)}
                   className={`player-tool-btn ${sleepTimer.endsAt || sleepTimer.endOfEpisode ? 'active' : ''}`}
                   title="睡眠定時器：時間到自動停止播放"
+                  aria-label="睡眠定時器"
                   aria-expanded={isSleepMenuOpen}
                   aria-haspopup="menu"
                 >
@@ -348,7 +354,7 @@ export default function GlobalAudioPlayer() {
             </div>
 
             <div className="volume-widget">
-              <button onClick={toggleMute} className="vol-btn" title="靜音 (M 鍵)">
+              <button onClick={toggleMute} className="vol-btn" title="靜音 (M 鍵)" aria-label={isMuted ? '取消靜音' : '靜音'}>
                 {isMuted ? '🔇' : '🔊'}
               </button>
               <input

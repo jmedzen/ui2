@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
 import path from 'path';
+import { readAllStyles } from './helpers/styles';
 
 test('UI, Mobile Configuration & Theme Integrity Suite', async (t) => {
   await t.test('layout.tsx declares viewport via the Next.js export for mobile Firefox', () => {
@@ -20,8 +21,7 @@ test('UI, Mobile Configuration & Theme Integrity Suite', async (t) => {
   });
 
   await t.test('globals.css defines Zen Modern serif fonts and all 6 themes', () => {
-    const cssPath = path.join(process.cwd(), 'src', 'app', 'globals.css');
-    const css = fs.readFileSync(cssPath, 'utf-8');
+    const css = readAllStyles();
 
     assert.ok(css.includes('--font-serif'), 'Must define --font-serif for classical Chinese texts');
     assert.ok(css.includes('Noto Serif TC') || css.includes('Songti TC'), 'Must include classical serif font fallbacks');
@@ -33,8 +33,7 @@ test('UI, Mobile Configuration & Theme Integrity Suite', async (t) => {
   });
 
   await t.test('globals.css defines mobile overrides and 960px breakpoint', () => {
-    const cssPath = path.join(process.cwd(), 'src', 'app', 'globals.css');
-    const css = fs.readFileSync(cssPath, 'utf-8');
+    const css = readAllStyles();
 
     assert.ok(css.includes('@media (max-width: 960px)'), 'Must define 960px mobile media query');
     assert.ok(css.includes('.app-root.is-mobile-screen'), 'Must define .is-mobile-screen class overrides for mobile Firefox');
@@ -42,8 +41,7 @@ test('UI, Mobile Configuration & Theme Integrity Suite', async (t) => {
   });
 
   await t.test('globals.css defines Zen focus mode and split resizer', () => {
-    const cssPath = path.join(process.cwd(), 'src', 'app', 'globals.css');
-    const css = fs.readFileSync(cssPath, 'utf-8');
+    const css = readAllStyles();
 
     assert.ok(css.includes('.layout-wrapper.zen-focus-mode'), 'Must define Zen focus mode CSS rules');
     assert.ok(css.includes('.split-resizer'), 'Must define .split-resizer CSS rules');
@@ -123,8 +121,7 @@ test('UI, Mobile Configuration & Theme Integrity Suite', async (t) => {
     assert.ok(homeContent.includes('home-hero-card'), 'HomePortal must contain hero banner');
     assert.ok(homeContent.includes('home-divisions-grid'), 'HomePortal must contain 4 Dharma divisions');
 
-    const cssPath = path.join(process.cwd(), 'src', 'app', 'globals.css');
-    const css = fs.readFileSync(cssPath, 'utf-8');
+    const css = readAllStyles();
     assert.ok(css.includes('.brand:hover'), 'Must define .brand:hover for return to home visual affordance');
     assert.ok(css.includes('.breadcrumb-home'), 'Must define .breadcrumb-home styling');
     assert.ok(css.includes('.home-portal-pane'), 'Must define .home-portal-pane styles');
