@@ -61,6 +61,14 @@ if ! gh api --paginate "${versions_url}?per_page=100" \
   exit 0
 fi
 
+# DEBUG=1 dumps the raw projection so the grouping key can be verified against
+# the registry's real shape. Off by default; it is noisy and lists every version.
+if [ "${DEBUG:-0}" = "1" ]; then
+  echo "--- raw versions (id, created_at, name, tags) ---"
+  awk -F'\t' '{ printf "  %s | %s | name=%s | tags=%s\n", $1, $2, $3, $4 }' "${versions_tsv}"
+  echo "--- end raw versions ---"
+fi
+
 version_count=$(grep -c . "${versions_tsv}" || true)
 if [ "${version_count}" -eq 0 ]; then
   echo "No published versions found; nothing to do."

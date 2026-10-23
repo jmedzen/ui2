@@ -16,6 +16,11 @@ on:
         required: true
         default: false
         type: boolean
+      debug:
+        description: 'Print the raw version listing (for troubleshooting grouping)'
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   prune-images:
@@ -36,4 +41,5 @@ jobs:
           PACKAGE_NAME: ${{ github.event.repository.name }}
           MIN_IMAGES_TO_KEEP: ${{ inputs.min_images_to_keep || '5' }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          DEBUG: ${{ inputs.debug && '1' || '0' }}
         run: bash .github/scripts/prune-ghcr.sh
