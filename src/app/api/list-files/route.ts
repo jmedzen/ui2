@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { readJsonBodyLimited } from '@/lib/adminAuth';
+import { clientKeyFor } from '@/lib/clientIp';
+import { fetchUpstream, UpstreamPolicyError, UpstreamTimeoutError } from '@/lib/upstream';
 
 /**
  * Shape of the upstream directory listing.
@@ -45,6 +48,52 @@ const MAX_CACHE_BYTES = Math.max(
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const UPSTREAM_TIMEOUT_MS = 15000;
 
+/** A directory path is short; nothing legitimate comes near this. */
+const MAX_SRC_LENGTH = 1024;
+/** The request body is `{"src": "..."}`; 4 KB is generous. */
+const MAX_REQUEST_BYTES = 4096;
+
+/**
+ * Upstream lookups (cache MISSes) allowed per client per minute.
+ *
+ * This route is public, and each distinct `src` used to cost the server one
+ * request to fayun.org's list.php with no budget at all, which made the app a
+ * free relay for hammering the origin. Cache HITs are not charged, so normal
+ * browsing — a course page probes a handful of candidate paths — is unaffected.
+ */
+const MISS_WINDOW_MS = 60 * 1000;
+const MAX_MISS_BUCKETS = 5000;
+
+function missLimit(): number {
+  const parsed = Number.parseInt((process.env.LIST_FILES_MAX_PER_MINUTE || '').trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 60;
+}
+
+const missBuckets = new Map<string, { count: number; resetAt: number }>();
+
+/** Fixed-window limiter; bounded so rotating keys cannot grow the map. */
+function chargeUpstreamLookup(request: Request, now: number): { ok: true } | { ok: false; retryAfter: number } {
+  for (const [key, bucket] of missBuckets) {
+    if (now >= bucket.resetAt) missBuckets.delete(key);
+  }
+  while (missBuckets.size >= MAX_MISS_BUCKETS) {
+    const oldest = missBuckets.keys().next().value;
+    if (oldest === undefined) break;
+    missBuckets.delete(oldest);
+  }
+  const key = clientKeyFor(request);
+  const bucket = missBuckets.get(key);
+  if (!bucket || now >= bucket.resetAt) {
+    missBuckets.set(key, { count: 1, resetAt: now + MISS_WINDOW_MS });
+    return { ok: true };
+  }
+  if (bucket.count >= missLimit()) {
+    return { ok: false, retryAfter: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)) };
+  }
+  bucket.count += 1;
+  return { ok: true };
+}
+
 /** Running total of `entry.bytes`; kept in lockstep with every set/delete. */
 let cacheBytes = 0;
 
@@ -83,15 +132,19 @@ function cleanExpiredCache(now: number) {
 
 export async function POST(request: Request) {
   try {
-    let src: unknown;
-    try {
-      ({ src } = await request.json());
-    } catch {
-      return NextResponse.json({ error: 'Malformed JSON body' }, { status: 400 });
+    // Bounded read: `request.json()` materialised a body of any size on a
+    // public, unauthenticated route.
+    const body = await readJsonBodyLimited(request, MAX_REQUEST_BYTES);
+    if (!body.ok) {
+      return NextResponse.json({ error: body.message }, { status: body.status });
     }
+    const src = body.value && typeof body.value === 'object' ? (body.value as { src?: unknown }).src : undefined;
 
     if (!src || typeof src !== 'string') {
       return NextResponse.json({ error: 'Missing or invalid src parameter' }, { status: 400 });
+    }
+    if (src.length > MAX_SRC_LENGTH) {
+      return NextResponse.json({ error: 'src parameter is too long' }, { status: 400 });
     }
 
     // Security Audit: Prevent Directory Traversal
@@ -120,40 +173,54 @@ export async function POST(request: Request) {
       });
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+    const charge = chargeUpstreamLookup(request, now);
+    if (!charge.ok) {
+      return NextResponse.json(
+        { error: 'Too many directory lookups, please slow down' },
+        { status: 429, headers: { 'Retry-After': String(charge.retryAfter) } }
+      );
+    }
 
     let res: Response;
     try {
-      res = await fetch('https://www.fayun.org/public/php/list.php', {
+      // fetchUpstream: redirects re-validated per hop, header + idle timeouts.
+      res = await fetchUpstream('https://www.fayun.org/public/php/list.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'User-Agent': 'Mozilla/5.0'
         },
         body: JSON.stringify({ src }),
-        cache: 'no-store',
-        signal: controller.signal
+        timeoutMs: UPSTREAM_TIMEOUT_MS,
+        idleTimeoutMs: UPSTREAM_TIMEOUT_MS
       });
     } catch (e: unknown) {
-      if (e instanceof Error && e.name === 'AbortError') {
+      if (e instanceof UpstreamTimeoutError) {
         return NextResponse.json({ error: 'Upstream directory listing timed out' }, { status: 504 });
       }
+      if (e instanceof UpstreamPolicyError) {
+        return NextResponse.json({ error: 'Upstream directory listing redirected off the allowlist' }, { status: 502 });
+      }
       return NextResponse.json({ error: 'Upstream directory listing failed' }, { status: 502 });
-    } finally {
-      clearTimeout(timeoutId);
     }
 
     if (!res.ok) {
+      try {
+        await res.body?.cancel();
+      } catch {}
       const errData = { error: `Remote returned ${res.status}` };
-      // Negative cache 404/400 errors to prevent repeated hammering
-      putEntry(src, {
-        data: errData,
-        timestamp: now,
-        ttl: NEGATIVE_CACHE_TTL_MS,
-        status: res.status,
-        bytes: 256
-      });
+      // Negative-cache only CLIENT errors (a path that does not exist). A 5xx is
+      // the origin having a bad moment; caching it for 10 minutes turned a
+      // transient blip into ten minutes of "no files" for that course.
+      if (res.status >= 400 && res.status < 500) {
+        putEntry(src, {
+          data: errData,
+          timestamp: now,
+          ttl: NEGATIVE_CACHE_TTL_MS,
+          status: res.status,
+          bytes: 256
+        });
+      }
       return NextResponse.json(errData, { status: res.status });
     }
 
@@ -201,10 +268,13 @@ export async function POST(request: Request) {
           }
           chunks.push(value);
         }
-      } catch {
+      } catch (e: unknown) {
         try {
           await reader.cancel();
         } catch {}
+        if (e instanceof UpstreamTimeoutError) {
+          return NextResponse.json({ error: 'Upstream directory listing timed out' }, { status: 504 });
+        }
         return NextResponse.json({ error: 'Failed to read upstream response' }, { status: 502 });
       }
       if (overflowed) {

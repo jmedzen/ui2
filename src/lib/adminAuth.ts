@@ -81,16 +81,21 @@ function configuredOrigins(): string[] {
     .filter((value): value is string => Boolean(value));
 }
 
+/**
+ * The host the browser believes it is talking to.
+ *
+ * X-Forwarded-Host is request-supplied, so it is honoured ONLY with
+ * TRUST_PROXY=1 — the contract the README documents. The previous version had a
+ * dead `isTrustedProxy()` branch followed by an unconditional read of the same
+ * header, so the setting changed nothing and any direct caller could choose the
+ * host its own Origin was compared against. Behind a proxy without
+ * TRUST_PROXY, set ADMIN_ALLOWED_ORIGINS instead.
+ */
 function requestHostForOriginCheck(request: Request): string {
   if (isTrustedProxy()) {
     const forwarded = firstHeaderValue(request, 'x-forwarded-host');
     if (forwarded) return forwarded.toLowerCase();
   }
-  // Caddy's reverse_proxy sets X-Forwarded-Host by default, but do not require
-  // TRUST_PROXY just to read it: the app is bound to loopback in compose, and
-  // the value is used only for CSRF host comparison, never authorization.
-  const forwarded = firstHeaderValue(request, 'x-forwarded-host');
-  if (forwarded) return forwarded.toLowerCase();
   try {
     return new URL(request.url).host.toLowerCase();
   } catch {

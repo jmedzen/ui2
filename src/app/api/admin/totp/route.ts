@@ -10,7 +10,7 @@ import {
   authorizeAdminRequest,
   readJsonBodyLimited
 } from '@/lib/adminAuth';
-import { checkAdminTransport } from '@/lib/adminSession';
+import { checkAdminTransport, destroyOtherAdminSessions } from '@/lib/adminSession';
 import {
   consumeAdminLoginAttempt,
   recordAdminLoginFailure,
@@ -191,7 +191,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       return jsonError(400, 'ADMIN_TOTP_SECRET_INVALID', parsedSecret.error);
     }
 
-    const attempt = consumeAdminLoginAttempt(request);
+    const attempt = consumeAdminLoginAttempt(request, { bypassGlobal: true });
     if (!attempt.ok) {
       appendAdminAudit('totp_failure', {
         reason: 'rate_limited',
@@ -251,8 +251,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
+    // Every OTHER session was established with the password alone; it must not
+    // outlive the account gaining a second factor. This session just proved
+    // both factors, so it is kept.
+    destroyOtherAdminSessions(request);
     resetAdminLoginFailures(attempt.key);
-    appendAdminAudit('totp_enabled', { ip, ua: userAgent });
+    appendAdminAudit('totp_enabled', { ip, ua: userAgent, other_sessions: 'revoked' });
     return NextResponse.json(
       { ok: true, enabled: true, manageable: true },
       { headers: NO_STORE }
@@ -264,7 +268,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return jsonError(409, 'ADMIN_TOTP_NOT_ENABLED', 'TOTP is not currently enabled');
   }
 
-  const attempt = consumeAdminLoginAttempt(request);
+  const attempt = consumeAdminLoginAttempt(request, { bypassGlobal: true });
   if (!attempt.ok) {
     appendAdminAudit('totp_failure', {
       reason: 'rate_limited',

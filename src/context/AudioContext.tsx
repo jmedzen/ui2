@@ -1,7 +1,14 @@
 'use client';
 
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
-import { triggerBackgroundServerCache, getOptimalMediaRoute, fetchCacheStatus } from '@/lib/speedTester';
+import {
+  triggerBackgroundServerCache,
+  getOptimalMediaRoute,
+  fetchCacheStatus,
+  resolvePlaybackRoute,
+  withDeadline,
+  USER_PLAY_ROUTE_DEADLINE_MS
+} from '@/lib/speedTester';
 import {
   readProgressMap,
   saveProgressMap,
@@ -578,10 +585,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     const reqId = ++playRequestIdRef.current;
 
-    // Initial cache status check & dual-path speed evaluation
+    // Initial cache status check & dual-path speed evaluation, BOUNDED: this
+    // runs inside the user's click, and play() below must still be inside that
+    // gesture's activation window or Safari rejects it (the first tap then
+    // seemed to do nothing). Past the deadline the proxy is used.
     Promise.all([
-      getOptimalMediaRoute(targetTrack.proxyUrl, targetTrack.url),
-      fetchCacheStatus(targetTrack.proxyUrl)
+      resolvePlaybackRoute(targetTrack.proxyUrl, targetTrack.url),
+      withDeadline(fetchCacheStatus(targetTrack.proxyUrl), USER_PLAY_ROUTE_DEADLINE_MS, false)
     ]).then(([routeRes, isCached]) => {
       if (!isMountedRef.current || reqId !== playRequestIdRef.current) return;
       const updatedTrack: PlayingTrack = {

@@ -375,17 +375,13 @@ export default function SettingsModal({
         return;
       }
 
-      if (
-        status === 401 &&
-        (data.code === 'ADMIN_BAD_TOTP' || data.code === 'ADMIN_TOTP_REPLAY')
-      ) {
+      if (status === 401 && data.code === 'ADMIN_BAD_CREDENTIALS') {
+        // With 2FA on, the server deliberately does not say WHICH factor was
+        // wrong (that distinction was a password oracle), so neither can we.
         setLoginTotpRequired(true);
+        setAdminPassword('');
         setAdminTotpCode('');
-        setAdminLoginError(
-          data.code === 'ADMIN_TOTP_REPLAY'
-            ? '此驗證碼已使用過，請等待下一個驗證碼。'
-            : '驗證碼不正確，請重新輸入。'
-        );
+        setAdminLoginError('密碼或驗證碼不正確，請重新輸入。若剛使用過同一組驗證碼，請等待下一組。');
         return;
       }
 

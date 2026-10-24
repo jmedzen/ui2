@@ -11,7 +11,10 @@ import {
 import {
   checkAdminTransport,
   createAdminSession,
-  serializeAdminSessionCookie
+  createDeviceCookieValue,
+  serializeAdminDeviceCookie,
+  serializeAdminSessionCookie,
+  verifyDeviceCookie
 } from '@/lib/adminSession';
 import {
   consumeAdminLoginAttempt,
@@ -118,9 +121,25 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  // With 2FA enabled, ask for the code BEFORE looking at the password. The old
+  // order verified the password first and answered "TOTP required" only when it
+  // was right — a free password oracle that revealed a correct guess without
+  // the second factor. Answering up front reveals only that 2FA is on, and
+  // costs no scrypt work.
+  if (credential.totpSecret && !code) {
+    return jsonError(401, 'ADMIN_TOTP_REQUIRED', 'TOTP verification code required', {}, {
+      totpRequired: true
+    });
+  }
+
+  // A browser that has logged in before is budgeted per device and is exempt
+  // from the global failure ceiling, so an address-rotating flood cannot lock
+  // the administrator out (see adminSession: trusted-device cookie).
+  const deviceId = verifyDeviceCookie(request, credential.hash);
+
   // Count the attempt before running scrypt. This is what prevents a login
   // flood from turning into an unbounded CPU/memory workload.
-  const attempt = consumeAdminLoginAttempt(request);
+  const attempt = consumeAdminLoginAttempt(request, { deviceId });
   if (!attempt.ok) {
     appendAdminAudit('login_failure', {
       reason: 'rate_limited',
@@ -133,7 +152,30 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const verified = await verifyPasswordAgainstHash(password, credential.hash);
-  if (!verified.ok) {
+
+  if (credential.totpSecret) {
+    // Both factors are judged before answering, and every failure gets the
+    // SAME answer. Distinct "bad password" / "bad code" / "replayed code"
+    // replies told an attacker holding one observed code whether a password
+    // guess was right.
+    const totp = verified.ok ? verifyAndConsumeTotpCode(credential.totpSecret, code) : null;
+    if (!verified.ok || !totp?.ok) {
+      recordAdminLoginFailure();
+      appendAdminAudit('login_failure', {
+        reason: !verified.ok ? verified.reason : totp && !totp.ok ? totp.reason : 'unknown',
+        ip,
+        ua: userAgent
+      });
+      await failureDelay();
+      return jsonError(
+        401,
+        'ADMIN_BAD_CREDENTIALS',
+        'Invalid password or verification code. If you just used this code, wait for the next one.',
+        {},
+        { totpRequired: true }
+      );
+    }
+  } else if (!verified.ok) {
     recordAdminLoginFailure();
     appendAdminAudit('login_failure', {
       reason: verified.reason,
@@ -142,37 +184,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
     await failureDelay();
     return jsonError(401, 'ADMIN_BAD_PASSWORD', 'Invalid password');
-  }
-
-  if (credential.totpSecret) {
-    if (!code) {
-      appendAdminAudit('login_failure', {
-        reason: 'totp_required',
-        ip,
-        ua: userAgent
-      });
-      return jsonError(401, 'ADMIN_TOTP_REQUIRED', 'TOTP verification code required', {}, {
-        totpRequired: true
-      });
-    }
-
-    const totp = verifyAndConsumeTotpCode(credential.totpSecret, code);
-    if (!totp.ok) {
-      recordAdminLoginFailure();
-      appendAdminAudit('login_failure', {
-        reason: totp.reason,
-        ip,
-        ua: userAgent
-      });
-      await failureDelay();
-      return jsonError(
-        401,
-        totp.reason === 'replay' ? 'ADMIN_TOTP_REPLAY' : 'ADMIN_BAD_TOTP',
-        totp.reason === 'replay'
-          ? 'This verification code was already used. Wait for the next code.'
-          : 'Invalid TOTP verification code'
-      );
-    }
   }
 
   resetAdminLoginFailures(attempt.key);
@@ -185,13 +196,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     expiresAt: new Date(session.expiresAt).toISOString()
   });
 
-  return NextResponse.json(
+  const response = NextResponse.json(
     { ok: true, expiresAt: session.expiresAt },
-    {
-      headers: {
-        ...NO_STORE,
-        'Set-Cookie': serializeAdminSessionCookie(session, request)
-      }
-    }
+    { headers: { ...NO_STORE } }
   );
+  // The session cookie stays first: callers and tests read the first cookie.
+  response.headers.append('Set-Cookie', serializeAdminSessionCookie(session, request));
+  response.headers.append(
+    'Set-Cookie',
+    serializeAdminDeviceCookie(createDeviceCookieValue(credential.hash), request)
+  );
+  return response;
 }

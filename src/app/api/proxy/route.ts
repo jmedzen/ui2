@@ -4,9 +4,12 @@ import { Readable } from 'stream';
 import { getCacheFilePath, isCached, updateAccessTime, cacheRemoteMedia, fileLooksLikeHtml, invalidateCacheStats, markCacheFileInUse, isDownloadInFlight } from '@/lib/serverMediaCache';
 import { authorizePreloadRequest } from '@/lib/serverTasks';
 import { clientKeyFor } from '@/lib/clientIp';
-
-const ALLOWED_HOSTS = ['www.fayun.org', 'fayun.org'];
-const ALLOWED_PROTOCOLS = ['https:'];
+import {
+  checkUpstreamUrl,
+  fetchUpstream,
+  UpstreamPolicyError,
+  UpstreamTimeoutError
+} from '@/lib/upstream';
 
 /* ------------------------------------------------------------------ *
  * S1: rate limiting for the expensive `preload` action
@@ -268,46 +271,26 @@ function resolveProxyTarget(searchParams: URLSearchParams): ResolvedProxyTarget 
   let targetUrl = '';
   if (url) {
     const cleanUrl = sanitizePath(url);
-    try {
-      const parsed = new URL(cleanUrl);
-      if (!ALLOWED_HOSTS.includes(parsed.hostname.toLowerCase())) {
-        return {
-          ok: false,
-          response: new NextResponse(
-            'Forbidden: Proxying to external domains is strictly prohibited.',
-            { status: 403 }
-          )
-        };
-      }
-      // S2: pin the protocol and port. The hostname allowlist alone accepted
-      // any port, turning the proxy into a probe for non-HTTP services on the
-      // upstream host (e.g. :22, :6379, :9200).
-      if (!ALLOWED_PROTOCOLS.includes(parsed.protocol)) {
-        return {
-          ok: false,
-          response: new NextResponse(
-            'Forbidden: Only HTTPS upstreams are permitted.',
-            { status: 403 }
-          )
-        };
-      }
-      const port = parsed.port || '443';
-      if (port !== '443') {
-        return {
-          ok: false,
-          response: new NextResponse(
-            'Forbidden: Non-standard upstream ports are prohibited.',
-            { status: 403 }
-          )
-        };
-      }
-      targetUrl = parsed.toString();
-    } catch {
+    // One policy for the first URL and for every redirect hop (lib/upstream).
+    // S2: the protocol and port are pinned as well as the host; the hostname
+    // allowlist alone accepted any port, turning the proxy into a probe for
+    // non-HTTP services on the upstream host (e.g. :22, :6379, :9200).
+    const checked = checkUpstreamUrl(cleanUrl);
+    if (!checked.ok) {
+      const message =
+        checked.reason === 'invalid'
+          ? 'Invalid target URL format'
+          : checked.reason === 'protocol'
+            ? 'Forbidden: Only HTTPS upstreams are permitted.'
+            : checked.reason === 'port'
+              ? 'Forbidden: Non-standard upstream ports are prohibited.'
+              : 'Forbidden: Proxying to external domains is strictly prohibited.';
       return {
         ok: false,
-        response: new NextResponse('Invalid target URL format', { status: 400 })
+        response: new NextResponse(message, { status: checked.reason === 'invalid' ? 400 : 403 })
       };
     }
+    targetUrl = checked.url.toString();
   } else if (rawPath) {
     const cleanPath = sanitizePath(rawPath);
     if (cleanPath.includes('..')) {
@@ -496,7 +479,7 @@ export async function GET(request: NextRequest) {
     const { targetUrl, cacheFilePath, ext } = resolved;
     cacheFilePathForLog = cacheFilePath;
 
-    const reqHeaders: HeadersInit = {
+    const reqHeaders: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Referer': 'https://www.fayun.org/',
       'Accept': '*/*'
@@ -651,10 +634,28 @@ export async function GET(request: NextRequest) {
       reqHeaders['Range'] = range;
     }
 
-    const response = await fetch(targetUrl, {
-      headers: reqHeaders,
-      cache: 'no-store'
-    });
+    // Redirects are re-validated hop by hop and both the response headers and
+    // every body read are time-bounded (see lib/upstream). The plain fetch used
+    // here before followed any redirect off the allowlist and could hang forever.
+    let response: Response;
+    try {
+      response = await fetchUpstream(targetUrl, { headers: reqHeaders });
+    } catch (error: unknown) {
+      if (error instanceof UpstreamPolicyError) {
+        console.warn(`[Proxy] Refused upstream redirect for ${cacheFilePath}: ${error.message}`);
+        return new NextResponse('Bad gateway: upstream redirected outside the allowlist', {
+          status: 502,
+          headers: { 'Cache-Control': 'no-store' }
+        });
+      }
+      if (error instanceof UpstreamTimeoutError) {
+        return new NextResponse('Gateway timeout: upstream did not respond', {
+          status: 504,
+          headers: { 'Cache-Control': 'no-store' }
+        });
+      }
+      throw error;
+    }
 
     if (!response.ok && response.status !== 206) {
       return new NextResponse(`Remote asset returned ${response.status}: ${response.statusText}`, { status: response.status });

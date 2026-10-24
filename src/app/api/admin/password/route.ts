@@ -134,7 +134,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const attempt = consumeAdminLoginAttempt(request);
+  // An authenticated session is exempt from the GLOBAL failure ceiling (which a
+  // flood from other addresses could otherwise exhaust); the per-client budget
+  // still bounds current-password guessing.
+  const attempt = consumeAdminLoginAttempt(request, { bypassGlobal: true });
   if (!attempt.ok) {
     appendAdminAudit('password_change_failure', {
       reason: 'rate_limited',

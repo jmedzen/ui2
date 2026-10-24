@@ -60,7 +60,7 @@ Browser
 | 檔案 | 職責 |
 | --- | --- |
 | `lib/courseMedia.ts` | 純函式：`canonicalPdfPath`、`sharedRootDirFor`、`sortVolumes` |
-| `lib/useAudioTracks.ts` | 音訊探索、卷次清單、失敗狀態 |
+| `lib/useAudioTracks.ts` | 音訊探索、卷次清單、失敗狀態（`discoverAudioTracks` 可單獨測試；每輪以自己的 `AbortSignal` 判斷所有權） |
 | `lib/useVideoTracks.ts` | 影音探索 |
 | `lib/usePdfTracks.ts` | 講義探索、跨目錄去重 |
 

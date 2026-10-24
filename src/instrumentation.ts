@@ -50,6 +50,15 @@ export async function register(): Promise<void> {
     console.log('[Boot] No automation token configured (TASK_API_TOKEN unset). The admin UI uses password login.');
   }
 
+  const { isTrustedProxy } = await import('@/lib/clientIp');
+  if (!isTrustedProxy() && process.env.NODE_ENV === 'production') {
+    console.warn(
+      '[Boot] TRUST_PROXY is not set: client addresses are not trusted, so every caller shares ONE ' +
+        'login and rate-limit budget. Behind Caddy (compose) set TRUST_PROXY=1. Browsers that have ' +
+        'logged in before keep their own login budget via the trusted-device cookie.'
+    );
+  }
+
   const probe = checkLogDirWritable();
   if (probe.writable) {
     console.log(`[Boot] Task log directory is writable: ${probe.dir}`);
@@ -64,6 +73,12 @@ export async function register(): Promise<void> {
         '(see docker-entrypoint.sh).'
     );
   }
+
+  // Reconcile the live catalog with the image's bundled copy exactly once, at
+  // boot, by generated_at. This used to run inside GET /api/courses and decided
+  // by course count, so the healthcheck could overwrite a newer scan result.
+  const { reconcileCatalogFiles } = await import('@/lib/catalogReconcile');
+  reconcileCatalogFiles();
 
   const reclaimed = reclaimOrphanedLock();
   if (reclaimed) {

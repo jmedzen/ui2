@@ -11,6 +11,30 @@ const speedCache = new Map<string, { route: 'direct' | 'proxy'; timestamp: numbe
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 Minutes client route preference memory
 const MAX_SPEED_CACHE_ENTRIES = 500; // Bound the route-preference memory
 
+/**
+ * Set once the direct origin has proven unmeasurable from this page.
+ *
+ * fayun.org sends no `Access-Control-Allow-Origin` (verified 2026-10-24: a
+ * ranged GET with an Origin header returns 206 with no CORS headers), so the
+ * browser rejects every direct probe with a TypeError before a byte is read.
+ * The probe therefore always scored 0 and the proxy always won — while still
+ * costing one wasted cross-origin request (and its 2 s budget) per track. After
+ * the first network-level rejection the direct probe is skipped for the rest of
+ * the session; a genuine timeout (AbortError) does not count, since that is a
+ * slow link rather than a policy.
+ */
+let directProbeBlocked = false;
+
+/** Test hook. */
+export function resetDirectProbeStateForTests(): void {
+  directProbeBlocked = false;
+}
+
+/** Whether the direct probe has been disabled for this session. */
+export function isDirectProbeBlocked(): boolean {
+  return directProbeBlocked;
+}
+
 /** Probe budget: never buffer more than this many bytes while measuring speed. */
 const PROBE_MAX_BYTES = 32 * 1024;
 const PROBE_TIMEOUT_MS = 2000;
@@ -131,7 +155,7 @@ export function triggerBackgroundServerCache(pathOrUrl: string): void {
  * memory. The abort timer is also kept armed until the read finishes, so a
  * stalled transfer cannot hang the probe forever.
  */
-async function measureChunkSpeed(targetUrl: string): Promise<number> {
+async function measureChunkSpeed(targetUrl: string, onNetworkError?: () => void): Promise<number> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   const startTime = performance.now();
@@ -173,7 +197,10 @@ async function measureChunkSpeed(targetUrl: string): Promise<number> {
     if (durationSec <= 0) return 1000;
     const speedKbps = (received / 1024) / durationSec;
     return speedKbps;
-  } catch {
+  } catch (error: unknown) {
+    // TypeError is what fetch raises for CORS refusals and unreachable hosts;
+    // AbortError is our own timeout and says nothing about policy.
+    if (error instanceof TypeError) onNetworkError?.();
     return 0;
   } finally {
     clearTimeout(timeoutId);
@@ -227,7 +254,11 @@ export async function getOptimalMediaRoute(
   // 4. Run non-blocking parallel probe test between direct fayun.org and web proxy
   try {
     const [directSpeed, proxySpeed] = await Promise.all([
-      measureChunkSpeed(directUrl),
+      directProbeBlocked
+        ? Promise.resolve(0)
+        : measureChunkSpeed(directUrl, () => {
+            directProbeBlocked = true;
+          }),
       measureChunkSpeed(proxyUrl)
     ]);
 
@@ -261,4 +292,51 @@ export async function getOptimalMediaRoute(
       activeUrl: proxyUrl
     };
   }
+}
+
+/**
+ * Resolves `promise`, or `fallback` once `ms` elapse — whichever comes first.
+ */
+export function withDeadline<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      }
+    );
+  });
+}
+
+/**
+ * Budget for deciding a route when the USER pressed play.
+ *
+ * `play()` must run while the click's transient activation is still live
+ * (WebKit ~1 s, Chromium ~5 s), otherwise Safari rejects it with
+ * NotAllowedError and the first tap appears to do nothing. The full route
+ * evaluation can take a status round-trip plus a 2 s probe, so a user-initiated
+ * play gets the proxy if the decision is not ready within this budget. The
+ * evaluation still finishes in the background and is remembered for next time.
+ */
+export const USER_PLAY_ROUTE_DEADLINE_MS = 700;
+
+/** `getOptimalMediaRoute`, bounded for use inside a user gesture. */
+export function resolvePlaybackRoute(
+  rawPath: string,
+  directUrl: string,
+  deadlineMs = USER_PLAY_ROUTE_DEADLINE_MS
+): Promise<SpeedTestResult> {
+  const path = cleanMediaPath(rawPath);
+  const proxyFallback: SpeedTestResult = {
+    route: 'proxy',
+    directSpeedKbps: 0,
+    proxySpeedKbps: 0,
+    activeUrl: `/api/proxy?path=${encodeURIComponent(path)}`
+  };
+  return withDeadline(getOptimalMediaRoute(rawPath, directUrl), deadlineMs, proxyFallback);
 }

@@ -1,3 +1,7 @@
+// Must come first: the suite writes and ages files, so it must not touch the
+// repository's real data/media_cache (which also made it environment-dependent).
+import './helpers/isolated-media-cache';
+
 import test from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';

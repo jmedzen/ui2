@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { isTrustedProxy } from './clientIp';
 
 /** Name reported in logs/UI for the scanner task. */
 export const SCAN_TASK = 'scan';
@@ -324,8 +325,10 @@ export function isSameOrigin(request: Request): boolean {
         return true;
       }
 
-      // Check against x-forwarded-host if present
-      const fwdHost = request.headers.get('x-forwarded-host');
+      // X-Forwarded-Host only when a trusted proxy wrote it (TRUST_PROXY=1);
+      // otherwise any caller could name the host its own Origin is checked
+      // against. Same contract as the admin origin check.
+      const fwdHost = isTrustedProxy() ? request.headers.get('x-forwarded-host') : null;
       if (fwdHost) {
         const firstFwd = fwdHost.split(',')[0].trim().toLowerCase();
         if (candHost === firstFwd) {

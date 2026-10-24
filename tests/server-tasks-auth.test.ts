@@ -34,8 +34,17 @@ test('preload auth — same-origin browser requests authorize without a token', 
 
     for (const [name, headers] of browserRequests) {
       await t.test(`allows ${name} without a token`, () => {
-        const result = authorizePreloadRequest(mk('http://myhost.org/api/proxy', headers));
-        assert.strictEqual(result.ok, true, `expected ${name} to be allowed`);
+        // X-Forwarded-Host is only honoured behind a trusted proxy (TRUST_PROXY=1,
+        // as compose sets it); the forwarded cases model exactly that deployment.
+        const previous = process.env.TRUST_PROXY;
+        if ('x-forwarded-host' in headers) process.env.TRUST_PROXY = '1';
+        try {
+          const result = authorizePreloadRequest(mk('http://myhost.org/api/proxy', headers));
+          assert.strictEqual(result.ok, true, `expected ${name} to be allowed`);
+        } finally {
+          if (previous === undefined) delete process.env.TRUST_PROXY;
+          else process.env.TRUST_PROXY = previous;
+        }
       });
     }
 

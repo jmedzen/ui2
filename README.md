@@ -106,6 +106,8 @@ ui2/
 │   │   ├── playbackStore.ts        # 播放進度、最愛（useSyncExternalStore）
 │   │   ├── stringStore.ts          # 型別安全的 localStorage store
 │   │   ├── catalog.ts              # 課程資料庫存取
+│   │   ├── catalogReconcile.ts     # 開機時依 generated_at 同步內建目錄
+│   │   ├── upstream.ts             # fayun.org 請求閘口（逐跳驗證導向、逾時）
 │   │   ├── serverMediaCache.ts     # 媒體快取（LRU、20 GB 上限）
 │   │   ├── admin*.ts               # 管理員認證、工作階段、速率限制、稽核
 │   │   └── …                       # themePreference、dailyPicks、useServiceWorker 等
@@ -236,7 +238,7 @@ docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name ui2 ui2:latest
 | `ADMIN_ALLOW_INSECURE_HTTP` | （未設定） | 生產環境預設拒絕以明文 HTTP 提交管理員密碼。僅在完全隔離的可信網路中才設為 `1`；此模式也會停用頁面 CSP 的 `upgrade-insecure-requests`，避免純 HTTP 部署的資產被升級到不存在的 TLS 連接埠。 |
 | `ADMIN_COOKIE_SECURE` | `auto` | `auto` 依 HTTPS 自動加上 `Secure`；也可明確設為 `true`／`false`。 |
 | `ADMIN_LOGIN_MAX_ATTEMPTS` | `10` | 每個來源每 15 分鐘的登入嘗試上限；超過回 `429`。 |
-| `ADMIN_LOGIN_GLOBAL_FAILURES` | `500` | 15 分鐘內全域失敗上限，避免輪換來源 IP 造成無限制的 scrypt 計算。 |
+| `ADMIN_LOGIN_GLOBAL_FAILURES` | `500` | 15 分鐘內全域失敗上限，避免輪換來源 IP 造成無限制的 scrypt 計算。曾成功登入的瀏覽器持有「受信任裝置」cookie（`fayun_admin_device`，HMAC 簽章、90 天、僅 `/api/admin`），改以每裝置計算額度且**不受全域上限影響**，因此大量失敗嘗試無法把管理員鎖在門外；變更密碼會使所有裝置 cookie 失效。已登入的工作階段變更密碼／TOTP 時同樣不受全域上限影響。 |
 | `ADMIN_AUDIT_LOG` | `<cwd>/data/logs/admin.log` | 管理員登入與操作稽核檔（`0600`）。預設超過 1 MB 輪替並保留 5 份編號備份（`.1`–`.5`）。設為 `off` 可停用。 |
 | `ADMIN_AUDIT_MAX_BYTES` | `1048576`（1 MB） | 稽核檔輪替大小門檻（1–67108864 bytes）。 |
 | `ADMIN_AUDIT_MAX_FILES` | `5` | 保留的編號備份數量（1–20）。輪替時最舊的備份會被刪除。 |
@@ -248,7 +250,10 @@ docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name ui2 ui2:latest
 | `PROXY_PRELOAD_MAX_PER_MINUTE` | `20` | 每個來源 IP 每分鐘可觸發 `action=preload` 的次數上限。 |
 | `TRUST_PROXY` | （未設定） | 設為 `1` 時才信任 `X-Forwarded-For`（速率限制來源 IP）以及 `X-Forwarded-Proto`／`X-Forwarded-Host`（HTTPS 判斷與 CSRF 主機比對）。**僅在容器只經由會覆寫這些標頭的代理（如 Caddy）連線時才可開啟**；compose 已預設開啟，並將 8410 綁在 loopback。未設定時所有來源共用同一額度（保守但無法被偽造繞過）。 |
 | `MEDIA_CACHE_MAINTENANCE_INTERVAL_MS` | `600000`（10 分鐘） | 定期清理 `.tmp` 孤兒檔並執行 LRU 淘汰的間隔（下限 30 秒）。 |
-| `MEDIA_CACHE_DIR` | `<cwd>/data/media_cache` | 自訂快取目錄。**注意**：路徑必須包含 `data` 字串才會生效。 |
+| `MEDIA_CACHE_DIR` | `<cwd>/data/media_cache` | 自訂快取目錄。**注意**：路徑必須包含 `data` 字串才會生效（避免 LRU 誤刪無關目錄）；不符合時會在日誌警告一次並改用預設目錄。 |
+| `UPSTREAM_TIMEOUT_MS` | `30000` | 對 fayun.org 的請求等待回應標頭的上限。逾時：代理回 `504`，背景快取放棄並釋出下載名額。 |
+| `UPSTREAM_IDLE_TIMEOUT_MS` | `60000` | 傳輸中兩個資料區塊之間的閒置上限（僅在確實等待網路時計時，播放器暫停造成的背壓不算）。避免停滯的來源永久佔住下載名額。 |
+| `LIST_FILES_MAX_PER_MINUTE` | `60` | `/api/list-files` 每個來源每分鐘可觸發的上游查詢（快取未命中）次數；命中快取不計。 |
 
 ### 管理員登入與維護操作
 
@@ -304,6 +309,9 @@ curl -X POST https://your.host/api/scan \
 - 管理員工作階段儲存在單一 Node 程序記憶體中。重啟容器即登出所有管理員；若未來改為多副本部署，需改用共享工作階段儲存。
 - 憑證來源優先序為 `ADMIN_PASSWORD_HASH` → `ADMIN_PASSWORD_HASH_FILE` → `ADMIN_PASSWORD_FILE`。明確設定的來源若損壞或不存在會 **fail closed**，不會悄悄退回其他來源。TOTP 則以 `ADMIN_TOTP_SECRET` 為優先，未設定時讀取檔案中的 `totpSecret`。
 - 網頁密碼變更需要目前密碼；若已啟用 TOTP，還需要目前的驗證碼。成功後會撤銷所有管理工作階段並發出新的 cookie。
+- 啟用 TOTP 時，除了完成啟用的這個工作階段外，其他（僅以密碼建立的）工作階段一律撤銷。
+- 啟用 TOTP 後，登入失敗一律回 `ADMIN_BAD_CREDENTIALS`，不區分密碼錯誤、驗證碼錯誤或重複使用，避免成為密碼猜測的判斷依據；未附驗證碼時在檢查密碼**之前**就回 `ADMIN_TOTP_REQUIRED`。
+- 對 fayun.org 的所有伺服器端請求（代理、背景快取、目錄清單）都不自動跟隨重新導向：每一跳都重新檢查 HTTPS、主機白名單與 443 埠，任何指向白名單外的導向回 `502`。
 - `admin.json` 同時包含 scrypt 雜湊與（啟用時）TOTP 密鑰，請備份並維持 `0600`；兩者都足以影響管理員存取。
 - 掃描狀態 API 的公開部分（課程數、最近同步時間、快取統計）仍可匿名讀取；`recentLogs` 與 `lockHolder` 僅在管理員工作階段或自動化權杖下回傳。
 

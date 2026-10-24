@@ -329,7 +329,9 @@ test('admin Phase 3 — TOTP login is two-step and rejects a replayed code', asy
 
   const replay = await login(loginRequest({ password: PASSWORD, code }));
   assert.strictEqual(replay.status, 401);
-  assert.strictEqual(errorCode(await replay.json()), 'ADMIN_TOTP_REPLAY');
+  // Deliberately the same answer as any other failure once 2FA is on: a
+  // distinct REPLAY code confirmed that the password was right.
+  assert.strictEqual(errorCode(await replay.json()), 'ADMIN_BAD_CREDENTIALS');
 });
 
 test('admin Phase 3 — ADMIN_TOTP_SECRET overrides the file and is not UI-manageable', async (t) => {

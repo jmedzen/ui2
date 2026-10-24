@@ -85,13 +85,32 @@ export interface LoginAttemptResult {
  * Call this before running scrypt. A denied attempt does not run the password
  * hash, which is what keeps a login flood from becoming a CPU exhaustion bug.
  */
-export function consumeAdminLoginAttempt(request: Request): LoginAttemptResult {
-  const key = clientKeyFor(request);
+export interface LoginAttemptOptions {
+  /**
+   * Id from a valid trusted-device cookie (adminSession.verifyDeviceCookie).
+   * The attempt is then budgeted per device and is exempt from the global
+   * failure ceiling, so a flood from other addresses cannot lock out a browser
+   * that has already logged in successfully.
+   */
+  deviceId?: string | null;
+  /**
+   * Skip the global ceiling for a caller that already holds an authenticated
+   * session (password/TOTP management). The per-client budget still applies.
+   */
+  bypassGlobal?: boolean;
+}
+
+export function consumeAdminLoginAttempt(
+  request: Request,
+  options: LoginAttemptOptions = {}
+): LoginAttemptResult {
+  const key = options.deviceId ? `device:${options.deviceId}` : clientKeyFor(request);
+  const exemptFromGlobal = Boolean(options.deviceId) || options.bypassGlobal === true;
   const now = Date.now();
   prune(now);
 
   const global = globalState()[GLOBAL_KEY];
-  if (global && global.resetAt > now && global.count >= globalFailureLimit()) {
+  if (!exemptFromGlobal && global && global.resetAt > now && global.count >= globalFailureLimit()) {
     return { ok: false, key, retryAfter: retryAfterSeconds(global.resetAt, now) };
   }
 

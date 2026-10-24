@@ -133,6 +133,21 @@ export function destroyAdminSession(request: Request): void {
   sessions().delete(tokenDigest(token));
 }
 
+/**
+ * Revokes every session except the one this request presents.
+ *
+ * Used when TOTP is enabled: any other session was established with the
+ * password alone, so it must not outlive the account gaining a second factor.
+ */
+export function destroyOtherAdminSessions(request: Request): void {
+  const token = readCookie(request, ADMIN_SESSION_COOKIE);
+  const keep = token ? tokenDigest(token) : null;
+  const store = sessions();
+  for (const key of [...store.keys()]) {
+    if (key !== keep) store.delete(key);
+  }
+}
+
 /** Revokes every session (used by password changes and tests). */
 export function destroyAllAdminSessions(): void {
   sessions().clear();
@@ -234,6 +249,75 @@ export function serializeClearAdminSessionCookie(request: Request): string {
     'SameSite=Strict',
     'Max-Age=0',
     'Expires=Thu, 01 Jan 1970 00:00:00 GMT'
+  ];
+  if (cookieSecure(request)) attributes.push('Secure');
+  return attributes.join('; ');
+}
+
+/* ------------------------------------------------------------------ *
+ * Trusted-device cookie (lockout resistance)
+ * ------------------------------------------------------------------ */
+
+/**
+ * A browser that has logged in successfully before.
+ *
+ * The login limiter keeps a GLOBAL failure ceiling so that rotating source
+ * addresses cannot turn into unbounded scrypt work. The flip side was that
+ * anyone able to produce ~50 addresses' worth of failures (or 10 failures when
+ * TRUST_PROXY is unset and every caller shares one bucket) locked the single
+ * administrator out for 15 minutes, repeatedly.
+ *
+ * This is the "device cookie" mitigation from the OWASP lockout guidance: a
+ * browser that completed a login receives an HMAC-signed, HttpOnly cookie, and
+ * attempts presenting a valid one are budgeted per DEVICE and skip the global
+ * ceiling. It is stateless: the MAC key is derived from the stored password
+ * hash, which is already a server-only secret, so rotating the password revokes
+ * every device cookie with no store to maintain. The cookie only affects rate
+ * limiting — it is never a credential.
+ */
+export const ADMIN_DEVICE_COOKIE = 'fayun_admin_device';
+const DEVICE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
+function deviceMacKey(passwordHash: string): Buffer {
+  return crypto.createHash('sha256').update(`fayun-admin-device-v1:${passwordHash}`).digest();
+}
+
+function deviceMac(passwordHash: string, payload: string): string {
+  return crypto.createHmac('sha256', deviceMacKey(passwordHash)).update(payload).digest('base64url');
+}
+
+/** Mints a new device cookie value bound to the current password hash. */
+export function createDeviceCookieValue(passwordHash: string, now = Date.now()): string {
+  const payload = `${now.toString(36)}.${crypto.randomBytes(12).toString('base64url')}`;
+  return `${payload}.${deviceMac(passwordHash, payload)}`;
+}
+
+/**
+ * Returns a stable per-device id when the request carries a valid, unexpired
+ * device cookie for the current password; otherwise null.
+ */
+export function verifyDeviceCookie(request: Request, passwordHash: string, now = Date.now()): string | null {
+  const value = readCookie(request, ADMIN_DEVICE_COOKIE);
+  if (!value || value.length > 200) return null;
+  const parts = value.split('.');
+  if (parts.length !== 3) return null;
+  const [issuedRaw, nonce, mac] = parts;
+  const issued = Number.parseInt(issuedRaw, 36);
+  if (!Number.isFinite(issued) || issued > now + 60_000 || now - issued > DEVICE_TTL_MS) return null;
+  const expected = Buffer.from(deviceMac(passwordHash, `${issuedRaw}.${nonce}`));
+  const given = Buffer.from(mac);
+  if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) return null;
+  return nonce;
+}
+
+/** Serializes the device cookie; scoped to the admin API only. */
+export function serializeAdminDeviceCookie(value: string, request: Request): string {
+  const attributes = [
+    `${ADMIN_DEVICE_COOKIE}=${value}`,
+    'Path=/api/admin',
+    'HttpOnly',
+    'SameSite=Strict',
+    `Max-Age=${Math.floor(DEVICE_TTL_MS / 1000)}`
   ];
   if (cookieSecure(request)) attributes.push('Secure');
   return attributes.join('; ');

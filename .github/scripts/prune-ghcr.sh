@@ -57,7 +57,19 @@ if [ -z "${owner}" ] || [ "${owner}" = "${GITHUB_REPOSITORY}" ]; then
   echo "::error::GITHUB_REPOSITORY must be 'owner/repo' (got '${GITHUB_REPOSITORY:-<unset>}')."
   exit 1
 fi
-versions_url="users/${owner}/packages/container/${PACKAGE_NAME}/versions"
+# Packages owned by an organization live under /orgs, not /users; the
+# hard-coded /users path made every listing fail (and pruning silently skip)
+# for an org-owned repository. OWNER_TYPE overrides detection.
+owner_type="${OWNER_TYPE:-}"
+if [ -z "${owner_type}" ]; then
+  owner_type="$(gh api "users/${owner}" --jq .type 2>/dev/null || echo User)"
+fi
+if [ "${owner_type}" = "Organization" ]; then
+  owner_scope="orgs"
+else
+  owner_scope="users"
+fi
+versions_url="${owner_scope}/${owner}/packages/container/${PACKAGE_NAME}/versions"
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "${workdir}"' EXIT

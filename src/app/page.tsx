@@ -460,8 +460,12 @@ export default function Home() {
       // the fetched rows simply replace the bundled ones.
       if (!hasCoursesRef.current) setIsLoading(true);
       setError(null);
-      const res = await fetch(`/api/courses?t=${Date.now()}`, {
-        cache: 'no-store'
+      // Revalidate rather than bust. The route answers with an ETag and
+      // `no-cache`, so `cache: 'no-cache'` sends If-None-Match and an unchanged
+      // ~900 KB catalog comes back as an empty 304. The old `?t=${Date.now()}`
+      // made every URL unique, so the 304 path could never be reached.
+      const res = await fetch('/api/courses', {
+        cache: 'no-cache'
       });
       if (!res.ok) {
         throw new Error(`HTTP error ${res.status}`);

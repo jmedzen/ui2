@@ -2,11 +2,31 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { Readable, Transform } from 'stream';
+import { fetchUpstream } from './upstream';
 
+/** The value we already warned about, so a rejected setting is logged once, not per request. */
+let warnedIgnoredCacheDir: string | null = null;
+
+/**
+ * Resolves the cache directory.
+ *
+ * MEDIA_CACHE_DIR must contain a `data` path segment. That guard is deliberate
+ * (the LRU deletes files, so a typo such as `MEDIA_CACHE_DIR=/` must not point
+ * eviction at an unrelated tree), but it used to apply SILENTLY: an operator who
+ * set `/srv/cache` got the default directory with no hint why. The rejection is
+ * now logged once.
+ */
 export function getCacheDir(): string {
-  const envDir = process.env.MEDIA_CACHE_DIR;
-  if (envDir && envDir.includes('data')) {
-    return envDir;
+  const envDir = (process.env.MEDIA_CACHE_DIR || '').trim();
+  if (envDir) {
+    if (envDir.includes('data')) return envDir;
+    if (warnedIgnoredCacheDir !== envDir) {
+      warnedIgnoredCacheDir = envDir;
+      console.warn(
+        `[Media Cache] Ignoring MEDIA_CACHE_DIR="${envDir}": the path must contain "data" ` +
+          '(a guard against pointing LRU eviction at an unrelated directory). Using the default.'
+      );
+    }
   }
   return path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'media_cache');
 }
@@ -669,10 +689,13 @@ export async function cacheRemoteMedia(targetUrl: string, cacheFilePath: string)
         'Accept': '*/*'
       };
 
-      const res = await fetch(targetUrl, {
-        headers: cleanHeaders,
-        cache: 'no-store'
-      });
+      // fetchUpstream re-validates every redirect hop against the allowlist and
+      // bounds both the header wait and every body read. A plain fetch here had
+      // neither: a redirect off fayun.org was followed and its body persisted
+      // as cache, and a stalled origin held this download slot forever — three
+      // of those wedged the whole subsystem until restart. A timeout or refused
+      // redirect throws into the catch below, and `finally` frees the slot.
+      const res = await fetchUpstream(targetUrl, { headers: cleanHeaders });
 
       // Assign BEFORE any early return. `discardUpstream()` is a no-op while
       // `upstream` is null, and this assignment used to sit after the `!res.ok`

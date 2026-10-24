@@ -23,11 +23,21 @@ DATA_DIR="${DATA_DIR:-/app/data}"
 WRITABLE_DIRS="$DATA_DIR $DATA_DIR/logs $DATA_DIR/media_cache"
 
 if [ "$(id -u)" = "0" ]; then
+    # SECURITY: this block runs as root with CAP_CHOWN over a directory the
+    # unprivileged app can write. `chown` and `[ -f ]` both FOLLOW symlinks, so
+    # a planted `data/logs/x -> /etc/passwd` used to be handed to uid 1000 on
+    # the next restart: a node -> root escalation inside the container. Every
+    # entry is therefore checked with `[ -L ]` first and changed with `chown -h`
+    # (which acts on the link itself, never its target).
     for d in $WRITABLE_DIRS; do
+        if [ -L "$d" ]; then
+            echo "[entrypoint] WARNING: $d is a symlink; refusing to chown it as root." >&2
+            continue
+        fi
         mkdir -p "$d"
         # Non-recursive: touches only the directory entries, never the cached
         # media files (the cache can hold 20 GB).
-        chown "$APP_UID:$APP_GID" "$d" 2>/dev/null || true
+        chown -h "$APP_UID:$APP_GID" "$d" 2>/dev/null || true
     done
 
     # Re-own the FILES directly inside $DATA_DIR and $DATA_DIR/logs.
@@ -42,8 +52,10 @@ if [ "$(id -u)" = "0" ]; then
     # The media cache is deliberately excluded: it holds up to 20 GB of files,
     # this loop is not recursive, and the app owns everything it creates there.
     for f in "$DATA_DIR"/* "$DATA_DIR"/.[!.]* "$DATA_DIR/logs"/* "$DATA_DIR/logs"/.[!.]*; do
+        # Symlinks first: `[ -f ]` is true for a link to a regular file.
+        [ -L "$f" ] && continue
         [ -f "$f" ] || continue
-        chown "$APP_UID:$APP_GID" "$f" 2>/dev/null || true
+        chown -h "$APP_UID:$APP_GID" "$f" 2>/dev/null || true
     done
 
     # Report a genuinely unusable volume here rather than letting it surface as

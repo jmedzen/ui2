@@ -239,7 +239,7 @@ test('Whole-site leak hardening', async (t) => {
 
     // `upstream = res.body` must precede the !res.ok early return, otherwise
     // discardUpstream() (which returns on null) is dead on that exact path.
-    const fetchIdx = src.indexOf('const res = await fetch(targetUrl');
+    const fetchIdx = src.indexOf('const res = await fetchUpstream(targetUrl');
     const assignIdx = src.indexOf('upstream = res.body;', fetchIdx);
     const okCheckIdx = src.indexOf('if (!res.ok || !res.body)', fetchIdx);
     assert.ok(fetchIdx > 0 && assignIdx > 0 && okCheckIdx > 0, 'all three sites must exist');

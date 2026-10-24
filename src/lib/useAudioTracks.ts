@@ -8,7 +8,7 @@
  * tracked separately from the returned tracks.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { CourseItem } from '@/types/course';
 import {
@@ -26,30 +26,28 @@ export interface AudioTracksState {
   error: string | null;
 }
 
+export interface AudioDiscoveryResult {
+  tracks: AudioTrackInfo[];
+  volumes: string[];
+  error: string | null;
+}
+
 /**
- * @param course   Course whose audio is being discovered.
- * @param reloadToken Bumped by the reader's retry button to re-run discovery.
+ * Probes the directory listing service for a course's audio episodes.
+ *
+ * Returns `null` when `signal` was aborted, which callers MUST treat as "this
+ * run no longer owns the UI" and discard. That is the fix for a race: the hook
+ * used a single shared `mountedRef` that the NEXT effect run immediately set
+ * back to true, so a superseded run (the reader had already switched course)
+ * still committed its tracks, its "無法連線" error and `isLoading=false` over
+ * the new course's in-flight load. Aborted probes also count as failures inside
+ * the run, which is exactly what produced the spurious error banner.
  */
-export function useAudioTracks(course: CourseItem, reloadToken: number): AudioTracksState {
-  const [tracks, setTracks] = useState<AudioTrackInfo[]>([]);
-  const [availableVolumes, setAvailableVolumes] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Guards against a late response from a course the reader already left.
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    const controller = new AbortController();
-    const isMounted = () => mountedRef.current;
-
-    async function load() {
-  setIsLoading(true);
-  setTracks([]);
-  setAvailableVolumes([]);
-  setError(null);
-
+export async function discoverAudioTracks(
+  course: CourseItem,
+  signal: AbortSignal,
+  fetchImpl: typeof fetch = fetch
+): Promise<AudioDiscoveryResult | null> {
   // Tracks whether discovery failed, as opposed to genuinely finding nothing.
   // `queryDirectory` deliberately swallows its own errors so one bad
   // candidate path cannot abort the whole probe, which means the caller has
@@ -62,11 +60,11 @@ export function useAudioTracks(course: CourseItem, reloadToken: number): AudioTr
 
   const queryDirectory = async (aPath: string): Promise<{ path: string; tracks: { filename: string; subPath: string; volume?: string }[]; volumes: string[] }> => {
     try {
-      const res = await fetch('/api/list-files', {
+      const res = await fetchImpl('/api/list-files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ src: aPath }),
-        signal: controller.signal
+        signal
       });
       if (!res.ok) {
         probeFailures += 1;
@@ -171,7 +169,7 @@ export function useAudioTracks(course: CourseItem, reloadToken: number): AudioTr
   if (course.audio_path && course.audio_path !== '/media') {
     probeAttempts += 1;
     const primaryResult = await queryDirectory(course.audio_path);
-    if (primaryResult.tracks.length > 0 && isMounted()) {
+    if (primaryResult.tracks.length > 0 && !signal.aborted) {
       fetchedTracks = primaryResult.tracks.map((t, idx) => {
         const fullPath = `${primaryResult.path}/${t.subPath}`;
         return {
@@ -188,7 +186,7 @@ export function useAudioTracks(course: CourseItem, reloadToken: number): AudioTr
   }
 
   // 2. Parallel Candidate Probe if fast-path yielded no tracks
-  if (fetchedTracks.length === 0 && isMounted()) {
+  if (fetchedTracks.length === 0 && !signal.aborted) {
     const potentialAudioPaths: string[] = [];
 
     // Special rule for 本地分 or any multi-volume yoga course
@@ -237,22 +235,50 @@ export function useAudioTracks(course: CourseItem, reloadToken: number): AudioTr
     }
   }
 
-  if (isMounted()) {
-    setTracks(fetchedTracks);
-    setAvailableVolumes(detectedVolumes);
-    // Only when nothing was found AND every probe errored: a partial success
-    // means the empty state is the honest answer.
-    if (fetchedTracks.length === 0 && probeAttempts > 0 && probeFailures === probeAttempts) {
-      setError('無法連線至音訊清單服務。');
-    }
-    setIsLoading(false);
-  }
+  if (signal.aborted) return null;
+
+  // Only when nothing was found AND every probe errored: a partial success
+  // means the empty state is the honest answer.
+  const error =
+    fetchedTracks.length === 0 && probeAttempts > 0 && probeFailures === probeAttempts
+      ? '無法連線至音訊清單服務。'
+      : null;
+  return { tracks: fetchedTracks, volumes: detectedVolumes, error };
+}
+
+/**
+ * @param course   Course whose audio is being discovered.
+ * @param reloadToken Bumped by the reader's retry button to re-run discovery.
+ */
+export function useAudioTracks(course: CourseItem, reloadToken: number): AudioTracksState {
+  const [tracks, setTracks] = useState<AudioTrackInfo[]>([]);
+  const [availableVolumes, setAvailableVolumes] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // One controller PER RUN. Its signal is the only ownership test: a shared
+    // ref is reset by the next run and cannot tell runs apart.
+    const controller = new AbortController();
+
+    async function load() {
+      setIsLoading(true);
+      setTracks([]);
+      setAvailableVolumes([]);
+      setError(null);
+
+      const result = await discoverAudioTracks(course, controller.signal);
+      if (!result || controller.signal.aborted) return;
+
+      setTracks(result.tracks);
+      setAvailableVolumes(result.volumes);
+      setError(result.error);
+      setIsLoading(false);
     }
 
     void load();
 
     return () => {
-      mountedRef.current = false;
       controller.abort();
     };
   }, [course, reloadToken]);

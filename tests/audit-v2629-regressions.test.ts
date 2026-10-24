@@ -147,8 +147,9 @@ test('audit v2.6.29 — the scan lock is not handed to a live holder', async (t)
   await t.test('a live Python catalog writer blocks the /api/courses upgrade', () => {
     const lib = read('src/lib/serverTasks.ts');
     assert.match(lib, /export function isCatalogRunActive/);
-    const route = read('src/app/api/courses/route.ts');
-    assert.match(route, /isCatalogRunActive\(\)/);
+    // The reconcile moved out of the GET route into lib/catalogReconcile.
+    const route = read('src/lib/catalogReconcile.ts');
+    assert.match(route, /isRunActive \?\? isCatalogRunActive/);
     // The upgrade swaps the inode a running scan is about to mirror, so the
     // scan's own output was silently discarded and the catalog regressed.
     assert.match(route, /Skipped auto-upgrade: a maintenance run is currently writing the catalog/);
@@ -157,7 +158,9 @@ test('audit v2.6.29 — the scan lock is not handed to a live holder', async (t)
   await t.test('catalog replacement is atomic and invalidates on inode change', () => {
     const route = read('src/app/api/courses/route.ts');
     // `copyFileSync` straight onto the catalog is not atomic.
-    assert.doesNotMatch(route, /^\s+fs\.copyFileSync\(SRC_FILE, DATA_FILE\);/m);
+    const reconcile = read('src/lib/catalogReconcile.ts');
+    assert.doesNotMatch(reconcile, /fs\.copyFileSync\(srcFile, dataFile\)/);
+    assert.match(reconcile, /atomicWrite\(dataFile/);
     // The memo must notice a same-size same-mtime replacement.
     assert.match(route, /st\.ino\}:\$\{st\.ctimeMs\}/);
   });
