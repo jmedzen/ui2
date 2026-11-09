@@ -15,6 +15,7 @@ import {
 import { authorizeAdminRequest, getOptionalAdminAuth } from '@/lib/adminAuth';
 import { appendAdminAudit } from '@/lib/adminAudit';
 import { clientKeyFor } from '@/lib/clientIp';
+import { describeSchedule, readDailyState } from '@/lib/dailyMaintenance';
 
 /**
  * These endpoints report live process state (a lock file, a log tail, a run
@@ -43,7 +44,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       status: 'active',
-      schedule: 'Web Trigger / Manual',
+      schedule: describeSchedule(),
+      // Date and per-task outcome only; no paths or pids.
+      dailyMaintenance: readDailyState(),
       isRunning: isScanLocked(),
       lockHolder: admin ? getScanLockInfoPublic() : undefined,
       lastScan: dbInfo.generated_at,

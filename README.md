@@ -41,8 +41,12 @@
 - **Server-Side LRU 快取**：`/api/list-files` 採用 Node.js 快取，重複造訪課程實現 **0ms 瞬間載入**。
 - **媒體代理服務**：後端 `/api/proxy` 自動轉發 `fayun.org` MP3/M4A/MP4/PDF 檔案，支援 **HTTP Range Header** 拖曳定位與跨域防護。
 
-### 7. 🔄 手動 Web 連線同步 (`/api/scan`)
-- 目錄區設有 **`🔄 手動觸發掃描/同步`** 按鈕；管理員登入後點擊即可連線 `fayun.org` 掃描檢查是否有新上架的經典與媒體資源，並自動更新數據庫。排程腳本可改用 `TASK_API_TOKEN`。
+### 7. 🔄 Web 連線同步與每日自動維護 (`/api/scan`、`/api/health-check`)
+- 目錄區設有 **`🔄 手動觸發掃描/同步`** 與巡檢修復按鈕；管理員登入後點擊即可連線 `fayun.org` 掃描檢查是否有新上架的經典與媒體資源，並自動更新數據庫。外部排程腳本可改用 `TASK_API_TOKEN`。
+- **每日自動執行**：伺服器啟動後內建排程，每天（預設 `04:00 Asia/Taipei`）依序執行一次「掃描同步」→「巡檢修復」，不需設定 cron 或權杖。
+  - 與手動按鈕共用同一個 `scan.lock`：若到點時有人正在手動執行，排程會等待（最多 2 小時）而不是同時執行；手動按鈕在排程執行中也會回 `409`。
+  - 每天只執行一次：當天日期記錄於 `data/logs/daily-maintenance.json`，容器當天重啟不會重跑；若到點時伺服器未啟動，當天恢復後會補跑一次。
+  - 結果寫入 `data/logs/scanner.log`（後台日誌視窗可見，以 `[每日排程]`／`⏰` 標示）、`daily-maintenance.json`（每項任務的成功／失敗）與管理員稽核日誌。
 
 ---
 
@@ -228,6 +232,9 @@ docker run -d -p 8410:8410 -v $(pwd)/data:/app/data --name ui2 ui2:latest
 | 變數 | 預設值 | 說明 |
 | --- | --- | --- |
 | `TASK_API_TOKEN` | （未設定） | **僅供排程／CI／腳本**使用的自動化權杖。設定後，`/api/scan` 與 `/api/health-check` 的 POST 可帶 `x-task-token` 或 `Authorization: Bearer`，也可用於讀取受保護的日誌／鎖定資訊。人工操作請使用管理員密碼登入；瀏覽器不再需要、也不會保存此權杖。 |
+| `DAILY_MAINTENANCE` | 啟用 | 設為 `0`／`false`／`off` 可停用每日自動掃描與修復（手動按鈕不受影響）。 |
+| `DAILY_MAINTENANCE_TIME` | `04:00` | 每日自動維護的時間（`HH:MM`，24 小時制）。 |
+| `DAILY_MAINTENANCE_TZ` | `Asia/Taipei` | 上述時間採用的時區（IANA 名稱）。 |
 | `SITE_URL` | （未設定） | 選填，用來**鎖定**對外正式網址。未設定時，網址由網頁「⚙️ 設定 → 🌐 網站網址」管理，儲存於 `data/site.json`；兩者皆無時使用內建預設 `https://ui2.mahabodhi.co`。**一旦設定此變數即優先於網頁設定**，且網頁欄位會變為唯讀——適合 CI 或唯讀檔案系統的部署。 |
 | `SITE_SETTINGS_FILE` | `<cwd>/data/site.json` | 網頁設定（canonical 網址）的儲存位置。容器內為 `./data` 綁定掛載，重啟後仍保留。 |
 | `ADMIN_PASSWORD_FILE` | `<cwd>/data/admin.json` | 管理員密碼雜湊檔（JSON，權限 `0600`）。由 `npm run admin:password` 或容器內 CLI 建立；檔案內容永遠不含明文密碼。這是唯一可由網頁「變更密碼」寫入的來源。 |

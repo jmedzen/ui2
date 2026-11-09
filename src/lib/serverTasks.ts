@@ -899,7 +899,13 @@ function adoptLockPid(token: string, pid: number): void {
  * `token` ties this run to the lock it acquired, so releasing cannot delete a
  * successor's lock.
  */
-export function runTaskScript(scriptName: string, label: string, token: string, runId?: string): string {
+export function runTaskScript(
+  scriptName: string,
+  label: string,
+  token: string,
+  runId?: string,
+  onExit?: (result: RunResult) => void
+): string {
   // The caller's id is echoed back so the UI can tell THIS run's completion from
   // a previous run's leftover log lines.
   const id = runId || crypto.randomBytes(8).toString('hex');
@@ -914,13 +920,28 @@ export function runTaskScript(scriptName: string, label: string, token: string, 
     if (stopHeartbeat) stopHeartbeat();
     releaseScanLock(token);
   };
+  // Record the outcome and notify the caller (the daily scheduler waits on it)
+  // exactly once, AFTER the lock is released so a follow-up task can take it.
+  let finished = false;
+  const finish = (result: RunResult) => {
+    writeRunResult(result);
+    release();
+    if (finished) return;
+    finished = true;
+    if (onExit) {
+      try {
+        onExit(result);
+      } catch (e) {
+        console.warn(`[${label}] onExit callback failed:`, e);
+      }
+    }
+  };
 
   const scriptPath = path.join(process.cwd(), 'scripts', scriptName);
   if (!fs.existsSync(scriptPath)) {
     console.error(`[${label}] Script not found: ${scriptPath}`);
     appendLog(`❌ [系統錯誤] ${label} 找不到腳本: ${scriptName}`);
-    writeRunResult({ id, task: label, code: null, signal: null, finishedAt: new Date().toISOString(), ok: false });
-    release();
+    finish({ id, task: label, code: null, signal: null, finishedAt: new Date().toISOString(), ok: false });
     return id;
   }
 
@@ -934,8 +955,7 @@ export function runTaskScript(scriptName: string, label: string, token: string, 
   } catch (e) {
     console.error(`[${label}] Failed to spawn ${scriptName}:`, e);
     appendLog(`❌ [系統錯誤] ${label} 無法啟動 python3: ${(e as Error)?.message || e}`);
-    writeRunResult({ id, task: label, code: null, signal: null, finishedAt: new Date().toISOString(), ok: false });
-    release();
+    finish({ id, task: label, code: null, signal: null, finishedAt: new Date().toISOString(), ok: false });
     return id;
   }
 
@@ -976,8 +996,7 @@ export function runTaskScript(scriptName: string, label: string, token: string, 
     // A spawn failure (ENOENT for a missing python3) arrives here rather than
     // as a throw, so this is the only place it can be surfaced.
     appendLog(`❌ [系統錯誤] ${label} 無法啟動: ${(err as NodeJS.ErrnoException)?.code || err.message}`);
-    writeRunResult({ id, task: label, code: null, signal: null, finishedAt: new Date().toISOString(), ok: false });
-    release();
+    finish({ id, task: label, code: null, signal: null, finishedAt: new Date().toISOString(), ok: false });
   });
 
   child.on('close', (code, signal) => {
@@ -991,7 +1010,7 @@ export function runTaskScript(scriptName: string, label: string, token: string, 
       const detail = code === 3 ? '（資料庫鎖定中，已有其他維護程序在執行）' : '';
       appendLog(`❌ [系統錯誤] ${label} 結束（code=${code}${signal ? `, signal=${signal}` : ''}）${detail}`);
     }
-    writeRunResult({
+    finish({
       id,
       task: label,
       code: typeof code === 'number' ? code : null,
@@ -999,7 +1018,6 @@ export function runTaskScript(scriptName: string, label: string, token: string, 
       finishedAt: new Date().toISOString(),
       ok: code === 0
     });
-    release();
   });
 
   // Detach so an incoming request ending does not tear down the maintenance job.
