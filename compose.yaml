@@ -64,6 +64,12 @@ services:
       # password file in ./data/admin.json; this token is never entered in the
       # browser UI.
       # - TASK_API_TOKEN=change-me
+      # Daily automatic scan + repair (same tasks as the admin buttons).
+      # Enabled by default at 04:00 Asia/Taipei; results go to
+      # ./data/logs/scanner.log and ./data/logs/daily-maintenance.json.
+      # - DAILY_MAINTENANCE=0          # disable the daily schedule
+      # - DAILY_MAINTENANCE_TIME=04:00
+      # - DAILY_MAINTENANCE_TZ=Asia/Taipei
       # Optional admin tuning:
       # - ADMIN_SESSION_TTL_MINUTES=720
       # - ADMIN_ALLOWED_ORIGINS=https://your.domain.example

@@ -105,4 +105,10 @@ export async function register(): Promise<void> {
   void enforceLRULimit().catch((e: unknown) => {
     console.warn('[Boot] Initial cache maintenance pass failed:', e);
   });
+
+  // Run the admin panel's 「掃描」 and 「維護」 tasks automatically once a day.
+  // Uses the same lock as the buttons, so a scheduled run and a manual one can
+  // never overlap; the buttons keep working as before.
+  const { startDailyMaintenance } = await import('@/lib/dailyMaintenance');
+  startDailyMaintenance();
 }

@@ -49,6 +49,9 @@ export default function SettingsModal({
     setLastRunState(value);
   }, []);
   const [lastScan, setLastScan] = useState<string>('未知');
+  // Daily automatic scan/repair: schedule text and the most recent daily run.
+  const [schedule, setSchedule] = useState<string>('');
+  const [dailyRun, setDailyRun] = useState<{ date?: string; status?: string } | null>(null);
   const [totalCourses, setTotalCourses] = useState<number>(0);
   const [cacheStats, setCacheStats] = useState<{ currentBytes: number; maxBytes: number; fileCount: number; maxGb: number } | null>(null);
   const [isFetchingLogs, setIsFetchingLogs] = useState<boolean>(false);
@@ -201,6 +204,8 @@ export default function SettingsModal({
         }
         setLastScan(data.lastScan || '未知');
         setTotalCourses(data.totalCourses || 0);
+        if (typeof data.schedule === 'string') setSchedule(data.schedule);
+        setDailyRun(data.dailyMaintenance || null);
         if (data.cacheStats) {
           setCacheStats(data.cacheStats);
         }
@@ -854,8 +859,16 @@ export default function SettingsModal({
                     </span>
                   </div>
                   <div className="stat-card">
-                    <span className="stat-label">⚡ 自動巡檢狀態</span>
-                    <span className="stat-value active">連線運作中</span>
+                    <span className="stat-label">⏰ 每日自動維護</span>
+                    <span className="stat-value active" title={schedule || undefined}>
+                      {dailyRun?.date
+                        ? `${dailyRun.date} ${
+                            dailyRun.status === 'running' ? '執行中…' : dailyRun.status === 'ok' ? '✅ 成功' : '❌ 失敗'
+                          }`
+                        : schedule
+                          ? '已排程，尚未執行'
+                          : '連線運作中'}
+                    </span>
                   </div>
                 </div>
               )}
