@@ -1,7 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { PdfItem } from '@/types/course';
+import { canInlinePdf } from '@/lib/inlinePdf';
+import PdfCanvasViewer from './PdfCanvasViewer';
+
+const subscribeNothing = () => () => {};
+
+/** Browser capability; the server and first client render assume inline works. */
+function readCanInline(): boolean {
+  return canInlinePdf({
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    maxTouchPoints: navigator.maxTouchPoints
+  });
+}
 
 interface PdfViewerProps {
   pdfs: PdfItem[];
@@ -11,6 +24,8 @@ interface PdfViewerProps {
 export default function PdfViewer({ pdfs, courseTitle }: PdfViewerProps) {
   const [selectedPdfIndex, setSelectedPdfIndex] = useState<number>(0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  // iOS/iPadOS cannot show more than page 1 of a PDF inside an iframe.
+  const inlineSupported = useSyncExternalStore(subscribeNothing, readCanInline, () => true);
 
   // Reset the selection when the course changes, but only *clamp* it when the
   // document list is refreshed in the background. Keying the reset on the
@@ -98,14 +113,22 @@ export default function PdfViewer({ pdfs, courseTitle }: PdfViewerProps) {
         </div>
       </div>
 
-      <div className="pdf-frame-container">
-        <iframe
-          src={`${proxyUrl}#toolbar=1&navpanes=1`}
-          title={activePdf.filename || courseTitle}
-          className="pdf-iframe"
-          loading="lazy"
-        />
-      </div>
+      {inlineSupported ? (
+        <div className="pdf-frame-container">
+          <iframe
+            src={`${proxyUrl}#toolbar=1&navpanes=1`}
+            title={activePdf.filename || courseTitle}
+            className="pdf-iframe"
+            loading="lazy"
+          />
+        </div>
+      ) : (
+        // iOS/iPadOS cannot show more than page 1 of a PDF in an iframe, so draw
+        // every page with pdf.js instead.
+        <div className="pdf-frame-container">
+          <PdfCanvasViewer key={proxyUrl} url={proxyUrl} title={activePdf.filename || courseTitle} />
+        </div>
+      )}
     </div>
   );
 }
