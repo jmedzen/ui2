@@ -1617,6 +1617,42 @@
   display: block;
 }
 
+.pdf-canvas-viewer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 12px;
+}
+
+.pdf-canvas-page {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  flex: none;
+  overflow: hidden;
+}
+
+.pdf-canvas-page canvas {
+  display: block;
+}
+
+.pdf-canvas-page-error,
+.pdf-canvas-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--text-secondary);
+  font-size: calc(13px * var(--font-scale));
+}
+
+.pdf-canvas-count {
+  color: var(--text-secondary);
+  font-size: calc(12px * var(--font-scale));
+}
+
 .pdf-empty-card {
   padding: 40px;
   text-align: center;
